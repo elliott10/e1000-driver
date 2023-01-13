@@ -1,5 +1,5 @@
 # E1000 Driver
-E1000 driver for the Intel 82540EP/EM Gigabit Ethernet.
+E1000 driver in Rust for the Intel 82540EP/EM Gigabit Ethernet.
 
 ## Support features
 * RISCV on Qemu is supported
