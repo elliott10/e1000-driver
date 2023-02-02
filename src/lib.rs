@@ -1,3 +1,9 @@
+#![no_std]
+
+extern crate alloc;
+mod e1000_const;
+mod e1000;
+
 pub fn add(left: usize, right: usize) -> usize {
     left + right
 }

@@ -2,25 +2,25 @@
 // from the Intel 82540EP/EM &c manual.
 
 /* Registers */
-pub const E1000_CTL: u32 = 0x00000 / 4; /* Device Control Register - RW */
-pub const E1000_ICR: u32 = 0x000C0 / 4; /* Interrupt Cause Read - R */
-pub const E1000_IMS: u32 = 0x000D0 / 4; /* Interrupt Mask Set - RW */
-pub const E1000_RCTL: u32 = 0x00100 / 4; /* RX Control - RW */
-pub const E1000_TCTL: u32 = 0x00400 / 4; /* TX Control - RW */
-pub const E1000_TIPG: u32 = 0x00410 / 4; /* TX Inter-packet gap -RW */
-pub const E1000_RDBAL: u32 = 0x02800 / 4; /* RX Descriptor Base Address Low - RW */
-pub const E1000_RDTR: u32 = 0x02820 / 4; /* RX Delay Timer */
-pub const E1000_RADV: u32 = 0x0282C / 4; /* RX Interrupt Absolute Delay Timer */
-pub const E1000_RDH: u32 = 0x02810 / 4; /* RX Descriptor Head - RW */
-pub const E1000_RDT: u32 = 0x02818 / 4; /* RX Descriptor Tail - RW */
-pub const E1000_RDLEN: u32 = 0x02808 / 4; /* RX Descriptor Length - RW */
-pub const E1000_RSRPD: u32 = 0x02C00 / 4; /* RX Small Packet Detect Interrupt */
-pub const E1000_TDBAL: u32 = 0x03800 / 4; /* TX Descriptor Base Address Low - RW */
-pub const E1000_TDLEN: u32 = 0x03808 / 4; /* TX Descriptor Length - RW */
-pub const E1000_TDH: u32 = 0x03810 / 4; /* TX Descriptor Head - RW */
-pub const E1000_TDT: u32 = 0x03818 / 4; /* TX Descripotr Tail - RW */
-pub const E1000_MTA: u32 = 0x05200 / 4; /* Multicast Table Array - RW Array */
-pub const E1000_RA: u32 = 0x05400 / 4; /* Receive Address - RW Array */
+pub const E1000_CTL: usize = 0x00000 / 4; /* Device Control Register - RW */
+pub const E1000_ICR: usize = 0x000C0 / 4; /* Interrupt Cause Read - R */
+pub const E1000_IMS: usize = 0x000D0 / 4; /* Interrupt Mask Set - RW */
+pub const E1000_RCTL: usize = 0x00100 / 4; /* RX Control - RW */
+pub const E1000_TCTL: usize = 0x00400 / 4; /* TX Control - RW */
+pub const E1000_TIPG: usize = 0x00410 / 4; /* TX Inter-packet gap -RW */
+pub const E1000_RDBAL: usize = 0x02800 / 4; /* RX Descriptor Base Address Low - RW */
+pub const E1000_RDTR: usize = 0x02820 / 4; /* RX Delay Timer */
+pub const E1000_RADV: usize = 0x0282C / 4; /* RX Interrupt Absolute Delay Timer */
+pub const E1000_RDH: usize = 0x02810 / 4; /* RX Descriptor Head - RW */
+pub const E1000_RDT: usize = 0x02818 / 4; /* RX Descriptor Tail - RW */
+pub const E1000_RDLEN: usize = 0x02808 / 4; /* RX Descriptor Length - RW */
+pub const E1000_RSRPD: usize = 0x02C00 / 4; /* RX Small Packet Detect Interrupt */
+pub const E1000_TDBAL: usize = 0x03800 / 4; /* TX Descriptor Base Address Low - RW */
+pub const E1000_TDLEN: usize = 0x03808 / 4; /* TX Descriptor Length - RW */
+pub const E1000_TDH: usize = 0x03810 / 4; /* TX Descriptor Head - RW */
+pub const E1000_TDT: usize = 0x03818 / 4; /* TX Descripotr Tail - RW */
+pub const E1000_MTA: usize = 0x05200 / 4; /* Multicast Table Array - RW Array */
+pub const E1000_RA: usize = 0x05400 / 4; /* Receive Address - RW Array */
 
 /* Device Control */
 pub const E1000_CTL_SLU: u32 = 0x00000040; /* set link up */
@@ -94,27 +94,6 @@ pub const E1000_TXD_CMD_RS: u32 = 0x08; /* Report Status */
 /* Transmit Descriptor status definitions [E1000 3.3.3.2] */
 pub const E1000_TXD_STAT_DD: u32 = 0x00000001; /* Descriptor Done */
 
-// [E1000 3.3.3]
-pub struct tx_desc {
-    addr: u64,
-    length: u16,
-    cso: u8,
-    cmd: u8,
-    status: u8,
-    css: u8,
-    special: u16,
-}
-
 /* Receive Descriptor bit definitions [E1000 3.2.3.1] */
 pub const E1000_RXD_STAT_DD: u32 = 0x01; /* Descriptor Done */
 pub const E1000_RXD_STAT_EOP: u32 = 0x02; /* End of Packet */
-
-// [E1000 3.2.3]
-pub struct rx_desc {
-    addr: u64,   /* Address of the descriptor's data buffer */
-    length: u16, /* Length of data DMAed into data buffer */
-    csum: u16,   /* Packet checksum */
-    status: u8,  /* Descriptor status */
-    errors: u8,  /* Descriptor Errors */
-    special: u16,
-}
