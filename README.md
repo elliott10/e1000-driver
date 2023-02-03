@@ -9,19 +9,24 @@ E1000 driver in Rust for the Intel 82540EP/EM Gigabit Ethernet.
 
 ## How to use
 
-Initialize the E1000 driver
+Initialize PCI and E1000 driver
 ```
-let mut e1000dev = e1000::E1000Device::new(base);
+pub struct Kernfn;
+impl e1000_driver::e1000::KernelFunc for Kernfn { ... }
+
+e1000_driver::pci::pci_init();
+
+let mut e1000_device = e1000_driver::e1000::E1000Device::<Kernfn>::new(e1000_driver::pci::E1000_REGS as usize).unwrap();
 ```
 
 Sending network packets
 ```
-e1000dev.e1000_transmit(packet);
+e1000_device.e1000_transmit(&frame);
 ```
 
 Receiving network packets
 ```
-e1000dev.e1000_recv();
+let rx_buf = e1000_device.e1000_recv();
 ```
 
 ## Example
