@@ -2,7 +2,9 @@
 
 extern crate alloc;
 mod e1000_const;
-mod e1000;
+pub mod e1000;
+
+pub mod pci;
 
 pub fn add(left: usize, right: usize) -> usize {
     left + right

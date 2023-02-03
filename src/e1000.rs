@@ -1,5 +1,6 @@
 // e1000 Driver for Intel 82540EP/EM
 use crate::e1000_const::*;
+use alloc::collections::VecDeque;
 use alloc::vec::Vec;
 use core::marker::PhantomData;
 use core::{cmp::min, mem::size_of, slice::from_raw_parts_mut};
@@ -154,6 +155,10 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         let regs = unsafe{ from_raw_parts_mut(mapped_regs as *mut u32, len) };
         let regs = Volatile::new(regs);
         regs.index_mut(E1000_IMS).write(0);
+
+        #[repr(transparent)]
+        只能用于只有单个非零大小字段（可能还有其他零大小字段，如PhantomData<T>）的
+        struct或enum 中。使得整个结构的内存布局和ABI被保证与该非零字段相同。
         */
         // 0x00000 ~ 0x1FFFF, I/O-Mapped Internal Registers and Memories
         let len = 0x1FFFF / size_of::<u32>();
@@ -242,6 +247,7 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
     */
     pub fn e1000_transmit(&mut self, packet: &[u8]) -> i32 {
         let tindex = self.regs[E1000_TDT].read() as usize;
+        info!("Read E1000_TDT = {:#x}", tindex);
         if (self.tx_ring[tindex].status & E1000_TXD_STAT_DD as u8) == 0 {
             error!("E1000 hasn't finished the corresponding previous transmission request");
             return -1;
@@ -256,7 +262,7 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         let mbuf = unsafe { from_raw_parts_mut(self.tx_mbufs[tindex] as *mut u8, length) };
         mbuf.copy_from_slice(packet);
 
-        info!(">>>>>>>>> TX PKT DATA:");
+        info!(">>>>>>>>> TX PKT {}", length);
         //print_hex_dump(tx_mbuf, 64);
 
         self.tx_ring[tindex].length = length as u16;
@@ -269,32 +275,38 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         length as i32
     }
 
-    pub fn e1000_recv(&mut self /* , packet: &mut [u8] */) -> usize {
+    pub fn e1000_recv(&mut self) -> Option<VecDeque<Vec<u8>>> {
         // Check for packets that have arrived from the e1000
         // Create and deliver an mbuf for each packet (using net_rx()).
-        let mut length = 0;
+        let mut recv_packets = VecDeque::new();
         let mut rindex = (self.regs[E1000_RDT].read() as usize + 1) % RX_RING_SIZE;
         // DD设为1时，内存中的接收包是完整的
         while (self.rx_ring[rindex].status & E1000_RXD_STAT_DD as u8) != 0 {
+            info!("Read E1000_RDT + 1 = {:#x}", rindex);
             let len = self.rx_ring[rindex].length as usize;
             let mbuf = unsafe { from_raw_parts_mut(self.rx_mbufs[rindex] as *mut u8, len) };
-            //packet[..len].copy_from_slice(rx_mbuf);
-            // 如何处理多个网络包 ?
+            info!("RX PKT {} <<<<<<<<<", len);
+
+            recv_packets.push_back(mbuf.to_vec());
+            //packet[..len].copy_from_slice(mbuf);
 
             // Deliver the mbuf to the network stack
             net_rx(mbuf);
             // Just need to clear 64 bits header
-            mbuf[..64].fill(0);
+            mbuf[..min(64, len)].fill(0);
 
             self.rx_ring[rindex].status = 0;
             self.regs[E1000_RDT].write(rindex as u32);
             // sync
 
             rindex = (rindex + 1) % RX_RING_SIZE;
-            length += len;
         }
 
-        length
+        if recv_packets.len() > 0 {
+            Some(recv_packets)
+        } else {
+            None
+        }
     }
 
     pub fn e1000_intr(&mut self) {
