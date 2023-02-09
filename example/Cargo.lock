@@ -73,7 +73,7 @@ dependencies = [
 [[package]]
 name = "lose-net-stack"
 version = "0.1.0"
-source = "git+https://github.com/yfblock/lose-net-stack?rev=3f467dd846cbdff548eb18fe5d5f4ffafec95714#3f467dd846cbdff548eb18fe5d5f4ffafec95714"
+source = "git+https://github.com/yfblock/lose-net-stack?rev=2d9dd23268318bcb2cfd19e9eae241438e28891f#2d9dd23268318bcb2cfd19e9eae241438e28891f"
 
 [[package]]
 name = "opensbi-rt"

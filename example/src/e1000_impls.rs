@@ -6,7 +6,7 @@ extern "C" {
 }
 
 lazy_static! {
-    static ref DMA_PADDR: AtomicUsize = AtomicUsize::new(end as usize);
+    static ref DMA_PADDR: AtomicUsize = AtomicUsize::new(0x81000000 as usize);
 }
 
 pub struct Kernfn;

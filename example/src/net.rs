@@ -12,63 +12,56 @@ pub fn init() {
 
     e1000_driver::pci::pci_init();
 
-    let mut e1000_device = e1000_driver::e1000::E1000Device::<Kernfn>::new(
+    let mut net = e1000_driver::e1000::E1000Device::<Kernfn>::new(
         e1000_driver::pci::E1000_REGS as usize
     ).unwrap();
 
-    // e1000_device.e1000_transmit(&frame);
-
-    loop {
-        let rx_buf = e1000_device.e1000_recv();
-
-        if let Some(packet) = rx_buf {
-            info!("receive packet: {}", packet.len());
-        }
-    }
-
-    // let mut net = VirtIONet::<HalImpl, MmioTransport>::new(unsafe {
-    //     MmioTransport::new(NonNull::new(0x1000_8000 as *mut VirtIOHeader).unwrap()).expect("failed to create net driver")
-    // }).expect("failed to create net driver");
-
     let lose_stack = LoseStack::new(IPv4::new(10, 0, 2, 15), MacAddress::new([0x52, 0x54, 0x00, 0x12, 0x34, 0x56]));
 
-    // loop {
-    //     let mut buf = vec![0u8; 100];
-    //     let len = net.recv(&mut buf).expect("can't receive data");
+    loop {
+        let datas = net.e1000_recv();
+        
+        if datas.is_none() {
+            continue;
+        }
 
-    //     info!("receive {len} bytes from net");
-    //     hexdump(&buf[..len]);
+        let datas = datas.unwrap();
 
-    //     let packet = lose_stack.analysis(&buf[..len]);
-    //     info!("packet: {:?}", packet);
-
-    //     match packet {
-    //         Packet::ARP(arp_packet) => {
-    //             let reply_packet = arp_packet.reply_packet(lose_stack.ip, lose_stack.mac).expect("can't build reply");
-    //             info!("reply_packet: {:?}", reply_packet);
-    //             let reply_data = reply_packet.build_data();
-    //             hexdump(&reply_data);
-    //             net.send(&reply_data).expect("can't send net data");
-    //         },
-    //         Packet::UDP(udp_packet) => {
-    //             info!("{}:{}(MAC:{}) -> {}:{}(MAC:{})  len:{}", udp_packet.source_ip, udp_packet.source_port, udp_packet.source_mac, 
-    //                 udp_packet.dest_ip, udp_packet.dest_port, udp_packet.dest_mac, udp_packet.data_len);
-    //             info!("data: {}", String::from_utf8_lossy(udp_packet.data.as_ref()));
-    //             hexdump(udp_packet.data.as_ref());
-
-    //             if String::from_utf8_lossy(udp_packet.data.as_ref()) == "this is a ping!" {
-    //                 let data = r"reply".as_bytes();
-    //                 let udp_reply_packet = udp_packet.reply(data);
-    //                 net.send(&udp_reply_packet.build_data()).expect("can't send using net dev");
-    //                 break;
-    //             }
-
-    //             // let response_udp = 
-    //         }
-    //         _ => {}
-    //     }
-    // }
-    info!("net stack example test successed!");
+        for data in datas {
+            info!("receive {} bytes from net", data.len());
+            hexdump(&data);
+    
+            let packet = lose_stack.analysis(&data);
+            info!("packet: {:?}", packet);
+    
+            match packet {
+                Packet::ARP(arp_packet) => {
+                    let reply_packet = arp_packet.reply_packet(lose_stack.ip, lose_stack.mac).expect("can't build reply");
+                    // info!("reply_packet: {:?}", reply_packet);
+                    // let reply_data = reply_packet.build_data();
+                    // hexdump(&reply_data);
+                    // net.e1000_transmit(&reply_data);
+                },
+                Packet::UDP(udp_packet) => {
+                    info!("{}:{}(MAC:{}) -> {}:{}(MAC:{})  len:{}", udp_packet.source_ip, udp_packet.source_port, udp_packet.source_mac, 
+                        udp_packet.dest_ip, udp_packet.dest_port, udp_packet.dest_mac, udp_packet.data_len);
+                    info!("data: {}", String::from_utf8_lossy(udp_packet.data.as_ref()));
+                    hexdump(udp_packet.data.as_ref());
+    
+                    if String::from_utf8_lossy(udp_packet.data.as_ref()) == "this is a ping!" {
+                        let data = r"reply".as_bytes();
+                        let udp_reply_packet = udp_packet.reply(data);
+                        net.e1000_transmit(&udp_reply_packet.build_data());
+                        info!("net stack example test successed!");
+                        return;
+                    }
+    
+                    // let response_udp = 
+                }
+                _ => {}
+            }
+        }
+    }
 }
 
 pub fn hexdump(data: &[u8]) {
