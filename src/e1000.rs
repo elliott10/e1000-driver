@@ -282,6 +282,7 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         let mut rindex = (self.regs[E1000_RDT].read() as usize + 1) % RX_RING_SIZE;
         // DD设为1时，内存中的接收包是完整的
         while (self.rx_ring[rindex].status & E1000_RXD_STAT_DD as u8) != 0 {
+            info!("rindex: {}", rindex);
             info!("Read E1000_RDT + 1 = {:#x}", rindex);
             let len = self.rx_ring[rindex].length as usize;
             let mbuf = unsafe { from_raw_parts_mut(self.rx_mbufs[rindex] as *mut u8, len) };

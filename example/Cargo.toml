@@ -1,0 +1,16 @@
+[package]
+name = "example"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+# virtio-drivers = "0.1.0"
+
+opensbi-rt = { git = "https://github.com/rcore-os/riscv-sbi-rt", branch = "old"}
+lazy_static = { version = "1.4", features = ["spin_no_std"] }
+log = "0.4"
+lose-net-stack = { git = "https://github.com/yfblock/lose-net-stack", rev = "2d9dd23268318bcb2cfd19e9eae241438e28891f"}
+
+e1000-driver = { path = ".." }
