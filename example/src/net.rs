@@ -37,10 +37,10 @@ pub fn init() {
             match packet {
                 Packet::ARP(arp_packet) => {
                     let reply_packet = arp_packet.reply_packet(lose_stack.ip, lose_stack.mac).expect("can't build reply");
-                    // info!("reply_packet: {:?}", reply_packet);
-                    // let reply_data = reply_packet.build_data();
-                    // hexdump(&reply_data);
-                    // net.e1000_transmit(&reply_data);
+                    info!("reply_packet: {:?}", reply_packet);
+                    let reply_data = reply_packet.build_data();
+                    hexdump(&reply_data);
+                    net.e1000_transmit(&reply_data);
                 },
                 Packet::UDP(udp_packet) => {
                     info!("{}:{}(MAC:{}) -> {}:{}(MAC:{})  len:{}", udp_packet.source_ip, udp_packet.source_port, udp_packet.source_mac, 

@@ -1,11 +1,10 @@
 // e1000 Driver for Intel 82540EP/EM
 use crate::e1000_const::*;
-use alloc::collections::VecDeque;
-use alloc::vec::Vec;
-use core::marker::PhantomData;
-use core::{cmp::min, mem::size_of, slice::from_raw_parts_mut};
-use log::*;
+use alloc::{vec::Vec, collections::VecDeque};
+use core::{cmp::min, mem::size_of, slice::from_raw_parts_mut, marker::PhantomData};
 use volatile::Volatile;
+use log::*;
+use crate::utils::*;
 
 pub const TX_RING_SIZE: usize = 16;
 pub const RX_RING_SIZE: usize = 16;
@@ -131,7 +130,6 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         if rx_mbufs_dma == 0 {
             panic!("e1000, alloc dma rx buffer failed");
         }
-        rx_mbufs.push(rx_mbufs_dma);
 
         for i in 0..RX_RING_SIZE {
             rx_ring[i].addr = rx_mbufs_dma as u64;
@@ -188,7 +186,8 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
 
         // 内存壁垒 fence
         //__sync_synchronize();
-        
+        fence_w();
+
         // [E1000 14.5] Transmit initialization
         if (self.tx_ring.len() * size_of::<TxDesc>()) % 128 != 0 {
             //panic("e1000");
@@ -271,6 +270,7 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
 
         self.regs[E1000_TDT].write(((tindex + 1) % TX_RING_SIZE) as u32);
         // sync
+        fence_w();
 
         length as i32
     }
@@ -287,18 +287,19 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
             let len = self.rx_ring[rindex].length as usize;
             let mbuf = unsafe { from_raw_parts_mut(self.rx_mbufs[rindex] as *mut u8, len) };
             info!("RX PKT {} <<<<<<<<<", len);
-
             recv_packets.push_back(mbuf.to_vec());
-            //packet[..len].copy_from_slice(mbuf);
 
             // Deliver the mbuf to the network stack
             net_rx(mbuf);
+
+            fence();
             // Just need to clear 64 bits header
             mbuf[..min(64, len)].fill(0);
 
             self.rx_ring[rindex].status = 0;
             self.regs[E1000_RDT].write(rindex as u32);
             // sync
+            fence_w();
 
             rindex = (rindex + 1) % RX_RING_SIZE;
         }
