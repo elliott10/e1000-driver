@@ -19,7 +19,7 @@ pub fn pci_init() {
         let base = ECAM + off;
         let pci_base = base as *mut Volatile<u32>;
         let deve_id = unsafe{ (*pci_base).read() };
-        debug!("PCI device id: {:#x} @ {:#x}", deve_id, base);
+        trace!("PCI device id: {:#x} @ {:#x}", deve_id, base);
 
         // E1000 ID = 100e:8086
         if deve_id == 0x100e8086 {
