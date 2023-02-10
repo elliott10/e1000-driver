@@ -1,9 +1,10 @@
 // e1000 Driver for Intel 82540EP/EM
 use crate::e1000_const::*;
-use alloc::{vec::Vec, collections::VecDeque};
+use alloc::vec::Vec;
+//use alloc::collections::VecDeque;
 use core::{cmp::min, mem::size_of, slice::from_raw_parts_mut, marker::PhantomData};
-use volatile::Volatile;
-use log::*;
+use super::volatile::Volatile;
+//use log::*;
 use crate::utils::*;
 
 pub const TX_RING_SIZE: usize = 16;
@@ -17,35 +18,28 @@ pub trait KernelFunc {
     /// Page size (usually 4K)
     const PAGE_SIZE: usize = 4096;
 
-    fn phys_to_virt(paddr: usize) -> usize {
-        paddr
-    }
-
-    fn virt_to_phys(vaddr: usize) -> usize {
-        vaddr
-    }
-
     /// 或分配irq
 
     /// Allocate consequent physical memory for DMA;
-    /// Return physical address which is page aligned.
-    fn dma_alloc_coherent(pages: usize) -> usize;
+    /// Return (cpu virtual address, dma physical address) which is page aligned.
+    //fn dma_alloc_coherent(pages: usize) -> usize;
+    fn dma_alloc_coherent(&mut self, pages: usize) -> (usize, usize);
 
-    /// Deallocate DMA memory
-    fn dma_free_coherent(paddr: usize, pages: usize);
+    /// Deallocate DMA memory by virtual address
+    fn dma_free_coherent(&mut self, vaddr: usize, pages: usize);
 }
 
 pub struct E1000Device<'a, K: KernelFunc> {
     regs: &'static mut [Volatile<u32>],
-    //rx_tail: usize,
-    //tx_tail: usize,
+    rx_ring_dma: usize,
+    tx_ring_dma: usize,
     rx_ring: &'a mut [RxDesc],
     tx_ring: &'a mut [TxDesc],
     rx_mbufs: Vec<usize>,
     tx_mbufs: Vec<usize>,
     mbuf_size: usize,
     //phy_interface: PhyInterfaceMode,
-    pd: PhantomData<K>,
+    kfn: &'a mut K,
 }
 
 // [E1000 3.3.3]
@@ -74,20 +68,21 @@ pub struct RxDesc {
 }
 
 impl<'a, K: KernelFunc> E1000Device<'a, K> {
-    pub fn new(mapped_regs: usize) -> Result<Self, i32> {
+    pub fn new(kfn: &'a mut K, mapped_regs: usize) -> Result<Self, i32> {
+        info!("New E1000 device @ {:#x}", mapped_regs);
         // 分配的ring内存空间需要16字节对齐
         let alloc_tx_ring_pages =
             ((TX_RING_SIZE * size_of::<TxDesc>()) + (K::PAGE_SIZE - 1)) / K::PAGE_SIZE;
         let alloc_rx_ring_pages =
             ((RX_RING_SIZE * size_of::<RxDesc>()) + (K::PAGE_SIZE - 1)) / K::PAGE_SIZE;
-        let tx_ring_dma = K::dma_alloc_coherent(alloc_tx_ring_pages);
-        let rx_ring_dma = K::dma_alloc_coherent(alloc_rx_ring_pages);
+        let (tx_ring_vaddr, tx_ring_dma) = kfn.dma_alloc_coherent(alloc_tx_ring_pages);
+        let (rx_ring_vaddr, rx_ring_dma) = kfn.dma_alloc_coherent(alloc_rx_ring_pages);
 
         let tx_ring = unsafe {
-            from_raw_parts_mut(K::phys_to_virt(tx_ring_dma) as *mut TxDesc, TX_RING_SIZE)
+            from_raw_parts_mut(tx_ring_vaddr as *mut TxDesc, TX_RING_SIZE)
         };
         let rx_ring = unsafe {
-            from_raw_parts_mut(K::phys_to_virt(rx_ring_dma) as *mut RxDesc, RX_RING_SIZE)
+            from_raw_parts_mut(rx_ring_vaddr as *mut RxDesc, RX_RING_SIZE)
         };
 
         tx_ring.fill(TxDesc {
@@ -108,33 +103,36 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
             special: 0,
         });
 
-        let mut tx_mbufs = Vec::with_capacity(tx_ring.len());
-        let mut rx_mbufs = Vec::with_capacity(rx_ring.len());
+        let mut tx_mbufs = Vec::try_with_capacity(tx_ring.len()).unwrap();
+        let mut rx_mbufs = Vec::try_with_capacity(rx_ring.len()).unwrap();
 
         // 一起申请所有TX内存
         let alloc_tx_buffer_pages =
             ((TX_RING_SIZE * MBUF_SIZE) + (K::PAGE_SIZE - 1)) / K::PAGE_SIZE;
-        let mut tx_mbufs_dma: usize = K::dma_alloc_coherent(alloc_tx_buffer_pages);
+        let (mut tx_mbufs_vaddr, mut tx_mbufs_dma) = kfn.dma_alloc_coherent(alloc_tx_buffer_pages);
 
         for i in 0..TX_RING_SIZE {
             tx_ring[i].status = E1000_TXD_STAT_DD as u8;
             tx_ring[i].addr = tx_mbufs_dma as u64;
-            tx_mbufs.push(K::phys_to_virt(tx_mbufs_dma));
+            tx_mbufs.try_push(tx_mbufs_vaddr);
             tx_mbufs_dma += MBUF_SIZE;
+            tx_mbufs_vaddr += MBUF_SIZE;
         }
 
         // 一起申请所有RX内存
         let alloc_rx_buffer_pages =
             ((RX_RING_SIZE * MBUF_SIZE) + (K::PAGE_SIZE - 1)) / K::PAGE_SIZE;
-        let mut rx_mbufs_dma: usize = K::dma_alloc_coherent(alloc_rx_buffer_pages);
-        if rx_mbufs_dma == 0 {
+        //let mut rx_mbufs_dma: usize = K::dma_alloc_coherent(alloc_rx_buffer_pages);
+        let (mut rx_mbufs_vaddr, mut rx_mbufs_dma) = kfn.dma_alloc_coherent(alloc_rx_buffer_pages);
+        if rx_mbufs_vaddr == 0 {
             panic!("e1000, alloc dma rx buffer failed");
         }
 
         for i in 0..RX_RING_SIZE {
             rx_ring[i].addr = rx_mbufs_dma as u64;
-            rx_mbufs.push(K::phys_to_virt(rx_mbufs_dma));
+            rx_mbufs.try_push(rx_mbufs_vaddr);
             rx_mbufs_dma += MBUF_SIZE;
+            rx_mbufs_vaddr += MBUF_SIZE;
         }
 
         // Slice切片，内存連續的動態大小的序列；
@@ -165,12 +163,14 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
 
         let mut e1000dev = E1000Device {
             regs,
+            rx_ring_dma,
+            tx_ring_dma,
             rx_ring,
             tx_ring,
             rx_mbufs,
             tx_mbufs,
             mbuf_size: MBUF_SIZE,
-            pd: PhantomData,
+            kfn,
         };
         e1000dev.e1000_init();
 
@@ -179,9 +179,13 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
 
     /// mapped_regs is the memory address at which the e1000's registers are mapped.
     pub fn e1000_init(&mut self) {
+        let stat = self.regs[E1000_STAT].read();
+        let ctl = self.regs[E1000_CTL].read();
+        info!("e1000 CTL: {:#x}, Status: {:#x}", ctl, stat);
+        
         // Reset the device
         self.regs[E1000_IMS].write(0); // disable interrupts
-        self.regs[E1000_CTL].write(self.regs[E1000_CTL].read() | E1000_CTL_RST);
+        self.regs[E1000_CTL].write(ctl | E1000_CTL_RST);
         self.regs[E1000_IMS].write(0); // redisable interrupts
 
         // 内存壁垒 fence
@@ -193,7 +197,7 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
             //panic("e1000");
             error!("e1000, size of tx_ring is invalid");
         }
-        self.regs[E1000_TDBAL].write(K::virt_to_phys(self.tx_ring.as_ptr() as usize) as u32);
+        self.regs[E1000_TDBAL].write(self.tx_ring_dma as u32);
 
         self.regs[E1000_TDLEN].write((self.tx_ring.len() * size_of::<TxDesc>()) as u32);
         self.regs[E1000_TDT].write(0);
@@ -203,7 +207,7 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         if (self.rx_ring.len() * size_of::<RxDesc>()) % 128 != 0 {
             error!("e1000, size of rx_ring is invalid");
         }
-        self.regs[E1000_RDBAL].write(K::virt_to_phys(self.rx_ring.as_ptr() as usize) as u32);
+        self.regs[E1000_RDBAL].write(self.rx_ring_dma as u32);
 
         self.regs[E1000_RDH].write(0);
         self.regs[E1000_RDT].write((RX_RING_SIZE - 1) as u32);
@@ -275,10 +279,11 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         length as i32
     }
 
-    pub fn e1000_recv(&mut self) -> Option<VecDeque<Vec<u8>>> {
+    pub fn e1000_recv(&mut self) -> Option<Vec<Vec<u8>>> {
         // Check for packets that have arrived from the e1000
         // Create and deliver an mbuf for each packet (using net_rx()).
-        let mut recv_packets = VecDeque::new();
+        //let mut recv_packets = VecDeque::new();
+        let mut recv_packets = Vec::new();
         let mut rindex = (self.regs[E1000_RDT].read() as usize + 1) % RX_RING_SIZE;
         // DD设为1时，内存中的接收包是完整的
         while (self.rx_ring[rindex].status & E1000_RXD_STAT_DD as u8) != 0 {
@@ -286,7 +291,8 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
             let len = self.rx_ring[rindex].length as usize;
             let mbuf = unsafe { from_raw_parts_mut(self.rx_mbufs[rindex] as *mut u8, len) };
             info!("RX PKT {} <<<<<<<<<", len);
-            recv_packets.push_back(mbuf.to_vec());
+            //recv_packets.push_back(mbuf.to_vec());
+            recv_packets.try_push(mbuf.try_to_vec().unwrap());
 
             // Deliver the mbuf to the network stack
             net_rx(mbuf);

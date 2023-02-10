@@ -3,6 +3,7 @@
 
 /* Registers */
 pub const E1000_CTL: usize = 0x00000 / 4; /* Device Control Register - RW */
+pub const E1000_STAT: usize = 0x00008 / 4; /* Device Status Register - R */
 pub const E1000_ICR: usize = 0x000C0 / 4; /* Interrupt Cause Read - R */
 pub const E1000_IMS: usize = 0x000D0 / 4; /* Interrupt Mask Set - RW */
 pub const E1000_RCTL: usize = 0x00100 / 4; /* RX Control - RW */
