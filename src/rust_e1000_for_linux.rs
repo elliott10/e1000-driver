@@ -3,12 +3,15 @@
 use core::sync::atomic::AtomicPtr;
 use kernel::net::{self, Device, Napi, NapiPoller, NetdevTx, RtnlLinkStats64, SkBuff};
 use kernel::prelude::*;
-use kernel::{bindings, c_str, define_pci_id_table, device, dma, driver, irq, pci, PointerWrapper};
+use kernel::{
+    bindings, c_str, define_pci_id_table, device, dma, driver, irq, pci, spinlock_init,
+    PointerWrapper,
+};
 use kernel::{
     file::{self, File},
     io_buffer::{IoBufferReader, IoBufferWriter},
     pci::MappedResource,
-    sync::{Arc, ArcBorrow, CondVar, Mutex, UniqueArc},
+    sync::{Arc, ArcBorrow, CondVar, SpinLock, UniqueArc},
 };
 
 #[macro_use]
@@ -91,10 +94,11 @@ impl NapiPoller for Poller {
 const E1000_REGS: u32 = 0x40000000; //?
 
 struct Kernfn<T> {
-    //dev: &'a dyn device::RawDevice,
     dev: Arc<device::Device>,
     alloc_coherent: Vec<dma::Allocation<T>>,
 }
+unsafe impl<T> Send for Kernfn<T> {}
+unsafe impl<T> Sync for Kernfn<T> {}
 
 impl<T> e1000::KernelFunc for Kernfn<T> {
     const PAGE_SIZE: usize = 1 << 12;
@@ -131,7 +135,7 @@ impl<T> e1000::KernelFunc for Kernfn<T> {
 struct NetData {
     dev: Arc<device::Device>,
     res: Arc<MappedResource>,
-    //dev_e1000: Arc<E1000Device<'static, Kernfn<u8>>>,
+    dev_e1000: Pin<Box<SpinLock<Option<E1000Device<'static, Kernfn<u8>>>>>>,
     tx_ring: usize,
     rx_ring: usize,
     irq: u32,
@@ -152,7 +156,7 @@ impl net::DeviceOperations for E1000Driver {
             alloc_coherent: Vec::new(),
         };
         let regs = data.res.ptr;
-        let mut e1000_device = E1000Device::<Kernfn<u8>>::new(&mut kfn, regs).unwrap();
+        let mut e1000_device = E1000Device::<Kernfn<u8>>::new(kfn, regs).unwrap();
 
         let ping_frame: Box<[u8]> = Box::try_new([
             0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x52, 0x54, 0x00, 0x12, 0x34, 0x55, 0x08, 0x06,
@@ -162,12 +166,16 @@ impl net::DeviceOperations for E1000Driver {
         e1000_device.e1000_transmit(&ping_frame);
         e1000_device.e1000_transmit(&ping_frame);
 
+        let mut dev_e1k = data.dev_e1000.lock();
+        *dev_e1k = Some(e1000_device);
+
         Ok(())
     }
 
     /// Corresponds to `ndo_stop` in `struct net_device_ops`.
     fn stop(dev: &Device, data: <Self::Data as PointerWrapper>::Borrowed<'_>) -> Result {
         pr_warn!("net::DeviceOperations::stop() unimplemented!\n");
+        drop(data);
         Ok(())
     }
 
@@ -177,17 +185,27 @@ impl net::DeviceOperations for E1000Driver {
         dev: &Device,
         data: <Self::Data as PointerWrapper>::Borrowed<'_>,
     ) -> NetdevTx {
-        pr_info!("start xmit");
+        pr_info!("start xmit\n");
+
+        skb.put_padto(bindings::ETH_ZLEN);
+        let size = skb.len() - skb.data_len();
+        let skb_data = skb.head_data();
+
+        pr_info!("SkBuff data len: {}, size: {}\n", skb_data.len(), size);
+
+        dev.sent_queue(skb.len());
+
+        {
+            let mut dev_e1k = data.dev_e1000.lock();
+            dev_e1k.as_mut().unwrap().e1000_transmit(skb_data);
+        }
 
         net::NetdevTx::Ok
     }
 
     /// Corresponds to `ndo_get_stats64` in `struct net_device_ops`.
-    fn get_stats64(
-        _dev: &Device,
-        _data: <Self::Data as PointerWrapper>::Borrowed<'_>,
-        _storage: &mut RtnlLinkStats64,
-    ) {
+    fn get_stats64(_dev: &Device, _data: &NetData, _storage: &mut RtnlLinkStats64) {
+        pr_info!("get stats64\n");
     }
 }
 
@@ -218,6 +236,7 @@ impl pci::Driver for E1000Driver {
 
         let bar_mask = pci_dev.select_bars(bindings::IORESOURCE_MEM as u64);
         pci_dev.request_selected_regions(bar_mask, c_str!("e1000"))?;
+        // Todo: pci_release_selected_regions when removing
 
         let res0 = pci_dev.iter_resource().nth(0).unwrap();
         let bar_res = pci_dev.map_resource(&res0, res0.len())?;
@@ -238,9 +257,13 @@ impl pci::Driver for E1000Driver {
         net_dev.eth_hw_addr_set(&MAC_HWADDR);
         let dev = Arc::try_new(device::Device::from_dev(pci_dev))?;
         let bar_res = Arc::try_new(bar_res)?;
+        let mut dev_e1000 = Pin::from(Box::try_new(unsafe { SpinLock::new(None) })?);
+        spinlock_init!(dev_e1000.as_mut(), "e1000_device");
+
         let net_data = Box::try_new(NetData {
             dev,
             res: bar_res.clone(),
+            dev_e1000,
             tx_ring: 0,
             rx_ring: 0,
             irq,
@@ -254,8 +277,9 @@ impl pci::Driver for E1000Driver {
             irq,
         })?)
     }
-    fn remove(_data: &Self::Data) {
+    fn remove(data: &Self::Data) {
         pr_info!("PCI Driver remove\n");
+        drop(data);
     }
     define_pci_id_table! {u32, [
         (pci::DeviceId::new(VENDOR_ID_INTEL_82540EM, DEVICE_ID_INTEL_82540EM), Some(0x1)),

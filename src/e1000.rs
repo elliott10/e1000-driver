@@ -2,8 +2,8 @@
 use crate::e1000_const::*;
 use alloc::vec::Vec;
 //use alloc::collections::VecDeque;
-use core::{cmp::min, mem::size_of, slice::from_raw_parts_mut, marker::PhantomData};
 use super::volatile::Volatile;
+use core::{cmp::min, marker::PhantomData, mem::size_of, slice::from_raw_parts_mut};
 //use log::*;
 use crate::utils::*;
 
@@ -39,7 +39,7 @@ pub struct E1000Device<'a, K: KernelFunc> {
     tx_mbufs: Vec<usize>,
     mbuf_size: usize,
     //phy_interface: PhyInterfaceMode,
-    kfn: &'a mut K,
+    kfn: K,
 }
 
 // [E1000 3.3.3]
@@ -68,7 +68,7 @@ pub struct RxDesc {
 }
 
 impl<'a, K: KernelFunc> E1000Device<'a, K> {
-    pub fn new(kfn: &'a mut K, mapped_regs: usize) -> Result<Self, i32> {
+    pub fn new(mut kfn: K, mapped_regs: usize) -> Result<Self, i32> {
         info!("New E1000 device @ {:#x}", mapped_regs);
         // 分配的ring内存空间需要16字节对齐
         let alloc_tx_ring_pages =
@@ -78,12 +78,8 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         let (tx_ring_vaddr, tx_ring_dma) = kfn.dma_alloc_coherent(alloc_tx_ring_pages);
         let (rx_ring_vaddr, rx_ring_dma) = kfn.dma_alloc_coherent(alloc_rx_ring_pages);
 
-        let tx_ring = unsafe {
-            from_raw_parts_mut(tx_ring_vaddr as *mut TxDesc, TX_RING_SIZE)
-        };
-        let rx_ring = unsafe {
-            from_raw_parts_mut(rx_ring_vaddr as *mut RxDesc, RX_RING_SIZE)
-        };
+        let tx_ring = unsafe { from_raw_parts_mut(tx_ring_vaddr as *mut TxDesc, TX_RING_SIZE) };
+        let rx_ring = unsafe { from_raw_parts_mut(rx_ring_vaddr as *mut RxDesc, RX_RING_SIZE) };
 
         tx_ring.fill(TxDesc {
             addr: 0,
@@ -182,7 +178,7 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         let stat = self.regs[E1000_STAT].read();
         let ctl = self.regs[E1000_CTL].read();
         info!("e1000 CTL: {:#x}, Status: {:#x}", ctl, stat);
-        
+
         // Reset the device
         self.regs[E1000_IMS].write(0); // disable interrupts
         self.regs[E1000_CTL].write(ctl | E1000_CTL_RST);
