@@ -7,8 +7,8 @@ use core::{cmp::min, marker::PhantomData, mem::size_of, slice::from_raw_parts_mu
 //use log::*;
 use crate::utils::*;
 
-pub const TX_RING_SIZE: usize = 16;
-pub const RX_RING_SIZE: usize = 16;
+pub const TX_RING_SIZE: usize = 256;
+pub const RX_RING_SIZE: usize = 256;
 pub const MBUF_SIZE: usize = 2048;
 
 // struct spinlock e1000_lock;
@@ -237,6 +237,9 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         self.regs[E1000_RDTR].write(0); // interrupt after every received packet (no timer)
         self.regs[E1000_RADV].write(0); // interrupt after every packet (no timer)
         self.regs[E1000_IMS].write(1 << 7); // RXDW -- Receiver Descriptor Write Back
+
+        self.e1000_write_flush();
+        info!("e1000_init has been completed");
     }
 
     /* 参考
@@ -262,6 +265,7 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         mbuf.copy_from_slice(packet);
 
         info!(">>>>>>>>> TX PKT {}", length);
+        info!("\n\r");
         //print_hex_dump(tx_mbuf, 64);
 
         self.tx_ring[tindex].length = length as u16;
@@ -269,12 +273,15 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         self.tx_ring[tindex].cmd = (E1000_TXD_CMD_RS | E1000_TXD_CMD_EOP) as u8;
 
         self.regs[E1000_TDT].write(((tindex + 1) % TX_RING_SIZE) as u32);
+
+        self.e1000_write_flush();
         // sync
         fence_w();
 
         length as i32
     }
 
+    // Todo: send recv Mutex lock
     pub fn e1000_recv(&mut self) -> Option<Vec<Vec<u8>>> {
         // Check for packets that have arrived from the e1000
         // Create and deliver an mbuf for each packet (using net_rx()).
@@ -299,11 +306,14 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
 
             self.rx_ring[rindex].status = 0;
             self.regs[E1000_RDT].write(rindex as u32);
+
+            self.e1000_write_flush();
             // sync
             fence_w();
 
             rindex = (rindex + 1) % RX_RING_SIZE;
         }
+        info!("e1000_recv\n\r");
 
         if recv_packets.len() > 0 {
             Some(recv_packets)
@@ -312,12 +322,32 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         }
     }
 
-    pub fn e1000_intr(&mut self) {
-        self.e1000_recv();
+    pub fn e1000_irq_disable(&mut self) {
+        self.regs[E1000_IMC].write(!0);
+        self.e1000_write_flush();
+    }
+
+    pub fn e1000_irq_enable(&mut self) {
+        self.regs[E1000_IMS].write(IMS_ENABLE_MASK);
+        self.e1000_write_flush();
+    }
+
+    pub fn e1000_write_flush(&mut self) {
+        self.regs[E1000_STAT].read();
+    }
+
+    /// Cause a link status change interrupt
+    pub fn e1000_cause_lsc_int(&mut self) {
+        self.regs[E1000_ICS].write(E1000_ICR_LSC);
+    }
+
+    pub fn e1000_intr(&mut self) -> u32 {
+        //self.e1000_recv();
+
         // tell the e1000 we've seen this interrupt;
         // without this the e1000 won't raise any
         // further interrupts.
-        self.regs[E1000_ICR].read();
+        self.regs[E1000_ICR].read()
     }
 }
 

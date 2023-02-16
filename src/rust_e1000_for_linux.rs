@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 //! Rust e1000 network device.
-use core::sync::atomic::AtomicPtr;
+use core::slice::from_raw_parts_mut;
+use core::sync::atomic::{AtomicPtr, AtomicU64, Ordering};
 use kernel::net::{self, Device, Napi, NapiPoller, NetdevTx, RtnlLinkStats64, SkBuff};
 use kernel::prelude::*;
 use kernel::{
@@ -55,50 +56,133 @@ module! {
     license: "GPL",
 }
 
+const RXBUFFER: u32 = 2048;
+
 struct E1000Driver;
 
 impl E1000Driver {
-    fn myfn() {}
-}
+    fn handle_rx_irq(dev: &net::Device, napi: &Napi, data: &NetData) {
+        let length = 2048;
+        let mut packets = 0;
+        let mut bytes = 0;
 
-impl irq::Handler for E1000Driver {
-    type Data = Box<u32>;
+        let recv_vec = {
+            let mut dev_e1k = data.dev_e1000.lock();
+            dev_e1k.as_mut().unwrap().e1000_recv()
+        };
 
-    fn handle_irq(_data: &u32) -> irq::Return {
-        irq::Return::None
+        if let Some(vec) = recv_vec {
+            packets = vec.len();
+            for (_i, packet) in vec.iter().enumerate() {
+                let mut len = packet.len();
+                bytes += len;
+
+                let skb = dev.alloc_skb_ip_align(RXBUFFER).unwrap();
+                let skb_buf =
+                    unsafe { from_raw_parts_mut(skb.head_data().as_ptr() as *mut u8, len) };
+                skb_buf.copy_from_slice(&packet);
+
+                len -= 4; // why ?
+                skb.put(len as u32);
+                let protocol = skb.eth_type_trans(dev);
+                skb.protocol_set(protocol);
+
+                // Send the skb up the stack
+                napi.gro_receive(&skb);
+            }
+            pr_info!("handle_rx_irq, received packets: {}\n", packets);
+        } else {
+            pr_warn!("None packets were received\n");
+        }
+
+        data.stats
+            .rx_bytes
+            .fetch_add(bytes as u64, Ordering::Relaxed);
+        data.stats
+            .rx_packets
+            .fetch_add(packets as u64, Ordering::Relaxed);
+    }
+
+    fn handle_tx_irq() {
+        // check status E1000_TXD_STAT_DD
     }
 }
 
-// fn request_irq(irq: u32, data: Box<u32>) -> Result<irq::Registration<Example>> {
-//     irq::Registration::try_new(irq, data, irq::flags::SHARED, fmt!("example_{irq}"))
-// }
+struct IrqData {
+    dev_e1000: Arc<SpinLock<Option<E1000Device<'static, Kernfn<u8>>>>>,
+    res: Arc<MappedResource>,
+    napi: Arc<net::Napi>,
+}
+
+impl irq::Handler for E1000Driver {
+    type Data = Box<IrqData>;
+
+    fn handle_irq(data: &IrqData) -> irq::Return {
+        pr_info!("handle_irq\n");
+        let intr = {
+            let mut dev_e1k = data.dev_e1000.lock();
+            dev_e1k.as_mut().unwrap().e1000_intr()
+        };
+        pr_info!("irq::Handler E1000_ICR = {:#x}\n", intr);
+
+        if intr == 0 {
+            pr_warn!("No valid e1000 interrupt was found\n");
+            return irq::Return::None;
+        }
+
+        data.napi.schedule();
+
+        irq::Return::Handled
+    }
+}
+
+fn request_irq(irq: u32, data: Box<IrqData>) -> Result<irq::Registration<E1000Driver>> {
+    irq::Registration::try_new(irq, data, irq::flags::SHARED, fmt!("e1000_{irq}"))
+}
 
 struct Poller;
-
 impl NapiPoller for Poller {
     /// The pointer type that will be used to hold driver-defined data type.
     /// This must be same as DeviceOperations::Data.
     type Data = Box<NetData>;
 
     /// Corresponds to NAPI poll method.
-    fn poll(
-        napi: &Napi,
-        budget: i32,
-        dev: &Device,
-        data: <Self::Data as PointerWrapper>::Borrowed<'_>,
-    ) -> i32 {
-        todo!()
+    fn poll(napi: &Napi, budget: i32, dev: &net::Device, data: &NetData) -> i32 {
+        pr_info!("NapiPoller poll\n");
+
+        E1000Driver::handle_rx_irq(dev, napi, data);
+        E1000Driver::handle_tx_irq();
+
+        napi.complete_done(1);
+        1
     }
 }
 
-const E1000_REGS: u32 = 0x40000000; //?
+struct Stats64 {
+    rx_bytes: AtomicU64,
+    rx_packets: AtomicU64,
+    tx_bytes: AtomicU64,
+    tx_packets: AtomicU64,
+}
+impl Stats64 {
+    fn new() -> Self {
+        Stats64 {
+            rx_bytes: AtomicU64::new(0),
+            rx_packets: AtomicU64::new(0),
+            tx_bytes: AtomicU64::new(0),
+            tx_packets: AtomicU64::new(0),
+        }
+    }
+}
 
 struct Kernfn<T> {
     dev: Arc<device::Device>,
     alloc_coherent: Vec<dma::Allocation<T>>,
 }
+/*
 unsafe impl<T> Send for Kernfn<T> {}
 unsafe impl<T> Sync for Kernfn<T> {}
+*/
 
 impl<T> e1000::KernelFunc for Kernfn<T> {
     const PAGE_SIZE: usize = 1 << 12;
@@ -132,12 +216,16 @@ impl<T> e1000::KernelFunc for Kernfn<T> {
     }
 }
 
+unsafe impl Send for NetData {}
+unsafe impl Sync for NetData {}
+
 struct NetData {
     dev: Arc<device::Device>,
     res: Arc<MappedResource>,
-    dev_e1000: Pin<Box<SpinLock<Option<E1000Device<'static, Kernfn<u8>>>>>>,
-    tx_ring: usize,
-    rx_ring: usize,
+    //dev_e1000: Pin<Box<SpinLock<Option<E1000Device<'static, Kernfn<u8>>>>>>,
+    dev_e1000: Arc<SpinLock<Option<E1000Device<'static, Kernfn<u8>>>>>,
+    stats: Stats64,
+    napi: Arc<net::Napi>,
     irq: u32,
     irq_handler: AtomicPtr<irq::Registration<E1000Driver>>,
 }
@@ -151,13 +239,13 @@ impl net::DeviceOperations for E1000Driver {
     fn open(dev: &Device, data: &NetData) -> Result {
         pr_info!("Ethernet E1000 open\n");
 
-        let mut kfn = Kernfn {
+        let kfn = Kernfn {
             dev: data.dev.clone(),
             alloc_coherent: Vec::new(),
         };
         let regs = data.res.ptr;
         let mut e1000_device = E1000Device::<Kernfn<u8>>::new(kfn, regs).unwrap();
-
+        /*
         let ping_frame: Box<[u8]> = Box::try_new([
             0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x52, 0x54, 0x00, 0x12, 0x34, 0x55, 0x08, 0x06,
             0x00, 0x01, 0x08, 0x00, 0x06, 0x04, 0x00, 0x01, 0x52, 0x54, 0x00, 0x12, 0x34, 0x55,
@@ -165,17 +253,40 @@ impl net::DeviceOperations for E1000Driver {
         ])?; //ping 192.168.0.66
         e1000_device.e1000_transmit(&ping_frame);
         e1000_device.e1000_transmit(&ping_frame);
+        */
+        pr_info!("e1000 device is initialized\n");
+        {
+            let mut dev_e1k = data.dev_e1000.lock();
+            *dev_e1k = Some(e1000_device);
+        }
 
-        let mut dev_e1k = data.dev_e1000.lock();
-        *dev_e1k = Some(e1000_device);
+        let irq_data = Box::try_new(IrqData {
+            dev_e1000: data.dev_e1000.clone(),
+            res: data.res.clone(),
+            napi: data.napi.clone(),
+        })?;
+        let mut irq_regist = request_irq(data.irq, irq_data)?;
+        data.irq_handler.store(&mut irq_regist, Ordering::Relaxed);
 
-        Ok(())
-    }
+        // Enable NAPI scheduling
+        data.napi.enable();
 
-    /// Corresponds to `ndo_stop` in `struct net_device_ops`.
-    fn stop(dev: &Device, data: <Self::Data as PointerWrapper>::Borrowed<'_>) -> Result {
-        pr_warn!("net::DeviceOperations::stop() unimplemented!\n");
-        drop(data);
+        dev.netif_start_queue();
+
+        {
+            let mut dev_e1k = data.dev_e1000.lock_irqdisable();
+            let e1k_fn = dev_e1k.as_mut().unwrap();
+
+            e1k_fn.e1000_irq_enable();
+
+            /* fire a link status change interrupt to start the watchdog */
+            e1k_fn.e1000_cause_lsc_int(); // 没啥用？
+        };
+
+        // watchdog handler ?
+        // Enable net interface
+        dev.netif_carrier_on();
+
         Ok(())
     }
 
@@ -188,24 +299,59 @@ impl net::DeviceOperations for E1000Driver {
         pr_info!("start xmit\n");
 
         skb.put_padto(bindings::ETH_ZLEN);
-        let size = skb.len() - skb.data_len();
+        let _size = skb.len() - skb.data_len();
         let skb_data = skb.head_data();
 
-        pr_info!("SkBuff data len: {}, size: {}\n", skb_data.len(), size);
+        pr_info!(
+            "SkBuff length: {}, head data len: {}, get size: {}\n",
+            skb.len(),
+            skb_data.len(),
+            _size
+        );
 
         dev.sent_queue(skb.len());
 
-        {
+        let len = {
             let mut dev_e1k = data.dev_e1000.lock();
-            dev_e1k.as_mut().unwrap().e1000_transmit(skb_data);
+            dev_e1k.as_mut().unwrap().e1000_transmit(skb_data)
+        };
+
+        if len < 0 {
+            pr_warn!("Failed to send transmit the skbuff packet: {}", len);
+            return net::NetdevTx::Busy;
+        }
+
+        // when clean_tx_irq
+        {
+            let bytes = skb.len() as u64;
+            let packets = 1;
+
+            skb.napi_consume(64);
+
+            data.stats.tx_bytes.fetch_add(bytes, Ordering::Relaxed);
+            data.stats.tx_packets.fetch_add(packets, Ordering::Relaxed);
+
+            dev.completed_queue(packets as u32, bytes as u32);
         }
 
         net::NetdevTx::Ok
     }
 
     /// Corresponds to `ndo_get_stats64` in `struct net_device_ops`.
-    fn get_stats64(_dev: &Device, _data: &NetData, _storage: &mut RtnlLinkStats64) {
+    fn get_stats64(_dev: &Device, data: &NetData, stats: &mut RtnlLinkStats64) {
         pr_info!("get stats64\n");
+
+        stats.set_rx_bytes(data.stats.rx_bytes.load(Ordering::Relaxed));
+        stats.set_rx_packets(data.stats.rx_packets.load(Ordering::Relaxed));
+        stats.set_tx_bytes(data.stats.tx_bytes.load(Ordering::Relaxed));
+        stats.set_tx_packets(data.stats.tx_packets.load(Ordering::Relaxed));
+    }
+
+    /// Corresponds to `ndo_stop` in `struct net_device_ops`.
+    fn stop(dev: &Device, data: <Self::Data as PointerWrapper>::Borrowed<'_>) -> Result {
+        pr_warn!("net::DeviceOperations::stop() unimplemented!\n");
+        drop(data);
+        Ok(())
     }
 }
 
@@ -257,15 +403,26 @@ impl pci::Driver for E1000Driver {
         net_dev.eth_hw_addr_set(&MAC_HWADDR);
         let dev = Arc::try_new(device::Device::from_dev(pci_dev))?;
         let bar_res = Arc::try_new(bar_res)?;
+        /*
         let mut dev_e1000 = Pin::from(Box::try_new(unsafe { SpinLock::new(None) })?);
         spinlock_init!(dev_e1000.as_mut(), "e1000_device");
+        */
+        let mut lock_e1000 = unsafe { SpinLock::new(None) };
+        spinlock_init!(
+            unsafe { Pin::new_unchecked(&mut lock_e1000) },
+            "e1000_device"
+        );
+        let mut dev_e1000 = Arc::try_new(lock_e1000)?;
+
+        let napi = net::NapiAdapter::<Poller>::add_weight(&net_dev, 64)?;
+        net_dev.netif_carrier_off();
 
         let net_data = Box::try_new(NetData {
             dev,
             res: bar_res.clone(),
             dev_e1000,
-            tx_ring: 0,
-            rx_ring: 0,
+            stats: Stats64::new(),
+            napi: napi.into(),
             irq,
             irq_handler: AtomicPtr::new(core::ptr::null_mut()),
         })?;

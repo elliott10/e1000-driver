@@ -5,7 +5,9 @@
 pub const E1000_CTL: usize = 0x00000 / 4; /* Device Control Register - RW */
 pub const E1000_STAT: usize = 0x00008 / 4; /* Device Status Register - R */
 pub const E1000_ICR: usize = 0x000C0 / 4; /* Interrupt Cause Read - R */
+pub const E1000_ICS: usize = 0x000C8 / 4; /* Interrupt Cause Set - WO */
 pub const E1000_IMS: usize = 0x000D0 / 4; /* Interrupt Mask Set - RW */
+pub const E1000_IMC: usize = 0x000D8 / 4; /* Interrupt Mask Clear - WO */
 pub const E1000_RCTL: usize = 0x00100 / 4; /* RX Control - RW */
 pub const E1000_TCTL: usize = 0x00400 / 4; /* TX Control - RW */
 pub const E1000_TIPG: usize = 0x00410 / 4; /* TX Inter-packet gap -RW */
@@ -22,6 +24,23 @@ pub const E1000_TDH: usize = 0x03810 / 4; /* TX Descriptor Head - RW */
 pub const E1000_TDT: usize = 0x03818 / 4; /* TX Descripotr Tail - RW */
 pub const E1000_MTA: usize = 0x05200 / 4; /* Multicast Table Array - RW Array */
 pub const E1000_RA: usize = 0x05400 / 4; /* Receive Address - RW Array */
+
+/* This defines the bits that are set in the Interrupt Mask
+ * Set/Read Register.  Each bit is documented below:
+ *   o RXT0   = Receiver Timer Interrupt (ring 0)
+ *   o TXDW   = Transmit Descriptor Written Back
+ *   o RXDMT0 = Receive Descriptor Minimum Threshold hit (ring 0)
+ *   o RXSEQ  = Receive Sequence Error
+ *   o LSC    = Link Status Change
+ */
+pub const IMS_ENABLE_MASK: u32 = E1000_IMS_RXT0 | E1000_IMS_RXDMT0 | E1000_IMS_RXSEQ | E1000_IMS_LSC | E1000_IMS_TXDW;
+pub const E1000_IMS_TXDW: u32 = 0x00000001;
+pub const E1000_IMS_LSC: u32 = 0x00000004;
+pub const E1000_IMS_RXSEQ: u32 = 0x00000008;
+pub const E1000_IMS_RXDMT0: u32 = 0x00000010;
+pub const E1000_IMS_RXT0: u32 = 0x00000080;
+
+pub const E1000_ICR_LSC: u32 = 0x00000004; /* Link Status Change */
 
 /* Device Control */
 pub const E1000_CTL_SLU: u32 = 0x00000040; /* set link up */
