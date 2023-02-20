@@ -67,7 +67,7 @@ impl E1000Driver {
         let mut bytes = 0;
 
         let recv_vec = {
-            let mut dev_e1k = data.dev_e1000.lock();
+            let mut dev_e1k = data.dev_e1000.lock_irqdisable();
             dev_e1k.as_mut().unwrap().e1000_recv()
         };
 
@@ -75,22 +75,30 @@ impl E1000Driver {
             packets = vec.len();
             for (_i, packet) in vec.iter().enumerate() {
                 let mut len = packet.len();
-                bytes += len;
+                //bytes += len;
 
                 let skb = dev.alloc_skb_ip_align(RXBUFFER).unwrap();
                 let skb_buf =
                     unsafe { from_raw_parts_mut(skb.head_data().as_ptr() as *mut u8, len) };
                 skb_buf.copy_from_slice(&packet);
 
-                len -= 4; // why ?
+                //len -= 4; // ?
                 skb.put(len as u32);
                 let protocol = skb.eth_type_trans(dev);
                 skb.protocol_set(protocol);
 
                 // Send the skb up the stack
                 napi.gro_receive(&skb);
+
+                bytes += len;
+
+                //pr_info!("Sk Buff protocol: {:#x}, [01] = {:x}{:x}\n", protocol, skb_buf[0], skb_buf[1]);
             }
-            pr_info!("handle_rx_irq, received packets: {}\n", packets);
+            pr_info!(
+                "handle_rx_irq, received packets: {}, bytes: {}\n",
+                packets,
+                bytes
+            );
         } else {
             pr_warn!("None packets were received\n");
         }
@@ -119,10 +127,16 @@ impl irq::Handler for E1000Driver {
 
     fn handle_irq(data: &IrqData) -> irq::Return {
         pr_info!("handle_irq\n");
+        /*
         let intr = {
             let mut dev_e1k = data.dev_e1000.lock();
             dev_e1k.as_mut().unwrap().e1000_intr()
+        }; */
+        let intr = unsafe {
+            let ptr = data.res.ptr.wrapping_add(0xc0); // ICR
+            bindings::readl(ptr as _)
         };
+
         pr_info!("irq::Handler E1000_ICR = {:#x}\n", intr);
 
         if intr == 0 {
@@ -275,7 +289,8 @@ impl net::DeviceOperations for E1000Driver {
             e1k_fn.e1000_irq_enable();
 
             /* fire a link status change interrupt to start the watchdog */
-            e1k_fn.e1000_cause_lsc_int(); // 没啥用？
+            e1k_fn.e1000_cause_lsc_int();
+            // 没啥用？
             /* 或这样触发LSC中断
             unsafe {
                 let ptr = data.res.ptr.wrapping_add(0xc8); // ICS

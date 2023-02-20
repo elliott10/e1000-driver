@@ -238,7 +238,7 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         // ask e1000 for receive interrupts.
         self.regs[E1000_RDTR].write(0); // interrupt after every received packet (no timer)
         self.regs[E1000_RADV].write(0); // interrupt after every packet (no timer)
-        self.regs[E1000_IMS].write(1 << 7); // RXDW -- Receiver Descriptor Write Back
+        self.regs[E1000_IMS].write(1 << 7); // RXT0 - Receiver Timer Interrupt , RXDW -- Receiver Descriptor Write Back
 
         self.regs[E1000_ICR].read(); // clear ints
         self.e1000_write_flush();
