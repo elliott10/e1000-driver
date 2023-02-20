@@ -245,15 +245,7 @@ impl net::DeviceOperations for E1000Driver {
         };
         let regs = data.res.ptr;
         let mut e1000_device = E1000Device::<Kernfn<u8>>::new(kfn, regs).unwrap();
-        /*
-        let ping_frame: Box<[u8]> = Box::try_new([
-            0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x52, 0x54, 0x00, 0x12, 0x34, 0x55, 0x08, 0x06,
-            0x00, 0x01, 0x08, 0x00, 0x06, 0x04, 0x00, 0x01, 0x52, 0x54, 0x00, 0x12, 0x34, 0x55,
-            0xc0, 0xa8, 0x00, 0x7b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xc0, 0xa8, 0x00, 0x42,
-        ])?; //ping 192.168.0.66
-        e1000_device.e1000_transmit(&ping_frame);
-        e1000_device.e1000_transmit(&ping_frame);
-        */
+
         pr_info!("e1000 device is initialized\n");
         {
             let mut dev_e1k = data.dev_e1000.lock();
@@ -265,8 +257,10 @@ impl net::DeviceOperations for E1000Driver {
             res: data.res.clone(),
             napi: data.napi.clone(),
         })?;
-        let mut irq_regist = request_irq(data.irq, irq_data)?;
-        data.irq_handler.store(&mut irq_regist, Ordering::Relaxed);
+        let irq_regist = request_irq(data.irq, irq_data)?;
+        // 注意把申请的irq放入Box中，其他线程才能handle中断
+        data.irq_handler
+            .store(Box::into_raw(Box::try_new(irq_regist)?), Ordering::Relaxed);
 
         // Enable NAPI scheduling
         data.napi.enable();
@@ -277,10 +271,17 @@ impl net::DeviceOperations for E1000Driver {
             let mut dev_e1k = data.dev_e1000.lock_irqdisable();
             let e1k_fn = dev_e1k.as_mut().unwrap();
 
+            // enable rx int
             e1k_fn.e1000_irq_enable();
 
             /* fire a link status change interrupt to start the watchdog */
             e1k_fn.e1000_cause_lsc_int(); // 没啥用？
+            /* 或这样触发LSC中断
+            unsafe {
+                let ptr = data.res.ptr.wrapping_add(0xc8); // ICS
+                bindings::writel(4, ptr as _);
+            }
+            */
         };
 
         // watchdog handler ?
@@ -312,7 +313,7 @@ impl net::DeviceOperations for E1000Driver {
         dev.sent_queue(skb.len());
 
         let len = {
-            let mut dev_e1k = data.dev_e1000.lock();
+            let mut dev_e1k = data.dev_e1000.lock_irqdisable();
             dev_e1k.as_mut().unwrap().e1000_transmit(skb_data)
         };
 

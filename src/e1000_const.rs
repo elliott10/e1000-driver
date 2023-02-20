@@ -5,6 +5,7 @@
 pub const E1000_CTL: usize = 0x00000 / 4; /* Device Control Register - RW */
 pub const E1000_STAT: usize = 0x00008 / 4; /* Device Status Register - R */
 pub const E1000_ICR: usize = 0x000C0 / 4; /* Interrupt Cause Read - R */
+pub const E1000_ITR: usize = 0x000C4 / 4; /* Interrupt Throttling Rate - RW */
 pub const E1000_ICS: usize = 0x000C8 / 4; /* Interrupt Cause Set - WO */
 pub const E1000_IMS: usize = 0x000D0 / 4; /* Interrupt Mask Set - RW */
 pub const E1000_IMC: usize = 0x000D8 / 4; /* Interrupt Mask Clear - WO */
@@ -12,6 +13,7 @@ pub const E1000_RCTL: usize = 0x00100 / 4; /* RX Control - RW */
 pub const E1000_TCTL: usize = 0x00400 / 4; /* TX Control - RW */
 pub const E1000_TIPG: usize = 0x00410 / 4; /* TX Inter-packet gap -RW */
 pub const E1000_RDBAL: usize = 0x02800 / 4; /* RX Descriptor Base Address Low - RW */
+pub const E1000_RDBAH: usize = 0x02804 / 4; /* RX Descriptor Base Address High - RW */
 pub const E1000_RDTR: usize = 0x02820 / 4; /* RX Delay Timer */
 pub const E1000_RADV: usize = 0x0282C / 4; /* RX Interrupt Absolute Delay Timer */
 pub const E1000_RDH: usize = 0x02810 / 4; /* RX Descriptor Head - RW */
@@ -19,9 +21,12 @@ pub const E1000_RDT: usize = 0x02818 / 4; /* RX Descriptor Tail - RW */
 pub const E1000_RDLEN: usize = 0x02808 / 4; /* RX Descriptor Length - RW */
 pub const E1000_RSRPD: usize = 0x02C00 / 4; /* RX Small Packet Detect Interrupt */
 pub const E1000_TDBAL: usize = 0x03800 / 4; /* TX Descriptor Base Address Low - RW */
+pub const E1000_TDBAH: usize = 0x03804 / 4; /* TX Descriptor Base Address High - RW */
 pub const E1000_TDLEN: usize = 0x03808 / 4; /* TX Descriptor Length - RW */
 pub const E1000_TDH: usize = 0x03810 / 4; /* TX Descriptor Head - RW */
 pub const E1000_TDT: usize = 0x03818 / 4; /* TX Descripotr Tail - RW */
+pub const E1000_TIDV: usize = 0x03820 / 4; /* TX Interrupt Delay Value - RW */
+pub const E1000_TADV: usize = 0x0382C / 4; /* TX Interrupt Absolute Delay Val - RW */
 pub const E1000_MTA: usize = 0x05200 / 4; /* Multicast Table Array - RW Array */
 pub const E1000_RA: usize = 0x05400 / 4; /* Receive Address - RW Array */
 
@@ -33,8 +38,11 @@ pub const E1000_RA: usize = 0x05400 / 4; /* Receive Address - RW Array */
  *   o RXSEQ  = Receive Sequence Error
  *   o LSC    = Link Status Change
  */
-pub const IMS_ENABLE_MASK: u32 = E1000_IMS_RXT0 | E1000_IMS_RXDMT0 | E1000_IMS_RXSEQ | E1000_IMS_LSC | E1000_IMS_TXDW;
+pub const IMS_ENABLE_MASK: u32 = E1000_IMS_RXT0 | E1000_IMS_RXDMT0 | E1000_IMS_RXSEQ
+    | E1000_IMS_LSC /* | E1000_IMS_TXQE | E1000_IMS_TXDW */;
+
 pub const E1000_IMS_TXDW: u32 = 0x00000001;
+pub const E1000_IMS_TXQE: u32 = 0x00000002;
 pub const E1000_IMS_LSC: u32 = 0x00000004;
 pub const E1000_IMS_RXSEQ: u32 = 0x00000008;
 pub const E1000_IMS_RXDMT0: u32 = 0x00000010;

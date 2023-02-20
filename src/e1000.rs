@@ -211,7 +211,7 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
 
         // filter by qemu's MAC address, 52:54:00:12:34:56
         self.regs[E1000_RA].write(0x12005452);
-        self.regs[E1000_RA + 1].write(0x5634 | (1 << 31));
+        self.regs[E1000_RA + 1].write(0x5534 | (1 << 31));
         // multicast table
         for i in 0..(4096 / 32) {
             self.regs[E1000_MTA + i].write(0);
@@ -233,11 +233,14 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
             E1000_RCTL_SECRC,
         ); // strip CRC
 
+        self.regs[E1000_TIDV].write(0);
+        self.regs[E1000_TADV].write(0);
         // ask e1000 for receive interrupts.
         self.regs[E1000_RDTR].write(0); // interrupt after every received packet (no timer)
         self.regs[E1000_RADV].write(0); // interrupt after every packet (no timer)
         self.regs[E1000_IMS].write(1 << 7); // RXDW -- Receiver Descriptor Write Back
 
+        self.regs[E1000_ICR].read(); // clear ints
         self.e1000_write_flush();
         info!("e1000_init has been completed");
     }

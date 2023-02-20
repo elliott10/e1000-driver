@@ -1,5 +1,4 @@
 #![cfg_attr(feature = "const_fn", feature(const_fn))]
-
 #![no_std]
 
 use core::ptr;
@@ -21,13 +20,13 @@ impl<T: Copy> Volatile<T> {
     ///
     /// let value = Volatile::new(0u32);
     /// ```
-    /// 
+    ///
     /// ```rust
     /// use volatile::Volatile;
     /// let mut_ptr = 0xFEE00000 as *mut u32;
     /// let volatile_ptr = mut_ptr as *mut Volatile<u32>;
     /// ```
-    /// 
+    ///
     /// # Panics
     ///
     /// This method never panics.
@@ -94,6 +93,10 @@ impl<T: Copy> Volatile<T> {
     pub fn write(&mut self, value: T) {
         // UNSAFE: Safe, as we know that our internal value exists.
         unsafe { ptr::write_volatile(&mut self.0, value) };
+        /*
+        use kernel::bindings;
+        unsafe { bindings::writel(value, &mut self.0 as *mut u32 as *mut _) };
+        */
     }
 
     /// Performs a volatile read of the contained value, passes a mutable reference to it to the
