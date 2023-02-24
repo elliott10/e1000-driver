@@ -3,6 +3,7 @@ name = "e1000-driver"
 authors = ["Luoyuan Xiao <xiaoluoyuan@163.com>"]
 version = "0.1.0"
 edition = "2018"
+license = "GPL-2.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

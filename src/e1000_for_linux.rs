@@ -1,52 +1,69 @@
-// SPDX-License-Identifier: GPL-2.0
 //! Rust e1000 network device.
+#![allow(unused)]
+
 use core::slice::from_raw_parts_mut;
 use core::sync::atomic::{AtomicPtr, AtomicU64, Ordering};
-use kernel::net::{self, Device, Napi, NapiPoller, NetdevTx, RtnlLinkStats64, SkBuff};
 use kernel::prelude::*;
 use kernel::{
-    bindings, c_str, define_pci_id_table, device, dma, driver, irq, pci, spinlock_init,
-    PointerWrapper,
-};
-use kernel::{
+    bindings, c_str, define_pci_id_table, device, dma, driver,
     file::{self, File},
     io_buffer::{IoBufferReader, IoBufferWriter},
+    irq,
+    net::{self, Device, Napi, NapiPoller, NetdevTx, RtnlLinkStats64, SkBuff},
+    pci,
     pci::MappedResource,
+    spinlock_init,
     sync::{Arc, ArcBorrow, CondVar, SpinLock, UniqueArc},
+    PointerWrapper,
 };
 
 #[macro_use]
-mod log {
-    macro_rules! info {
-    ($($arg:tt)*) => (
-        $crate::pr_info!($($arg)*);
-    )
-}
-    macro_rules! debug (
-    ($($arg:tt)*) => (
-        $crate::pr_debug!($($arg)*)
-    )
-);
-    macro_rules! warn (
-    ($($arg:tt)*) => (
-        $crate::pr_warn!($($arg)*)
-    )
-);
-    macro_rules! error (
-    ($($arg:tt)*) => (
-        $crate::pr_err!($($arg)*)
-    )
-);
-}
-
-mod utils;
-mod volatile;
-pub use volatile::*;
-
+mod linux;
 mod e1000;
+mod utils;
 pub use e1000::*;
-mod e1000_const;
-pub use e1000_const::*;
+pub use linux::volatile::*;
+
+/// Expand Vec and slice functions
+pub trait Ext<T> {
+    /// Vec function with_capacity
+    fn with_capacity(capacity: usize) -> Self
+    where
+        Self: Sized,
+    {
+        unimplemented!()
+    }
+    /// Vec function push
+    fn push(&mut self, value: T) {
+        unimplemented!()
+    }
+    /// slice function to_vec
+    fn to_vec(&self) -> Vec<T> {
+        unimplemented!()
+    }
+}
+
+impl<T> Ext<T> for Vec<T> {
+    fn with_capacity(capacity: usize) -> Self {
+        alloc::vec::Vec::try_with_capacity(capacity).unwrap()
+    }
+
+    fn push(&mut self, value: T) {
+        self.try_push(value);
+    }
+}
+
+impl<T: Clone> Ext<T> for [T] {
+    fn to_vec(&self) -> Vec<T> {
+        self.try_to_vec().unwrap()
+    }
+}
+
+const RXBUFFER: u32 = 2048;
+/// Intel E1000 ID
+const DEVICE_ID_INTEL_82540EM: u32 = 0x100e;
+const VENDOR_ID_INTEL_82540EM: u32 = 0x8086;
+const MAC_HWADDR: [u8; 6] = [0x52, 0x54, 0x00, 0x12, 0x34, 0x55];
 
 module! {
     type: RustE1000dev,
@@ -56,13 +73,10 @@ module! {
     license: "GPL",
 }
 
-const RXBUFFER: u32 = 2048;
-
 struct E1000Driver;
 
 impl E1000Driver {
     fn handle_rx_irq(dev: &net::Device, napi: &Napi, data: &NetData) {
-        let length = 2048;
         let mut packets = 0;
         let mut bytes = 0;
 
@@ -127,8 +141,7 @@ impl irq::Handler for E1000Driver {
 
     fn handle_irq(data: &IrqData) -> irq::Return {
         pr_info!("handle_irq\n");
-        /*
-        let intr = {
+        /* let intr = {
             let mut dev_e1k = data.dev_e1000.lock();
             dev_e1k.as_mut().unwrap().e1000_intr()
         }; */
@@ -155,6 +168,7 @@ fn request_irq(irq: u32, data: Box<IrqData>) -> Result<irq::Registration<E1000Dr
 }
 
 struct Poller;
+
 impl NapiPoller for Poller {
     /// The pointer type that will be used to hold driver-defined data type.
     /// This must be same as DeviceOperations::Data.
@@ -178,6 +192,7 @@ struct Stats64 {
     tx_bytes: AtomicU64,
     tx_packets: AtomicU64,
 }
+
 impl Stats64 {
     fn new() -> Self {
         Stats64 {
@@ -193,10 +208,6 @@ struct Kernfn<T> {
     dev: Arc<device::Device>,
     alloc_coherent: Vec<dma::Allocation<T>>,
 }
-/*
-unsafe impl<T> Send for Kernfn<T> {}
-unsafe impl<T> Sync for Kernfn<T> {}
-*/
 
 impl<T> e1000::KernelFunc for Kernfn<T> {
     const PAGE_SIZE: usize = 1 << 12;
@@ -236,7 +247,6 @@ unsafe impl Sync for NetData {}
 struct NetData {
     dev: Arc<device::Device>,
     res: Arc<MappedResource>,
-    //dev_e1000: Pin<Box<SpinLock<Option<E1000Device<'static, Kernfn<u8>>>>>>,
     dev_e1000: Arc<SpinLock<Option<E1000Device<'static, Kernfn<u8>>>>>,
     stats: Stats64,
     napi: Arc<net::Napi>,
@@ -290,8 +300,7 @@ impl net::DeviceOperations for E1000Driver {
 
             /* fire a link status change interrupt to start the watchdog */
             e1k_fn.e1000_cause_lsc_int();
-            // 没啥用？
-            /* 或这样触发LSC中断
+            /* 或这种方式触发LSC中断
             unsafe {
                 let ptr = data.res.ptr.wrapping_add(0xc8); // ICS
                 bindings::writel(4, ptr as _);
@@ -382,10 +391,6 @@ impl driver::DeviceRemoval for DrvData {
         pr_info!("DrvData remove device driver from PCI\n");
     }
 }
-
-const DEVICE_ID_INTEL_82540EM: u32 = 0x100e;
-const VENDOR_ID_INTEL_82540EM: u32 = 0x8086;
-const MAC_HWADDR: [u8; 6] = [0x52, 0x54, 0x00, 0x12, 0x34, 0x55];
 
 impl pci::Driver for E1000Driver {
     type Data = Box<DrvData>;

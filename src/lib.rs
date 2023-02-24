@@ -1,11 +1,18 @@
 #![no_std]
+#![allow(unused)]
 
 extern crate alloc;
 
+#[macro_use]
+extern crate log;
+
 mod utils;
-mod e1000_const;
 pub mod e1000;
 pub mod pci;
+
+pub use volatile::Volatile;
+
+pub trait Ext {}
 
 pub fn add(left: usize, right: usize) -> usize {
     left + right

@@ -1,24 +1,21 @@
 // e1000 Driver for Intel 82540EP/EM
-use crate::e1000_const::*;
+use super::e1000_const::*;
+use super::super::Ext;
+use super::super::Volatile;
 use alloc::vec::Vec;
-//use alloc::collections::VecDeque;
-use super::volatile::Volatile;
-use core::{cmp::min, marker::PhantomData, mem::size_of, slice::from_raw_parts_mut};
-//use log::*;
+use core::{cmp::min, mem::size_of, slice::from_raw_parts_mut};
 use crate::utils::*;
 
-pub const TX_RING_SIZE: usize = 256;
-pub const RX_RING_SIZE: usize = 256;
-pub const MBUF_SIZE: usize = 2048;
-
-// struct spinlock e1000_lock;
+const TX_RING_SIZE: usize = 256;
+const RX_RING_SIZE: usize = 256;
+const MBUF_SIZE: usize = 2048;
 
 /// Kernel functions that drivers must use
 pub trait KernelFunc {
     /// Page size (usually 4K)
     const PAGE_SIZE: usize = 4096;
 
-    /// 或分配irq
+    /// 或请求分配irq
 
     /// Allocate consequent physical memory for DMA;
     /// Return (cpu virtual address, dma physical address) which is page aligned.
@@ -29,11 +26,12 @@ pub trait KernelFunc {
     fn dma_free_coherent(&mut self, vaddr: usize, pages: usize);
 }
 
+/// E1000Device 网卡驱动的主要结构体
 pub struct E1000Device<'a, K: KernelFunc> {
     regs: &'static mut [Volatile<u32>],
     rx_ring_dma: usize,
     tx_ring_dma: usize,
-    rx_ring: &'a mut [RxDesc],
+    rx_ring: &'a mut [RxDesc], //可以只为ring buffer加锁
     tx_ring: &'a mut [TxDesc],
     rx_mbufs: Vec<usize>,
     tx_mbufs: Vec<usize>,
@@ -42,7 +40,9 @@ pub struct E1000Device<'a, K: KernelFunc> {
     kfn: K,
 }
 
-// [E1000 3.3.3]
+// struct spinlock e1000_lock;
+
+/// [E1000 3.3.3]
 #[derive(Debug, Clone)]
 #[repr(C, align(16))]
 pub struct TxDesc {
@@ -55,7 +55,7 @@ pub struct TxDesc {
     special: u16,
 }
 
-// [E1000 3.2.3]
+/// [E1000 3.2.3]
 #[derive(Debug, Clone)]
 #[repr(C, align(16))]
 pub struct RxDesc {
@@ -68,6 +68,7 @@ pub struct RxDesc {
 }
 
 impl<'a, K: KernelFunc> E1000Device<'a, K> {
+    /// New an e1000 device by Allocating memory
     pub fn new(mut kfn: K, mapped_regs: usize) -> Result<Self, i32> {
         info!("New E1000 device @ {:#x}", mapped_regs);
         // 分配的ring内存空间需要16字节对齐
@@ -99,8 +100,8 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
             special: 0,
         });
 
-        let mut tx_mbufs = Vec::try_with_capacity(tx_ring.len()).unwrap();
-        let mut rx_mbufs = Vec::try_with_capacity(rx_ring.len()).unwrap();
+        let mut tx_mbufs = Vec::with_capacity(tx_ring.len());
+        let mut rx_mbufs = Vec::with_capacity(rx_ring.len());
 
         // 一起申请所有TX内存
         let alloc_tx_buffer_pages =
@@ -110,7 +111,7 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         for i in 0..TX_RING_SIZE {
             tx_ring[i].status = E1000_TXD_STAT_DD as u8;
             tx_ring[i].addr = tx_mbufs_dma as u64;
-            tx_mbufs.try_push(tx_mbufs_vaddr);
+            tx_mbufs.push(tx_mbufs_vaddr);
             tx_mbufs_dma += MBUF_SIZE;
             tx_mbufs_vaddr += MBUF_SIZE;
         }
@@ -126,7 +127,7 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
 
         for i in 0..RX_RING_SIZE {
             rx_ring[i].addr = rx_mbufs_dma as u64;
-            rx_mbufs.try_push(rx_mbufs_vaddr);
+            rx_mbufs.push(rx_mbufs_vaddr);
             rx_mbufs_dma += MBUF_SIZE;
             rx_mbufs_vaddr += MBUF_SIZE;
         }
@@ -173,6 +174,7 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         Ok(e1000dev)
     }
 
+    /// Initialize e1000 driver  
     /// mapped_regs is the memory address at which the e1000's registers are mapped.
     pub fn e1000_init(&mut self) {
         let stat = self.regs[E1000_STAT].read();
@@ -245,11 +247,7 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         info!("e1000_init has been completed");
     }
 
-    /* 参考
-    xv6_for_internet_os
-    https://xiayingp.gitbook.io/build_a_os/labs/lab-10-networking-part-1
-    https://blog.mky.moe/mit6828/10-lab10/
-    */
+    /// Transmitting network packets
     pub fn e1000_transmit(&mut self, packet: &[u8]) -> i32 {
         let tindex = self.regs[E1000_TDT].read() as usize;
         info!("Read E1000_TDT = {:#x}", tindex);
@@ -284,7 +282,8 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         length as i32
     }
 
-    // Todo: send recv Mutex lock
+    // Todo: send and recv lock
+    /// Receiving network packets
     pub fn e1000_recv(&mut self) -> Option<Vec<Vec<u8>>> {
         // Check for packets that have arrived from the e1000
         // Create and deliver an mbuf for each packet (using net_rx()).
@@ -298,7 +297,7 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
             let mbuf = unsafe { from_raw_parts_mut(self.rx_mbufs[rindex] as *mut u8, len) };
             info!("RX PKT {} <<<<<<<<<", len);
             //recv_packets.push_back(mbuf.to_vec());
-            recv_packets.try_push(mbuf.try_to_vec().unwrap());
+            recv_packets.push(mbuf.to_vec());
 
             // Deliver the mbuf to the network stack
             net_rx(mbuf);
@@ -324,17 +323,25 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
             None
         }
     }
+    
+    // 参考
+    // xv6_for_internet_os
+    // https://xiayingp.gitbook.io/build_a_os/labs/lab-10-networking-part-1
+    // https://blog.mky.moe/mit6828/10-lab10/
 
+    /// Clear Interrupt
     pub fn e1000_irq_disable(&mut self) {
         self.regs[E1000_IMC].write(!0);
         self.e1000_write_flush();
     }
 
+    /// Enable Interrupts
     pub fn e1000_irq_enable(&mut self) {
         self.regs[E1000_IMS].write(IMS_ENABLE_MASK);
         self.e1000_write_flush();
     }
 
+    /// flush e1000 status
     pub fn e1000_write_flush(&mut self) {
         self.regs[E1000_STAT].read();
     }
@@ -344,6 +351,7 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         self.regs[E1000_ICS].write(E1000_ICR_LSC);
     }
 
+    /// To handle e1000 interrupt
     pub fn e1000_intr(&mut self) -> u32 {
         //self.e1000_recv();
 
@@ -354,8 +362,8 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
     }
 }
 
-// called by e1000 driver's interrupt handler to deliver a packet to the
-// networking stack
+/// called by e1000 driver's interrupt handler to deliver a packet to the
+/// networking stack
 pub fn net_rx(packet: &mut [u8]) {
     /*
     struct eth *ethhdr;
