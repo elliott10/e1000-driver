@@ -4,6 +4,8 @@ authors = ["Luoyuan Xiao <xiaoluoyuan@163.com>"]
 version = "0.1.0"
 edition = "2018"
 license = "GPL-2.0"
+repository = "https://github.com/elliott10/e1000-driver.git"
+description = "E1000 driver in Rust for the Intel 82540EP/EM Gigabit Ethernet."
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

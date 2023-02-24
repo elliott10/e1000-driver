@@ -1,7 +1,7 @@
 obj-m := e1000_for_linux.o
 
 PWD := $(shell pwd)
-ARCH := riscv
+ARCH ?= riscv
 KDIR ?= /lib/modules/$(shell uname -r)/build
 
 default:
