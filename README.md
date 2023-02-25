@@ -33,12 +33,14 @@ let rx_buf = e1000_device.e1000_recv();
 ## Rust e1000 driver for Linux kernel module
 ```
 git clone https://github.com/elliott10/e1000-driver.git -b dev
+
 cd e1000-driver/src/linux
 make KDIR=/path/to/linux
+
 # e.g. make KDIR=/home/rust/linux
 ```
 
 ## Reference
 * Linux source code
 * [xv6: Implementation of net](https://github.com/mit-pdos/xv6-riscv-fall19/tree/net)
-* [Rust for Linux](https://github.com/fuji
+* [Rust for Linux](https://github.com/fujita/linux/tree/rust-e1000)
