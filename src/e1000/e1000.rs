@@ -15,7 +15,7 @@ pub trait KernelFunc {
     /// Page size (usually 4K)
     const PAGE_SIZE: usize = 4096;
 
-    /// 或请求分配irq
+    // 或请求分配irq
 
     /// Allocate consequent physical memory for DMA;
     /// Return (cpu virtual address, dma physical address) which is page aligned.
@@ -26,7 +26,8 @@ pub trait KernelFunc {
     fn dma_free_coherent(&mut self, vaddr: usize, pages: usize);
 }
 
-/// E1000Device 网卡驱动的主要结构体
+/// Main structure of the e1000 driver.
+/// Used to save members such as ring buffer.
 pub struct E1000Device<'a, K: KernelFunc> {
     regs: &'static mut [Volatile<u32>],
     rx_ring_dma: usize,
@@ -43,6 +44,7 @@ pub struct E1000Device<'a, K: KernelFunc> {
 // struct spinlock e1000_lock;
 
 /// [E1000 3.3.3]
+/// The dma descriptor for transmitting
 #[derive(Debug, Clone)]
 #[repr(C, align(16))]
 pub struct TxDesc {
@@ -56,6 +58,7 @@ pub struct TxDesc {
 }
 
 /// [E1000 3.2.3]
+/// The dma descriptor for receiving
 #[derive(Debug, Clone)]
 #[repr(C, align(16))]
 pub struct RxDesc {

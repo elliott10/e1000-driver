@@ -3,11 +3,12 @@ use core::slice::from_raw_parts_mut;
 use volatile::Volatile;
 use log::*;
 
-// E1000 registers which were mapped
+/// E1000 registers which were mapped
 pub const E1000_REGS: u32 = 0x40000000;
-// Qemu virt PCIe config space
+/// Qemu virt PCIe config space
 pub const ECAM: u32 = 0x30000000;
 
+// Simple PCI-E Scanning for qemu and its e1000 ethernet
 pub fn pci_init() {
     // Look at each PCI device on bus 0
     for dev in 0..32 {

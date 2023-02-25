@@ -30,11 +30,11 @@ Receiving network packets
 let rx_buf = e1000_device.e1000_recv();
 ```
 
-## Kernel module on Linux
+## Rust e1000 driver for Linux kernel module
 ```
 cd src/linux
-make ARCH=arch KDIR=/path/to/linux
-# e.g. make ARCH=riscv KDIR=/home/rust/linux
+make KDIR=/path/to/linux
+# e.g. make KDIR=/home/rust/linux
 ```
 
 ## Reference
