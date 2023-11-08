@@ -40,4 +40,8 @@ make KDIR=/path/to/linux
 ## Reference
 * Linux source code
 * [xv6: Implementation of net](https://github.com/mit-pdos/xv6-riscv-fall19/tree/net)
+* [MIT 6.828/2019/networking](https://pdos.csail.mit.edu/6.828/2019/lec/l-networking.pdf)
+* [Intel Gigabit Ethernet 82540EP/EM](https://pdos.csail.mit.edu/6.828/2019/readings/hardware/8254x_GBe_SDM.pdf)
+* [OSDev: Intel 8254x](https://wiki.osdev.org/Intel_8254x)
 * [Rust for Linux](https://github.com/fujita/linux/tree/rust-e1000)
+* [Kernel threads: Rust e1000 driver (Intel Ethernet adapter)](https://lore.kernel.org/rust-for-linux/20220919.103820.680182888079022491.fujita@lima-default/)
