@@ -33,8 +33,8 @@ let rx_buf = e1000_device.e1000_recv();
 ## Rust e1000 driver for Linux kernel module
 ```
 cd src/linux
-make KDIR=/path/to/linux
-# e.g. make KDIR=/home/rust/linux
+make ARCH=<cpu arch> KDIR=<path to linux>
+# e.g. make ARCH=x86_64 KDIR=/home/rust/linux/build
 ```
 
 ## Reference

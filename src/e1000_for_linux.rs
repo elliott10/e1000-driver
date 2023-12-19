@@ -14,7 +14,7 @@ use kernel::{
     pci::MappedResource,
     spinlock_init,
     sync::{Arc, ArcBorrow, CondVar, SpinLock, UniqueArc},
-    PointerWrapper,
+    ForeignOwnable,
 };
 
 #[macro_use]
@@ -61,8 +61,9 @@ impl<T: Clone> Ext<T> for [T] {
 
 const RXBUFFER: u32 = 2048;
 /// Intel E1000 ID
+const VENDOR_ID_INTEL: u32 = 0x8086;
+const DEVICE_ID_INTEL_I219: u32 = 0x15fc;
 const DEVICE_ID_INTEL_82540EM: u32 = 0x100e;
-const VENDOR_ID_INTEL_82540EM: u32 = 0x8086;
 const MAC_HWADDR: [u8; 6] = [0x52, 0x54, 0x00, 0x12, 0x34, 0x55];
 
 module! {
@@ -250,7 +251,7 @@ struct NetData {
     dev_e1000: Arc<SpinLock<Option<E1000Device<'static, Kernfn<u8>>>>>,
     stats: Stats64,
     napi: Arc<net::Napi>,
-    irq: u32,
+    irq: Option<u32>,
     irq_handler: AtomicPtr<irq::Registration<E1000Driver>>,
 }
 
@@ -281,7 +282,7 @@ impl net::DeviceOperations for E1000Driver {
             res: data.res.clone(),
             napi: data.napi.clone(),
         })?;
-        let irq_regist = request_irq(data.irq, irq_data)?;
+        let irq_regist = request_irq(data.irq.unwrap(), irq_data)?;
         // 注意把申请的irq放入Box中，其他线程才能handle中断
         data.irq_handler
             .store(Box::into_raw(Box::try_new(irq_regist)?), Ordering::Relaxed);
@@ -319,7 +320,7 @@ impl net::DeviceOperations for E1000Driver {
     fn start_xmit(
         skb: &SkBuff,
         dev: &Device,
-        data: <Self::Data as PointerWrapper>::Borrowed<'_>,
+        data: <Self::Data as ForeignOwnable>::Borrowed<'_>,
     ) -> NetdevTx {
         pr_info!("start xmit\n");
 
@@ -373,8 +374,15 @@ impl net::DeviceOperations for E1000Driver {
     }
 
     /// Corresponds to `ndo_stop` in `struct net_device_ops`.
-    fn stop(dev: &Device, data: <Self::Data as PointerWrapper>::Borrowed<'_>) -> Result {
-        pr_warn!("net::DeviceOperations::stop() unimplemented!\n");
+    fn stop(dev: &Device, data: <Self::Data as ForeignOwnable>::Borrowed<'_>) -> Result {
+        pr_warn!("net::DeviceOperations::stop\n");
+        dev.netif_carrier_off();
+        let mut dev_e1k = data.dev_e1000.lock_irqdisable();
+        dev_e1k.as_mut().unwrap().e1000_irq_disable();
+
+        dev.netif_stop_queue();
+        data.napi.disable();
+
         drop(data);
         Ok(())
     }
@@ -383,7 +391,8 @@ impl net::DeviceOperations for E1000Driver {
 struct DrvData {
     regist: net::Registration<E1000Driver>,
     bar_res: Arc<MappedResource>,
-    irq: u32,
+    bar_mask: i32,
+    irq: Option<u32>,
 }
 
 impl driver::DeviceRemoval for DrvData {
@@ -403,7 +412,6 @@ impl pci::Driver for E1000Driver {
 
         let bar_mask = pci_dev.select_bars(bindings::IORESOURCE_MEM as u64);
         pci_dev.request_selected_regions(bar_mask, c_str!("e1000"))?;
-        // Todo: pci_release_selected_regions when removing
 
         let res0 = pci_dev.iter_resource().nth(0).unwrap();
         let bar_res = pci_dev.map_resource(&res0, res0.len())?;
@@ -413,7 +421,7 @@ impl pci::Driver for E1000Driver {
             "PCI MappedResource addr: {:#x}, len: {}, irq: {}\n",
             bar_res.ptr,
             res0.len(),
-            irq
+            irq.unwrap_or_default(),
         );
 
         dma::set_mask(pci_dev, 0xffffffff)?;
@@ -452,15 +460,18 @@ impl pci::Driver for E1000Driver {
         Ok(Box::try_new(DrvData {
             regist,
             bar_res: bar_res.clone(),
+            bar_mask,
             irq,
         })?)
     }
-    fn remove(data: &Self::Data) {
+    fn remove(pci_dev: &mut pci::Device, data: &Self::Data) {
         pr_info!("PCI Driver remove\n");
+        pci_dev.release_selected_regions(data.bar_mask);
         drop(data);
     }
     define_pci_id_table! {u32, [
-        (pci::DeviceId::new(VENDOR_ID_INTEL_82540EM, DEVICE_ID_INTEL_82540EM), Some(0x1)),
+        (pci::DeviceId::new(VENDOR_ID_INTEL, DEVICE_ID_INTEL_82540EM), Some(0x1)),
+        (pci::DeviceId::new(VENDOR_ID_INTEL, DEVICE_ID_INTEL_I219), Some(0x1)),
     ]}
 }
 
