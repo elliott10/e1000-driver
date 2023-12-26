@@ -28,7 +28,7 @@ pub(crate) const E1000_TDT: usize = 0x03818 / 4; /* TX Descripotr Tail - RW */
 pub(crate) const E1000_TIDV: usize = 0x03820 / 4; /* TX Interrupt Delay Value - RW */
 pub(crate) const E1000_TADV: usize = 0x0382C / 4; /* TX Interrupt Absolute Delay Val - RW */
 pub(crate) const E1000_MTA: usize = 0x05200 / 4; /* Multicast Table Array - RW Array */
-pub(crate) const E1000_RA: usize = 0x05400 / 4; /* Receive Address - RW Array */
+pub(crate) const E1000_RA: usize = 0x05400 / 4; /* Receive Address Low are used for unicast/multicast address filtering. - RW Array */
 
 /* This defines the bits that are set in the Interrupt Mask
  * Set/Read Register.  Each bit is documented below:

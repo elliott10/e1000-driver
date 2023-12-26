@@ -215,8 +215,9 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         self.regs[E1000_RDLEN].write((self.rx_ring.len() * size_of::<RxDesc>()) as u32);
 
         // filter by qemu's MAC address, 52:54:00:12:34:56
-        self.regs[E1000_RA].write(0x12005452);
-        self.regs[E1000_RA + 1].write(0x5534 | (1 << 31));
+        //self.regs[E1000_RA].write(0x12005452);
+        //self.regs[E1000_RA + 1].write(0x5534 | (1 << 31));
+
         // multicast table
         for i in 0..(4096 / 32) {
             self.regs[E1000_MTA + i].write(0);

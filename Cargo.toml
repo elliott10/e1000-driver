@@ -1,7 +1,7 @@
 [package]
 name = "e1000-driver"
 authors = ["Luoyuan Xiao <xiaoluoyuan@163.com>"]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2018"
 license = "GPL-2.0"
 repository = "https://github.com/elliott10/e1000-driver.git"
