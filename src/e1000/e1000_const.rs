@@ -30,6 +30,8 @@ pub(crate) const E1000_TADV: usize = 0x0382C / 4; /* TX Interrupt Absolute Delay
 pub(crate) const E1000_MTA: usize = 0x05200 / 4; /* Multicast Table Array - RW Array */
 pub(crate) const E1000_RA: usize = 0x05400 / 4; /* Receive Address Low are used for unicast/multicast address filtering. - RW Array */
 
+pub(crate) const E1000_RFCTL: usize = 0x05008 / 4; /* e1000e: RFCTL */
+
 /* This defines the bits that are set in the Interrupt Mask
  * Set/Read Register.  Each bit is documented below:
  *   o RXT0   = Receiver Timer Interrupt (ring 0)

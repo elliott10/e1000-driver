@@ -134,6 +134,7 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
             rx_mbufs_dma += MBUF_SIZE;
             rx_mbufs_vaddr += MBUF_SIZE;
         }
+        fence_w();
 
         // Slice切片，内存連續的動態大小的序列；
         // array, 数组
@@ -199,24 +200,27 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
             error!("e1000, size of tx_ring is invalid");
         }
         self.regs[E1000_TDBAL].write(self.tx_ring_dma as u32);
-
+        self.regs[E1000_TDBAH].write((self.tx_ring_dma >> 32) as u32);
         self.regs[E1000_TDLEN].write((self.tx_ring.len() * size_of::<TxDesc>()) as u32);
-        self.regs[E1000_TDT].write(0);
-        self.regs[E1000_TDH].write(0);
+
+        self.regs[E1000_TDT].write(0); // TX Desc Tail
+        self.regs[E1000_TDH].write(0); // TX Desc Head
 
         // [E1000 14.4] Receive initialization
+        info!("rx ring 0: {:x?}",self.rx_ring[0]);
         if (self.rx_ring.len() * size_of::<RxDesc>()) % 128 != 0 {
             error!("e1000, size of rx_ring is invalid");
         }
         self.regs[E1000_RDBAL].write(self.rx_ring_dma as u32);
+        self.regs[E1000_RDBAH].write((self.rx_ring_dma >> 32) as u32);
+        self.regs[E1000_RDLEN].write((self.rx_ring.len() * size_of::<RxDesc>()) as u32);
 
         self.regs[E1000_RDH].write(0);
         self.regs[E1000_RDT].write((RX_RING_SIZE - 1) as u32);
-        self.regs[E1000_RDLEN].write((self.rx_ring.len() * size_of::<RxDesc>()) as u32);
 
         // filter by qemu's MAC address, 52:54:00:12:34:56
-        //self.regs[E1000_RA].write(0x12005452);
-        //self.regs[E1000_RA + 1].write(0x5534 | (1 << 31));
+        //self.regs[E1000_RA].write(0x6c005452);
+        //self.regs[E1000_RA + 1].write(0x88f8 | (1 << 31)); //52:54:00:6c:f8:88
 
         // multicast table
         for i in 0..(4096 / 32) {
@@ -232,18 +236,23 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         self.regs[E1000_TIPG].write(10 | (8 << 10) | (6 << 20)); // inter-pkt gap
 
         // receiver control bits.
-        self.regs[E1000_RCTL].write(
-            E1000_RCTL_EN | // enable receiver
-            E1000_RCTL_BAM |                 // enable broadcast
-            E1000_RCTL_SZ_2048 |             // 2048-byte rx buffers
-            E1000_RCTL_SECRC,
-        ); // strip CRC
+        self.regs[E1000_RCTL].write((
+            E1000_RCTL_EN |  // enable receiver
+            E1000_RCTL_BAM |  // enable broadcast
+            E1000_RCTL_SZ_2048 |  // 2048-byte rx buffers
+            E1000_RCTL_SECRC  // strip CRC
+            ) & !(0b11 << 10) // Just for e1000e DTYP bits[11:10]=00 : Legacy description type
+        ); 
+        self.regs[E1000_RFCTL].write(0); //e1000e RFCTL.EXSTEN bits[15]=0 : Legacy Desc
 
         self.regs[E1000_TIDV].write(0);
         self.regs[E1000_TADV].write(0);
         // ask e1000 for receive interrupts.
         self.regs[E1000_RDTR].write(0); // interrupt after every received packet (no timer)
         self.regs[E1000_RADV].write(0); // interrupt after every packet (no timer)
+
+        self.regs[E1000_ICS].write(1 << 7);
+
         self.regs[E1000_IMS].write(1 << 7); // RXT0 - Receiver Timer Interrupt , RXDW -- Receiver Descriptor Write Back
 
         self.regs[E1000_ICR].read(); // clear ints
@@ -255,6 +264,7 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
     pub fn e1000_transmit(&mut self, packet: &[u8]) -> i32 {
         let tindex = self.regs[E1000_TDT].read() as usize;
         info!("Read E1000_TDT = {:#x}", tindex);
+        //info!("TX Desc = {:#x?}", self.tx_ring[tindex]);
         if (self.tx_ring[tindex].status & E1000_TXD_STAT_DD as u8) == 0 {
             error!("E1000 hasn't finished the corresponding previous transmission request");
             return -1;
@@ -294,6 +304,13 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         //let mut recv_packets = VecDeque::new();
         let mut recv_packets = Vec::new();
         let mut rindex = (self.regs[E1000_RDT].read() as usize + 1) % RX_RING_SIZE;
+
+        //info!("RX Desc {} = {:#x?}", rindex, self.rx_ring[rindex]);
+        if self.rx_ring[rindex].addr == 0 { // ? qemu-kvm的e1000e上，有时该desc addr却会被自动清空
+            error!("E1000 RX Desc.addr is invalid");
+            return None;
+        }
+
         // DD设为1时，内存中的接收包是完整的
         while (self.rx_ring[rindex].status & E1000_RXD_STAT_DD as u8) != 0 {
             info!("Read E1000_RDT + 1 = {:#x}", rindex);
@@ -335,7 +352,7 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
 
     /// Clear Interrupt
     pub fn e1000_irq_disable(&mut self) {
-        self.regs[E1000_IMC].write(!0);
+        self.regs[E1000_IMC].write(!0); // 只有在对应位写1才能清中断Mask，以屏蔽对应中断
         self.e1000_write_flush();
     }
 
@@ -362,7 +379,9 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         // tell the e1000 we've seen this interrupt;
         // without this the e1000 won't raise any
         // further interrupts.
-        self.regs[E1000_ICR].read()
+        let icr = self.regs[E1000_ICR].read();
+        self.regs[E1000_ICR].write(icr);
+        icr
     }
 }
 

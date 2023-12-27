@@ -65,9 +65,9 @@ const VENDOR_ID_INTEL: u32 = 0x8086;
 const DEVICE_ID_INTEL_I219: u32 = 0x15fc;
 const DEVICE_ID_INTEL_82540EM: u32 = 0x100e;
 const DEVICE_ID_INTEL_82574L: u32 = 0x10d3;
-const MAC_HWADDR: [u8; 6] = [0x52, 0x54, 0x00, 0x12, 0x34, 0x56];
+//const MAC_HWADDR: [u8; 6] = [0x52, 0x54, 0x00, 0x12, 0x34, 0x56];
 //const MAC_HWADDR: [u8; 6] = [0x90, 0xe2, 0xfc, 0xb5, 0x36, 0x95];
-//const MAC_HWADDR: [u8; 6] = [0x52, 0x54, 0x00, 0x6c, 0xf8, 0x88];
+const MAC_HWADDR: [u8; 6] = [0x52, 0x54, 0x00, 0x6c, 0xf8, 0x88];
 
 module! {
     type: RustE1000dev,
@@ -144,23 +144,25 @@ impl irq::Handler for E1000Driver {
     type Data = Box<IrqData>;
 
     fn handle_irq(data: &IrqData) -> irq::Return {
-        pr_info!("handle_irq\n");
-        /* let intr = {
+        let intr = {
             let mut dev_e1k = data.dev_e1000.lock();
             dev_e1k.as_mut().unwrap().e1000_intr()
-        }; */
-        let intr = unsafe {
-            let ptr = data.res.ptr.wrapping_add(0xc0); // ICR
-            bindings::readl(ptr as _)
         };
+        /*
+        let intr = unsafe {
+            let ptr = data.res.ptr.wrapping_add(0xC0); // ICR
+            bindings::readl(ptr as *const u32 as _)
+        };
+        */
 
         pr_info!("irq::Handler E1000_ICR = {:#x}\n", intr);
 
+        /*
         if intr == 0 {
             pr_warn!("No valid e1000 interrupt was found\n");
-            //?
-            //return irq::Return::None;
+            return irq::Return::None;
         }
+        */
 
         data.napi.schedule();
 
@@ -228,7 +230,7 @@ impl<T> e1000::KernelFunc for Kernfn<T> {
         let vaddr = alloc.cpu_addr as usize;
         let paddr = alloc.dma_handle as usize;
         self.alloc_coherent.try_push(alloc);
-        pr_info!("Allocated vaddr: {:#x}, paddr: {:#x}\n", vaddr, paddr);
+        pr_info!("Allocated {} pages, vaddr: {:#x}, paddr: {:#x}\n", pages, vaddr, paddr);
 
         (vaddr, paddr)
     }
@@ -486,6 +488,21 @@ struct RustE1000dev {
 
 impl kernel::Module for RustE1000dev {
     fn init(name: &'static CStr, module: &'static ThisModule) -> Result<Self> {
+
+        pr_info!(r"
+ ____            _      __              _     _                  
+|  _ \ _   _ ___| |_   / _| ___  _ __  | |   (_)_ __  _   ___  __
+| |_) | | | / __| __| | |_ / _ \| '__| | |   | | '_ \| | | \ \/ /
+|  _ <| |_| \__ \ |_  |  _| (_) | |    | |___| | | | | |_| |>  < 
+|_| \_\\__,_|___/\__| |_|  \___/|_|    |_____|_|_| |_|\__,_/_/\_\
+                                                                 
+ ____       _                    
+|  _ \ _ __(_)_   _____ _ __ ___ 
+| | | | '__| \ \ / / _ \ '__/ __|
+| |_| | |  | |\ V /  __/ |  \__ \
+|____/|_|  |_| \_/ \___|_|  |___/
+                                 
+");
         pr_info!("Rust e1000 device driver (init)\n");
 
         let dev = driver::Registration::<pci::Adapter<E1000Driver>>::new_pinned(name, module)?;
