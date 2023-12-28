@@ -40,7 +40,7 @@ pub(crate) const E1000_RFCTL: usize = 0x05008 / 4; /* e1000e: RFCTL */
  *   o RXSEQ  = Receive Sequence Error
  *   o LSC    = Link Status Change
  */
-pub(crate) const IMS_ENABLE_MASK: u32 = E1000_IMS_RXT0 | E1000_IMS_RXDMT0 | E1000_IMS_RXSEQ
+pub(crate) const IMS_ENABLE_MASK: u32 = E1000_IMS_RXT0 /* | E1000_IMS_RXDMT0 | E1000_IMS_RXSEQ */
     | E1000_IMS_LSC /* | E1000_IMS_TXQE | E1000_IMS_TXDW */;
 
 pub(crate) const E1000_IMS_TXDW: u32 = 0x00000001;
@@ -56,7 +56,7 @@ pub(crate) const E1000_ICR_LSC: u32 = 0x00000004; /* Link Status Change */
 pub(crate) const E1000_CTL_SLU: u32 = 0x00000040; /* set link up */
 pub(crate) const E1000_CTL_FRCSPD: u32 = 0x00000800; /* force speed */
 pub(crate) const E1000_CTL_FRCDPLX: u32 = 0x00001000; /* force duplex */
-pub(crate) const E1000_CTL_RST: u32 = 0x00400000; /* full reset */
+pub(crate) const E1000_CTL_RST: u32 = (1 << 26); /* Device Reset */
 
 /* Transmit Control */
 pub(crate) const E1000_TCTL_RST: u32 = 0x00000001; /* software reset */

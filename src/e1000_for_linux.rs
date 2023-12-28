@@ -112,7 +112,7 @@ impl E1000Driver {
 
                 //pr_info!("Sk Buff protocol: {:#x}, [01] = {:x}{:x}\n", protocol, skb_buf[0], skb_buf[1]);
             }
-            pr_info!(
+            info!(
                 "handle_rx_irq, received packets: {}, bytes: {}\n",
                 packets,
                 bytes
@@ -144,8 +144,9 @@ impl irq::Handler for E1000Driver {
     type Data = Box<IrqData>;
 
     fn handle_irq(data: &IrqData) -> irq::Return {
+        info!("handle_irq\n");
         let intr = {
-            let mut dev_e1k = data.dev_e1000.lock();
+            let mut dev_e1k = data.dev_e1000.lock_irqdisable();
             dev_e1k.as_mut().unwrap().e1000_intr()
         };
         /*
@@ -154,15 +155,12 @@ impl irq::Handler for E1000Driver {
             bindings::readl(ptr as *const u32 as _)
         };
         */
+        info!("irq::Handler E1000_ICR = {:#x}\n", intr);
 
-        pr_info!("irq::Handler E1000_ICR = {:#x}\n", intr);
-
-        /*
         if intr == 0 {
             pr_warn!("No valid e1000 interrupt was found\n");
-            return irq::Return::None;
+            //return irq::Return::None;
         }
-        */
 
         data.napi.schedule();
 
@@ -183,7 +181,7 @@ impl NapiPoller for Poller {
 
     /// Corresponds to NAPI poll method.
     fn poll(napi: &Napi, budget: i32, dev: &net::Device, data: &NetData) -> i32 {
-        pr_info!("NapiPoller poll\n");
+        info!("NapiPoller poll\n");
 
         E1000Driver::handle_rx_irq(dev, napi, data);
         E1000Driver::handle_tx_irq();
@@ -328,13 +326,13 @@ impl net::DeviceOperations for E1000Driver {
         dev: &Device,
         data: <Self::Data as ForeignOwnable>::Borrowed<'_>,
     ) -> NetdevTx {
-        pr_info!("start xmit\n");
+        info!("start xmit\n");
 
         skb.put_padto(bindings::ETH_ZLEN);
         let _size = skb.len() - skb.data_len();
         let skb_data = skb.head_data();
 
-        pr_info!(
+        info!(
             "SkBuff length: {}, head data len: {}, get size: {}\n",
             skb.len(),
             skb_data.len(),
@@ -371,7 +369,7 @@ impl net::DeviceOperations for E1000Driver {
 
     /// Corresponds to `ndo_get_stats64` in `struct net_device_ops`.
     fn get_stats64(_dev: &Device, data: &NetData, stats: &mut RtnlLinkStats64) {
-        pr_info!("get stats64\n");
+        info!("get stats64\n");
 
         stats.set_rx_bytes(data.stats.rx_bytes.load(Ordering::Relaxed));
         stats.set_rx_packets(data.stats.rx_packets.load(Ordering::Relaxed));
@@ -381,7 +379,7 @@ impl net::DeviceOperations for E1000Driver {
 
     /// Corresponds to `ndo_stop` in `struct net_device_ops`.
     fn stop(dev: &Device, data: <Self::Data as ForeignOwnable>::Borrowed<'_>) -> Result {
-        pr_warn!("net::DeviceOperations::stop\n");
+        pr_info!("net::DeviceOperations::stop\n");
         dev.netif_carrier_off();
         let mut dev_e1k = data.dev_e1000.lock_irqdisable();
         dev_e1k.as_mut().unwrap().e1000_irq_disable();

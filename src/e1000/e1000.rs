@@ -199,6 +199,16 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
             //panic("e1000");
             error!("e1000, size of tx_ring is invalid");
         }
+
+        // transmitter control bits.
+        self.regs[E1000_TCTL].write(
+            E1000_TCTL_EN |  // enable
+            E1000_TCTL_PSP |                  // pad short packets
+            (0x10 << E1000_TCTL_CT_SHIFT) |   // collision stuff
+            (0x40 << E1000_TCTL_COLD_SHIFT),
+        );
+        self.regs[E1000_TIPG].write(10 | (8 << 10) | (6 << 20)); // inter-pkt gap
+
         self.regs[E1000_TDBAL].write(self.tx_ring_dma as u32);
         self.regs[E1000_TDBAH].write((self.tx_ring_dma >> 32) as u32);
         self.regs[E1000_TDLEN].write((self.tx_ring.len() * size_of::<TxDesc>()) as u32);
@@ -211,6 +221,18 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         if (self.rx_ring.len() * size_of::<RxDesc>()) % 128 != 0 {
             error!("e1000, size of rx_ring is invalid");
         }
+
+        // receiver control bits.
+        self.regs[E1000_RCTL].write((
+            E1000_RCTL_EN |  // enable receiver
+            E1000_RCTL_BAM |  // enable broadcast
+            E1000_RCTL_SZ_2048 |  // 2048-byte rx buffers
+            E1000_RCTL_SECRC  // strip CRC
+            ) & !(0b11 << 10) // Just for e1000e DTYP bits[11:10]=00 : Legacy description type
+        ); 
+        self.regs[E1000_RFCTL].write(0); //e1000e RFCTL.EXSTEN bits[15]=0 : Legacy Desc
+        info!("e1000 RCTL: {:#x}, RFCTL: {:#x}", self.regs[E1000_RCTL].read(), self.regs[E1000_RFCTL].read());
+
         self.regs[E1000_RDBAL].write(self.rx_ring_dma as u32);
         self.regs[E1000_RDBAH].write((self.rx_ring_dma >> 32) as u32);
         self.regs[E1000_RDLEN].write((self.rx_ring.len() * size_of::<RxDesc>()) as u32);
@@ -226,24 +248,6 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         for i in 0..(4096 / 32) {
             self.regs[E1000_MTA + i].write(0);
         }
-        // transmitter control bits.
-        self.regs[E1000_TCTL].write(
-            E1000_TCTL_EN |  // enable
-            E1000_TCTL_PSP |                  // pad short packets
-            (0x10 << E1000_TCTL_CT_SHIFT) |   // collision stuff
-            (0x40 << E1000_TCTL_COLD_SHIFT),
-        );
-        self.regs[E1000_TIPG].write(10 | (8 << 10) | (6 << 20)); // inter-pkt gap
-
-        // receiver control bits.
-        self.regs[E1000_RCTL].write((
-            E1000_RCTL_EN |  // enable receiver
-            E1000_RCTL_BAM |  // enable broadcast
-            E1000_RCTL_SZ_2048 |  // 2048-byte rx buffers
-            E1000_RCTL_SECRC  // strip CRC
-            ) & !(0b11 << 10) // Just for e1000e DTYP bits[11:10]=00 : Legacy description type
-        ); 
-        self.regs[E1000_RFCTL].write(0); //e1000e RFCTL.EXSTEN bits[15]=0 : Legacy Desc
 
         self.regs[E1000_TIDV].write(0);
         self.regs[E1000_TADV].write(0);
@@ -380,7 +384,7 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         // without this the e1000 won't raise any
         // further interrupts.
         let icr = self.regs[E1000_ICR].read();
-        self.regs[E1000_ICR].write(icr);
+        self.regs[E1000_ICR].write(icr); //Writing a 1b to ICR any bit also clears that bit.
         icr
     }
 }
