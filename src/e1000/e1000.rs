@@ -203,8 +203,8 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         // transmitter control bits.
         self.regs[E1000_TCTL].write(
             E1000_TCTL_EN |  // enable
-            E1000_TCTL_PSP |                  // pad short packets
-            (0x10 << E1000_TCTL_CT_SHIFT) |   // collision stuff
+            E1000_TCTL_PSP |  // pad short packets
+            (0x10 << E1000_TCTL_CT_SHIFT) |  // collision stuff
             (0x40 << E1000_TCTL_COLD_SHIFT),
         );
         self.regs[E1000_TIPG].write(10 | (8 << 10) | (6 << 20)); // inter-pkt gap
@@ -255,7 +255,9 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         self.regs[E1000_RDTR].write(0); // interrupt after every received packet (no timer)
         self.regs[E1000_RADV].write(0); // interrupt after every packet (no timer)
 
-        self.regs[E1000_ICS].write(1 << 7);
+        self.regs[E1000_ITR].write(0); //Interrupt Throttle interval has expired, and an interrupt will be generated
+
+        //self.regs[E1000_ICS].write(1 << 7); //手动测试触发对应中断
 
         self.regs[E1000_IMS].write(1 << 7); // RXT0 - Receiver Timer Interrupt , RXDW -- Receiver Descriptor Write Back
 
@@ -310,7 +312,7 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         let mut rindex = (self.regs[E1000_RDT].read() as usize + 1) % RX_RING_SIZE;
 
         //info!("RX Desc {} = {:#x?}", rindex, self.rx_ring[rindex]);
-        if self.rx_ring[rindex].addr == 0 { // ? qemu-kvm的e1000e上，有时该desc addr却会被自动清空
+        if self.rx_ring[rindex].addr == 0 {
             error!("E1000 RX Desc.addr is invalid");
             return None;
         }

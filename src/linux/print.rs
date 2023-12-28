@@ -1,11 +1,15 @@
 macro_rules! info {
     ($($arg:tt)*) => (
-        //$crate::pr_info!($($arg)*);
+        /*
+        $crate::pr_info!($($arg)*);
+        */
     )
 }
 macro_rules! debug (
     ($($arg:tt)*) => (
-        //$crate::pr_debug!($($arg)*)
+        /*
+        $crate::pr_debug!($($arg)*)
+        */
     )
 );
 macro_rules! warn (

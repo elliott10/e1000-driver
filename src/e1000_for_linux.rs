@@ -157,9 +157,9 @@ impl irq::Handler for E1000Driver {
         */
         info!("irq::Handler E1000_ICR = {:#x}\n", intr);
 
-        if intr == 0 {
+        if (intr & (1<<7)) == 0 {
             pr_warn!("No valid e1000 interrupt was found\n");
-            //return irq::Return::None;
+            return irq::Return::None;
         }
 
         data.napi.schedule();
@@ -386,6 +386,9 @@ impl net::DeviceOperations for E1000Driver {
 
         dev.netif_stop_queue();
         data.napi.disable();
+
+        let irq_ptr = data.irq_handler.load(Ordering::Relaxed);
+        unsafe{ drop(Box::from_raw(irq_ptr)); }
 
         drop(data);
         Ok(())
