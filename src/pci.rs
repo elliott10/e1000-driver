@@ -24,7 +24,7 @@ pub fn pci_init() {
 
         // E1000 ID = 100e:8086
         if deve_id == 0x100e8086 {
-            info!("PCI Found device id: {:#x}", deve_id);
+            pr_info!("PCI Found device id: {:#x}", deve_id);
             let pci_config = unsafe { from_raw_parts_mut(base as *mut Volatile<u32>, 0xff / 4) };
 
             // Enable I/O access, memory access, mastering

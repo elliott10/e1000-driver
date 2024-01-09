@@ -30,7 +30,12 @@ pub(crate) const E1000_TADV: usize = 0x0382C / 4; /* TX Interrupt Absolute Delay
 pub(crate) const E1000_MTA: usize = 0x05200 / 4; /* Multicast Table Array - RW Array */
 pub(crate) const E1000_RA: usize = 0x05400 / 4; /* Receive Address Low are used for unicast/multicast address filtering. - RW Array */
 
+/* Extension features*/
 pub(crate) const E1000_RFCTL: usize = 0x05008 / 4; /* e1000e: RFCTL */
+pub(crate) const E1000_TXDCTL0: usize = 0x03828 / 4; /* e1000e: RFCTL */
+pub(crate) const E1000_TXDCTL1: usize = (0x3828 + 0x100) / 4; /* e1000e: RFCTL */
+
+pub(crate) const E1000_TXDCTL_GRAN_SHIFT: u32 = 24;
 
 /* This defines the bits that are set in the Interrupt Mask
  * Set/Read Register.  Each bit is documented below:
@@ -57,6 +62,8 @@ pub(crate) const E1000_CTL_SLU: u32 = 0x00000040; /* set link up */
 pub(crate) const E1000_CTL_FRCSPD: u32 = 0x00000800; /* force speed */
 pub(crate) const E1000_CTL_FRCDPLX: u32 = 0x00001000; /* force duplex */
 pub(crate) const E1000_CTL_RST: u32 = (1 << 26); /* Device Reset */
+pub(crate) const E1000_CTL_PHY_RST: u32 = (1 << 31); /* Phy Reset */
+pub(crate) const E1000_CTL_ASDE: u32 = (1 << 5); /* Auto-Speed Detection Enable */
 
 /* Transmit Control */
 pub(crate) const E1000_TCTL_RST: u32 = 0x00000001; /* software reset */

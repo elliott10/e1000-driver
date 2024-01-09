@@ -5,6 +5,7 @@ use super::super::Volatile;
 use alloc::vec::Vec;
 use core::{cmp::min, mem::size_of, slice::from_raw_parts_mut};
 use crate::utils::*;
+use kernel::pr_info;
 
 const TX_RING_SIZE: usize = 256;
 const RX_RING_SIZE: usize = 256;
@@ -73,7 +74,7 @@ pub struct RxDesc {
 impl<'a, K: KernelFunc> E1000Device<'a, K> {
     /// New an e1000 device by Allocating memory
     pub fn new(mut kfn: K, mapped_regs: usize) -> Result<Self, i32> {
-        info!("New E1000 device @ {:#x}", mapped_regs);
+        pr_info!("New E1000 device @ {:#x}\n", mapped_regs);
         // 分配的ring内存空间需要16字节对齐
         let alloc_tx_ring_pages =
             ((TX_RING_SIZE * size_of::<TxDesc>()) + (K::PAGE_SIZE - 1)) / K::PAGE_SIZE;
@@ -183,11 +184,17 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
     pub fn e1000_init(&mut self) {
         let stat = self.regs[E1000_STAT].read();
         let ctl = self.regs[E1000_CTL].read();
-        info!("e1000 CTL: {:#x}, Status: {:#x}", ctl, stat);
+        pr_info!("e1000 CTL: {:#x}, Status: {:#x}\n", ctl, stat);
 
         // Reset the device
         self.regs[E1000_IMS].write(0); // disable interrupts
         self.regs[E1000_CTL].write(ctl | E1000_CTL_RST);
+        // self.e1000_write_flush();
+        self.regs[E1000_CTL].write(ctl | E1000_CTL_PHY_RST); // reset phy
+        self.regs[E1000_IMS].write(0); // redisable interrupts
+        self.regs[E1000_CTL].write(ctl | E1000_CTL_ASDE | E1000_CTL_SLU); // set Auto-Speed Detection Enable and set link up
+
+        
         self.regs[E1000_IMS].write(0); // redisable interrupts
 
         // 内存壁垒 fence
@@ -204,8 +211,10 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         self.regs[E1000_TCTL].write(
             E1000_TCTL_EN |  // enable
             E1000_TCTL_PSP |  // pad short packets
-            (0x10 << E1000_TCTL_CT_SHIFT) |  // collision stuff
-            (0x40 << E1000_TCTL_COLD_SHIFT),
+            E1000_TCTL_RTLC |
+            (15 << E1000_TCTL_CT_SHIFT) & // collision stuff
+            !(E1000_TCTL_COLD) |
+            (63 << E1000_TCTL_COLD_SHIFT)
         );
         self.regs[E1000_TIPG].write(10 | (8 << 10) | (6 << 20)); // inter-pkt gap
 
@@ -216,8 +225,11 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         self.regs[E1000_TDT].write(0); // TX Desc Tail
         self.regs[E1000_TDH].write(0); // TX Desc Head
 
+        self.regs[E1000_TXDCTL0].write(1 << E1000_TXDCTL_GRAN_SHIFT);
+        self.regs[E1000_TXDCTL1].write(1 << E1000_TXDCTL_GRAN_SHIFT);
+
         // [E1000 14.4] Receive initialization
-        info!("rx ring 0: {:x?}",self.rx_ring[0]);
+        pr_info!("rx ring 0: {:x?}\n",self.rx_ring[0]);
         if (self.rx_ring.len() * size_of::<RxDesc>()) % 128 != 0 {
             error!("e1000, size of rx_ring is invalid");
         }
@@ -231,7 +243,7 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
             ) & !(0b11 << 10) // Just for e1000e DTYP bits[11:10]=00 : Legacy description type
         ); 
         self.regs[E1000_RFCTL].write(0); //e1000e RFCTL.EXSTEN bits[15]=0 : Legacy Desc
-        info!("e1000 RCTL: {:#x}, RFCTL: {:#x}", self.regs[E1000_RCTL].read(), self.regs[E1000_RFCTL].read());
+        pr_info!("e1000 RCTL: {:#x}, RFCTL: {:#x}\n", self.regs[E1000_RCTL].read(), self.regs[E1000_RFCTL].read());
 
         self.regs[E1000_RDBAL].write(self.rx_ring_dma as u32);
         self.regs[E1000_RDBAH].write((self.rx_ring_dma >> 32) as u32);
@@ -241,8 +253,8 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         self.regs[E1000_RDT].write((RX_RING_SIZE - 1) as u32);
 
         // filter by qemu's MAC address, 52:54:00:12:34:56
-        //self.regs[E1000_RA].write(0x6c005452);
-        //self.regs[E1000_RA + 1].write(0x88f8 | (1 << 31)); //52:54:00:6c:f8:88
+        // self.regs[E1000_RA].write(0x88888888);
+        // self.regs[E1000_RA + 1].write(0x8887 | (1 << 31)); //52:54:00:6c:f8:88
 
         // multicast table
         for i in 0..(4096 / 32) {
@@ -263,18 +275,22 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
 
         self.regs[E1000_ICR].read(); // clear ints
         self.e1000_write_flush();
-        info!("e1000_init has been completed");
+        pr_info!("e1000_init has been completed\n");
     }
 
     /// Transmitting network packets
     pub fn e1000_transmit(&mut self, packet: &[u8]) -> i32 {
+        let tdh = self.regs[E1000_TDH].read() as usize;
         let tindex = self.regs[E1000_TDT].read() as usize;
-        info!("Read E1000_TDT = {:#x}", tindex);
-        //info!("TX Desc = {:#x?}", self.tx_ring[tindex]);
+        pr_info!("Read E1000_TDH = {:#x}", tdh);
+        pr_info!("Read E1000_TDT = {:#x}", tindex);
+        // info!("TX Desc = {:#x?}", self.tx_ring[tindex]);
         if (self.tx_ring[tindex].status & E1000_TXD_STAT_DD as u8) == 0 {
             error!("E1000 hasn't finished the corresponding previous transmission request");
             return -1;
         }
+
+        pr_info!("TX===================================={:02x?}\n", packet);
 
         let mut length = packet.len();
         if length > self.mbuf_size {
@@ -285,13 +301,13 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         let mbuf = unsafe { from_raw_parts_mut(self.tx_mbufs[tindex] as *mut u8, length) };
         mbuf.copy_from_slice(packet);
 
-        info!(">>>>>>>>> TX PKT {}", length);
-        info!("\n\r");
-        //print_hex_dump(tx_mbuf, 64);
+        pr_info!(">>>>>>>>> TX PKT {}", length);
+        pr_info!("\n\r");
 
         self.tx_ring[tindex].length = length as u16;
         self.tx_ring[tindex].status = 0;
         self.tx_ring[tindex].cmd = (E1000_TXD_CMD_RS | E1000_TXD_CMD_EOP) as u8;
+        pr_info!("TX Desc = {:#x?}", self.tx_ring[tindex]);
 
         self.regs[E1000_TDT].write(((tindex + 1) % TX_RING_SIZE) as u32);
 
@@ -319,11 +335,12 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
 
         // DD设为1时，内存中的接收包是完整的
         while (self.rx_ring[rindex].status & E1000_RXD_STAT_DD as u8) != 0 {
-            info!("Read E1000_RDT + 1 = {:#x}", rindex);
+            pr_info!("Read E1000_RDT + 1 = {:#x}", rindex);
             let len = self.rx_ring[rindex].length as usize;
             let mbuf = unsafe { from_raw_parts_mut(self.rx_mbufs[rindex] as *mut u8, len) };
-            info!("RX PKT {} <<<<<<<<<", len);
+            pr_info!("RX PKT {} <<<<<<<<<", len);
             //recv_packets.push_back(mbuf.to_vec());
+            pr_info!("RX===================================={:02x?}\n", mbuf);
             recv_packets.push(mbuf.to_vec());
 
             // Deliver the mbuf to the network stack
@@ -342,7 +359,7 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
 
             rindex = (rindex + 1) % RX_RING_SIZE;
         }
-        info!("e1000_recv\n\r");
+        pr_info!("e1000_recv\n\r");
 
         if recv_packets.len() > 0 {
             Some(recv_packets)
@@ -389,6 +406,18 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         self.regs[E1000_ICR].write(icr); //Writing a 1b to ICR any bit also clears that bit.
         icr
     }
+
+    pub fn e1000_clean_tx_irq(&mut self) {
+        // let mut tindex = self.regs[E1000_TDT].read() as usize;
+        // while (self.tx_ring[tindex].status & E1000_TXD_STAT_DD as u8) != 0 {
+        //     self.tx_ring[tindex].status & !E1000_TXD_STAT_DD as u8;
+        //     tindex = tindex + 1;
+        //     if tindex == TX_RING_SIZE {
+        //         tindex = 0;
+        //     }
+        // }
+    }
+
 }
 
 /// called by e1000 driver's interrupt handler to deliver a packet to the
