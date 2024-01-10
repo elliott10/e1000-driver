@@ -218,7 +218,7 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         );
         self.regs[E1000_TIPG].write(10 | (8 << 10) | (6 << 20)); // inter-pkt gap
 
-        self.regs[E1000_TDBAL].write(self.tx_ring_dma as u32);
+        self.regs[E1000_TDBAL].write((self.tx_ring_dma & 0xffffffff) as u32);
         self.regs[E1000_TDBAH].write((self.tx_ring_dma >> 32) as u32);
         self.regs[E1000_TDLEN].write((self.tx_ring.len() * size_of::<TxDesc>()) as u32);
 
@@ -231,11 +231,13 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         let mut txdctl0 = self.regs[E1000_TXDCTL0].read();
         txdctl0 = (txdctl0 & !(E1000_TXDCTL_WTHRESH)) | E1000_TXDCTL_FULL_TX_DESC_WB;
         txdctl0 = (txdctl0 & !(E1000_TXDCTL_PTHRESH)) | E1000_TXDCTL_MAX_TX_DESC_PREFETCH;
+        txdctl0 = (txdctl0 | (1 << 22));
         self.regs[E1000_TXDCTL0].write(txdctl0);
 
         let mut txdctl1 = self.regs[E1000_TXDCTL1].read();
         txdctl1 = (txdctl1 & !(E1000_TXDCTL_WTHRESH)) | E1000_TXDCTL_FULL_TX_DESC_WB;
         txdctl1 = (txdctl1 & !(E1000_TXDCTL_PTHRESH)) | E1000_TXDCTL_MAX_TX_DESC_PREFETCH;
+        txdctl1 = (txdctl1 | (1 << 22));
         self.regs[E1000_TXDCTL1].write(txdctl1);
 
         // [E1000 14.4] Receive initialization
@@ -300,8 +302,6 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
     pub fn e1000_transmit(&mut self, packet: &[u8]) -> i32 {
         let tdh = self.regs[E1000_TDH].read() as usize;
         let tindex = self.regs[E1000_TDT].read() as usize;
-        pr_info!("Read E1000_TDH = {:#x}", tdh);
-        pr_info!("Read E1000_TDT = {:#x}", tindex);
         // info!("TX Desc = {:#x?}", self.tx_ring[tindex]);
         if (self.tx_ring[tindex].status & E1000_TXD_STAT_DD as u8) == 0 {
             error!("E1000 hasn't finished the corresponding previous transmission request");
@@ -319,19 +319,29 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         let mbuf = unsafe { from_raw_parts_mut(self.tx_mbufs[tindex] as *mut u8, length) };
         mbuf.copy_from_slice(packet);
 
-        pr_info!(">>>>>>>>> TX PKT {}", length);
-        pr_info!("\n\r");
+        pr_info!(">>>>>>>>> TX PKT {}\n", length);
 
         self.tx_ring[tindex].length = length as u16;
         self.tx_ring[tindex].status = 0;
         self.tx_ring[tindex].cmd = (E1000_TXD_CMD_RS | E1000_TXD_CMD_EOP) as u8;
-        pr_info!("TX Desc = {:#x?}", self.tx_ring[tindex]);
+        // pr_info!("TX Desc = {:#x?}", self.tx_ring[tindex]);
 
         self.regs[E1000_TDT].write(((tindex + 1) % TX_RING_SIZE) as u32);
 
         self.e1000_write_flush();
         // sync
         fence_w();
+        
+        let tdh = self.regs[E1000_TDH].read() as usize;
+        let tindex = self.regs[E1000_TDT].read() as usize;
+        let tdbah = self.regs[E1000_TDBAH].read() as usize;
+        let tdbal = self.regs[E1000_TDBAL].read() as usize;
+        let tdlen = self.regs[E1000_TDLEN].read() as usize;
+        pr_info!("Read E1000_TDH = {:#x}\n", tdh);
+        pr_info!("Read E1000_TDT = {:#x}\n", tindex);
+        pr_info!("Read E1000_TDBAH = {:#x}\n", tdbah);
+        pr_info!("Read E1000_TDBAL = {:#x}\n", tdbal);
+        pr_info!("Read E1000_TDLEN = {:#x}\n", tdlen);
 
         length as i32
     }

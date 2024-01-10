@@ -345,7 +345,7 @@ impl net::DeviceOperations for E1000Driver {
         );
 
         dev.sent_queue(skb.len());
-
+        skb.set_tx_timestamp();
         let len = {
             let mut dev_e1k = data.dev_e1000.lock_irqdisable();
             dev_e1k.as_mut().unwrap().e1000_transmit(skb_data)
