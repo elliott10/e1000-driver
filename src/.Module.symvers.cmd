@@ -1,1 +1,0 @@
-cmd_/root/kernel_dev/drivers/e1000-driver/src/linux/../Module.symvers :=  sed 's/ko$$/o/'  /root/kernel_dev/drivers/e1000-driver/src/linux/../modules.order | scripts/mod/modpost  -a    -o /root/kernel_dev/drivers/e1000-driver/src/linux/../Module.symvers -e -i Module.symvers -T - 

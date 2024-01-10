@@ -1,1 +1,0 @@
-cmd_/root/kernel_dev/drivers/e1000-driver/src/linux/../e1000_for_linux.mod := printf '%s\n'   e1000_for_linux.o | awk '!x[$$0]++ { print("/root/kernel_dev/drivers/e1000-driver/src/linux/../"$$0) }' > /root/kernel_dev/drivers/e1000-driver/src/linux/../e1000_for_linux.mod

@@ -1,1 +1,0 @@
-cmd_/root/kernel_dev/drivers/e1000-driver/src/linux/../modules.order := {   echo /root/kernel_dev/drivers/e1000-driver/src/linux/../e1000_for_linux.ko; :; } > /root/kernel_dev/drivers/e1000-driver/src/linux/../modules.order
