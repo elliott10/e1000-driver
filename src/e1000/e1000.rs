@@ -9,7 +9,7 @@ use kernel::pr_info;
 
 const TX_RING_SIZE: usize = 256;
 const RX_RING_SIZE: usize = 256;
-const MBUF_SIZE: usize = 2048;
+const MBUF_SIZE: usize = 4096;
 
 /// Kernel functions that drivers must use
 pub trait KernelFunc {
@@ -190,9 +190,9 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         self.regs[E1000_IMS].write(0); // disable interrupts
         self.regs[E1000_CTL].write(ctl | E1000_CTL_RST);
         // self.e1000_write_flush();
-        self.regs[E1000_CTL].write(ctl | E1000_CTL_PHY_RST); // reset phy
+        self.regs[E1000_CTL].write(ctl | E1000_CTL_PHY_RST);
         self.regs[E1000_IMS].write(0); // redisable interrupts
-        self.regs[E1000_CTL].write(ctl | E1000_CTL_ASDE | E1000_CTL_SLU); // set Auto-Speed Detection Enable and set link up
+        self.regs[E1000_CTL].write(ctl | E1000_CTL_ASDE | E1000_CTL_SLU);
 
         
         self.regs[E1000_IMS].write(0); // redisable interrupts
@@ -228,11 +228,22 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         self.regs[E1000_TXDCTL0].write(1 << E1000_TXDCTL_GRAN_SHIFT);
         self.regs[E1000_TXDCTL1].write(1 << E1000_TXDCTL_GRAN_SHIFT);
 
+        let mut txdctl0 = self.regs[E1000_TXDCTL0].read();
+        txdctl0 = (txdctl0 & !(E1000_TXDCTL_WTHRESH)) | E1000_TXDCTL_FULL_TX_DESC_WB;
+        txdctl0 = (txdctl0 & !(E1000_TXDCTL_PTHRESH)) | E1000_TXDCTL_MAX_TX_DESC_PREFETCH;
+        self.regs[E1000_TXDCTL0].write(txdctl0);
+
+        let mut txdctl1 = self.regs[E1000_TXDCTL1].read();
+        txdctl1 = (txdctl1 & !(E1000_TXDCTL_WTHRESH)) | E1000_TXDCTL_FULL_TX_DESC_WB;
+        txdctl1 = (txdctl1 & !(E1000_TXDCTL_PTHRESH)) | E1000_TXDCTL_MAX_TX_DESC_PREFETCH;
+        self.regs[E1000_TXDCTL1].write(txdctl1);
+
         // [E1000 14.4] Receive initialization
         pr_info!("rx ring 0: {:x?}\n",self.rx_ring[0]);
         if (self.rx_ring.len() * size_of::<RxDesc>()) % 128 != 0 {
             error!("e1000, size of rx_ring is invalid");
         }
+
 
         // receiver control bits.
         self.regs[E1000_RCTL].write((
@@ -274,6 +285,13 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         self.regs[E1000_IMS].write(1 << 7); // RXT0 - Receiver Timer Interrupt , RXDW -- Receiver Descriptor Write Back
 
         self.regs[E1000_ICR].read(); // clear ints
+
+        let mut ctrl_ext = self.regs[E1000_CTRL_EXT].read();
+        ctrl_ext = ctrl_ext | E1000_CTRL_EXT_RO_DIS;
+        self.regs[E1000_CTRL_EXT].write(ctrl_ext);
+
+        self.e1000_power_up_phy();
+
         self.e1000_write_flush();
         pr_info!("e1000_init has been completed\n");
     }
@@ -408,16 +426,49 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
     }
 
     pub fn e1000_clean_tx_irq(&mut self) {
-        // let mut tindex = self.regs[E1000_TDT].read() as usize;
-        // while (self.tx_ring[tindex].status & E1000_TXD_STAT_DD as u8) != 0 {
-        //     self.tx_ring[tindex].status & !E1000_TXD_STAT_DD as u8;
-        //     tindex = tindex + 1;
-        //     if tindex == TX_RING_SIZE {
-        //         tindex = 0;
-        //     }
-        // }
     }
 
+    pub fn e1000_read_phy_reg(&mut self, reg_addr: u32) -> u16 {
+        let phy_addr = 1;
+        let mut mdic = 0
+            | reg_addr << E1000_MDIC_REG_SHIFT
+            | phy_addr << E1000_MDIC_PHY_SHIFT
+            | E1000_MDIC_OP_READ;
+        self.regs[E1000_MDIC].write(mdic);
+        
+        // polling the ready bit
+        loop {
+            mdic = self.regs[E1000_MDIC].read();
+            if mdic & E1000_MDIC_READY > 0 {
+                break;
+            }
+        }
+        mdic as u16
+    }
+    
+    pub fn e1000_write_phy_reg(&mut self, reg_addr: u32, data: u16) {
+        let phy_addr = 1;
+        let mut mdic = data as u32
+            | reg_addr << E1000_MDIC_REG_SHIFT
+            | phy_addr << E1000_MDIC_PHY_SHIFT
+            | E1000_MDIC_OP_WRITE;
+        self.regs[E1000_MDIC].write(mdic);
+
+        // polling the ready bit
+        loop {
+            mdic = self.regs[E1000_MDIC].read();
+            if mdic & E1000_MDIC_READY > 0 {
+                break;
+            }
+        }
+    }
+
+
+    pub fn e1000_power_up_phy(&mut self) {
+        let mut mii = self.e1000_read_phy_reg(PHY_CTRL);
+        mii |= !MII_CR_POWER_DOWN as u16;
+        self.e1000_write_phy_reg(PHY_CTRL, mii);
+    }
 }
 
 /// called by e1000 driver's interrupt handler to deliver a packet to the

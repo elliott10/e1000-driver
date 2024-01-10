@@ -29,13 +29,47 @@ pub(crate) const E1000_TIDV: usize = 0x03820 / 4; /* TX Interrupt Delay Value - 
 pub(crate) const E1000_TADV: usize = 0x0382C / 4; /* TX Interrupt Absolute Delay Val - RW */
 pub(crate) const E1000_MTA: usize = 0x05200 / 4; /* Multicast Table Array - RW Array */
 pub(crate) const E1000_RA: usize = 0x05400 / 4; /* Receive Address Low are used for unicast/multicast address filtering. - RW Array */
+pub(crate) const E1000_MDIC: usize = 0x00020 / 4; /* MDI Control Register */
 
 /* Extension features*/
 pub(crate) const E1000_RFCTL: usize = 0x05008 / 4; /* e1000e: RFCTL */
+pub(crate) const E1000_CTRL_EXT: usize = 0x0018 / 4;
 pub(crate) const E1000_TXDCTL0: usize = 0x03828 / 4; /* e1000e: RFCTL */
 pub(crate) const E1000_TXDCTL1: usize = (0x3828 + 0x100) / 4; /* e1000e: RFCTL */
 
+pub(crate) const PHY_CTRL: u32 = 0;
+
 pub(crate) const E1000_TXDCTL_GRAN_SHIFT: u32 = 24;
+pub(crate) const E1000_TXDCTL_PTHRESH: u32 = 0x0000003F;
+pub(crate) const E1000_TXDCTL_HTHRESH: u32 = 0x00003F00;
+pub(crate) const E1000_TXDCTL_WTHRESH: u32 = 0x003F0000; 
+pub(crate) const E1000_TXDCTL_FULL_TX_DESC_WB: u32 = 0x01010000;  
+pub(crate) const E1000_TXDCTL_MAX_TX_DESC_PREFETCH: u32 = 0x0100001F;
+pub(crate) const E1000_CTRL_EXT_RO_DIS: u32 = 0x00020000; 
+
+pub(crate) const E1000_MDIC_DATA_MASK: u32 = 65535;
+pub(crate) const E1000_MDIC_REG_MASK: u32 = 2031616;
+pub(crate) const E1000_MDIC_REG_SHIFT: u32 = 16;
+pub(crate) const E1000_MDIC_PHY_MASK: u32 = 65011712;
+pub(crate) const E1000_MDIC_PHY_SHIFT: u32 = 21;
+pub(crate) const E1000_MDIC_OP_WRITE: u32 = 67108864;
+pub(crate) const E1000_MDIC_OP_READ: u32 = 134217728;
+pub(crate) const E1000_MDIC_READY: u32 = 268435456;
+pub(crate) const E1000_MDIC_INT_EN: u32 = 536870912;
+pub(crate) const E1000_MDIC_ERROR: u32 = 1073741824;
+
+pub(crate) const MII_CR_POWER_DOWN: u32 = 2048;
+
+
+/* Transmit Descriptor Control */
+// #define E1000_TXDCTL_PTHRESH 0x0000003F /* TXDCTL Prefetch Threshold */
+// #define E1000_TXDCTL_HTHRESH 0x00003F00 /* TXDCTL Host Threshold */
+// #define E1000_TXDCTL_WTHRESH 0x003F0000 /* TXDCTL Writeback Threshold */
+// #define E1000_TXDCTL_GRAN    0x01000000 /* TXDCTL Granularity */
+// #define E1000_TXDCTL_FULL_TX_DESC_WB 0x01010000 /* GRAN=1, WTHRESH=1 */
+// #define E1000_TXDCTL_MAX_TX_DESC_PREFETCH 0x0100001F /* GRAN=1, PTHRESH=31 */
+// /* Enable the counting of desc. still to be processed. */
+// #define E1000_TXDCTL_COUNT_DESC 0x00400000
 
 /* This defines the bits that are set in the Interrupt Mask
  * Set/Read Register.  Each bit is documented below:

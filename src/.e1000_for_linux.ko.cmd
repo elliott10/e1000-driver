@@ -1,0 +1,1 @@
+cmd_/root/kernel_dev/drivers/e1000-driver/src/linux/../e1000_for_linux.ko := ld.lld -r -m elf_x86_64 -z noexecstack --build-id=sha1  -T scripts/module.lds -o /root/kernel_dev/drivers/e1000-driver/src/linux/../e1000_for_linux.ko /root/kernel_dev/drivers/e1000-driver/src/linux/../e1000_for_linux.o /root/kernel_dev/drivers/e1000-driver/src/linux/../e1000_for_linux.mod.o;  true
