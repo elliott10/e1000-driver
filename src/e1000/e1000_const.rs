@@ -47,6 +47,28 @@ pub(crate) const E1000_TXDCTL_FULL_TX_DESC_WB: u32 = 0x01010000;
 pub(crate) const E1000_TXDCTL_MAX_TX_DESC_PREFETCH: u32 = 0x0100001F;
 pub(crate) const E1000_CTRL_EXT_RO_DIS: u32 = 0x00020000; 
 
+// /* Transmit Descriptor bit definitions */
+// pub(crate) const E1000_TXD_DTYP_D: u32 =      0x00100000; /* Data Descriptor */
+// pub(crate) const E1000_TXD_POPTS_IXSM: u32 = 0x01;       /* Insert IP checksum */
+// pub(crate) const E1000_TXD_POPTS_TXSM: u32 = 0x02;       /* Insert TCP/UDP checksum */
+// pub(crate) const E1000_TXD_CMD_EOP: u32 = 0x01000000; /* End of Packet */
+// pub(crate) const E1000_TXD_CMD_IFCS: u32 = 0x02000000; /* Insert FCS (Ethernet CRC) */
+// pub(crate) const E1000_TXD_CMD_IC: u32 = 0x04000000; /* Insert Checksum */
+// pub(crate) const E1000_TXD_CMD_RS: u32 = 0x08000000; /* Report Status */
+// pub(crate) const E1000_TXD_CMD_RPS: u32 = 0x10000000; /* Report Packet Sent */
+// pub(crate) const E1000_TXD_CMD_DEXT: u32 = 0x20000000; /* Descriptor extension (0 = legacy) */
+// pub(crate) const E1000_TXD_CMD_VLE: u32 = 0x40000000; /* Add VLAN tag */
+// pub(crate) const E1000_TXD_CMD_IDE: u32 = 0x80000000; /* Enable Tidv register */
+// pub(crate) const E1000_TXD_STAT_DD: u32 = 0x00000001; /* Descriptor Done */
+// pub(crate) const E1000_TXD_STAT_EC: u32 = 0x00000002; /* Excess Collisions */
+// pub(crate) const E1000_TXD_STAT_LC: u32 = 0x00000004; /* Late Collisions */
+// pub(crate) const E1000_TXD_STAT_TU: u32 = 0x00000008; /* Transmit underrun */
+// pub(crate) const E1000_TXD_CMD_TCP: u32 = 0x01000000; /* TCP packet */
+// pub(crate) const E1000_TXD_CMD_IP: u32 = 0x02000000; /* IP packet */
+// pub(crate) const E1000_TXD_CMD_TSE: u32 = 0x04000000; /* TCP Seg enable */
+// pub(crate) const E1000_TXD_STAT_TC: u32 = 0x00000004; /* Tx Underrun */
+// pub(crate) const E1000_TXD_EXTCMD_TSTAMP: u32 =	0x00000010; /* IEEE1588 Timestamp packet */
+
 pub(crate) const E1000_MDIC_DATA_MASK: u32 = 65535;
 pub(crate) const E1000_MDIC_REG_MASK: u32 = 2031616;
 pub(crate) const E1000_MDIC_REG_SHIFT: u32 = 16;
@@ -161,6 +183,7 @@ pub(crate) const DATA_MAX: u32 = 1518;
 /* Transmit Descriptor command definitions [E1000 3.3.3.1] */
 pub(crate) const E1000_TXD_CMD_EOP: u32 = 0x01; /* End of Packet */
 pub(crate) const E1000_TXD_CMD_RS: u32 = 0x08; /* Report Status */
+pub(crate) const E1000_TXD_CMD_IFCS: u32 = 0x02;
 
 /* Transmit Descriptor status definitions [E1000 3.3.3.2] */
 pub(crate) const E1000_TXD_STAT_DD: u32 = 0x00000001; /* Descriptor Done */

@@ -323,8 +323,9 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
 
         self.tx_ring[tindex].length = length as u16;
         self.tx_ring[tindex].status = 0;
-        self.tx_ring[tindex].cmd = (E1000_TXD_CMD_RS | E1000_TXD_CMD_EOP) as u8;
-        // pr_info!("TX Desc = {:#x?}", self.tx_ring[tindex]);
+        self.tx_ring[tindex].cmd = (E1000_TXD_CMD_RS | E1000_TXD_CMD_EOP | E1000_TXD_CMD_IFCS) as u8;
+        // self.tx_ring[tindex].cmd = (2) as u8;
+        pr_info!("TX Desc = {:#x?}", self.tx_ring[tindex]);
 
         self.regs[E1000_TDT].write(((tindex + 1) % TX_RING_SIZE) as u32);
 
