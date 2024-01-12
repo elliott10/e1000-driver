@@ -1,8 +1,8 @@
 obj-m := e1000_for_linux.o
 
 PWD := $(shell pwd)
-ARCH ?= riscv
-KDIR ?= /lib/modules/$(shell uname -r)/build
+ARCH ?= x86_64
+KDIR ?= ~/kernel_dev/linux-rust-v6.1.66/
 
 default:
 	@[ -e ../Makefile ] || ln -s linux/Makefile ../

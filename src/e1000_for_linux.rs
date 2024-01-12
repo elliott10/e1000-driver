@@ -63,11 +63,13 @@ const RXBUFFER: u32 = 2048;
 /// Intel E1000 ID
 const VENDOR_ID_INTEL: u32 = 0x8086;
 const DEVICE_ID_INTEL_I219: u32 = 0x15fc;
+const DEVICE_ID_INTEL_I219_LM22: u32 = 0x0dc7;
 const DEVICE_ID_INTEL_82540EM: u32 = 0x100e;
 const DEVICE_ID_INTEL_82574L: u32 = 0x10d3;
 //const MAC_HWADDR: [u8; 6] = [0x52, 0x54, 0x00, 0x12, 0x34, 0x56];
 //const MAC_HWADDR: [u8; 6] = [0x90, 0xe2, 0xfc, 0xb5, 0x36, 0x95];
-const MAC_HWADDR: [u8; 6] = [0x52, 0x54, 0x00, 0x6c, 0xf8, 0x88];
+// const MAC_HWADDR: [u8; 6] = [0x52, 0x54, 0x00, 0x6c, 0xf8, 0x88];
+const MAC_HWADDR: [u8; 6] = [0x88, 0x88, 0x88, 0x88, 0x87, 0x88];
 
 module! {
     type: RustE1000dev,
@@ -112,7 +114,7 @@ impl E1000Driver {
 
                 //pr_info!("Sk Buff protocol: {:#x}, [01] = {:x}{:x}\n", protocol, skb_buf[0], skb_buf[1]);
             }
-            info!(
+            pr_info!(
                 "handle_rx_irq, received packets: {}, bytes: {}\n",
                 packets,
                 bytes
@@ -129,9 +131,12 @@ impl E1000Driver {
             .fetch_add(packets as u64, Ordering::Relaxed);
     }
 
-    fn handle_tx_irq() {
+    fn handle_tx_irq(dev: &net::Device, napi: &Napi, data: &NetData) {
         // check status E1000_TXD_STAT_DD
+        // let mut dev_e1k = data.dev_e1000.lock_irqdisable();
+        // let tdh = dev_e1k.as_mut().unwrap().e1000_clean_tx_irq();
     }
+    // fn handle_tx_irq() {}
 }
 
 struct IrqData {
@@ -144,7 +149,7 @@ impl irq::Handler for E1000Driver {
     type Data = Box<IrqData>;
 
     fn handle_irq(data: &IrqData) -> irq::Return {
-        info!("handle_irq\n");
+        pr_info!("handle_irq\n");
         let intr = {
             let mut dev_e1k = data.dev_e1000.lock_irqdisable();
             dev_e1k.as_mut().unwrap().e1000_intr()
@@ -155,7 +160,7 @@ impl irq::Handler for E1000Driver {
             bindings::readl(ptr as *const u32 as _)
         };
         */
-        info!("irq::Handler E1000_ICR = {:#x}\n", intr);
+        pr_info!("irq::Handler E1000_ICR = {:#x}\n", intr);
 
         if (intr & (1<<7)) == 0 {
             pr_warn!("No valid e1000 interrupt was found\n");
@@ -181,10 +186,10 @@ impl NapiPoller for Poller {
 
     /// Corresponds to NAPI poll method.
     fn poll(napi: &Napi, budget: i32, dev: &net::Device, data: &NetData) -> i32 {
-        info!("NapiPoller poll\n");
+        pr_info!("NapiPoller poll\n");
 
         E1000Driver::handle_rx_irq(dev, napi, data);
-        E1000Driver::handle_tx_irq();
+        E1000Driver::handle_tx_irq(dev, napi, data);
 
         napi.complete_done(1);
         1
@@ -326,13 +331,13 @@ impl net::DeviceOperations for E1000Driver {
         dev: &Device,
         data: <Self::Data as ForeignOwnable>::Borrowed<'_>,
     ) -> NetdevTx {
-        info!("start xmit\n");
+        pr_info!("start xmit\n");
 
         skb.put_padto(bindings::ETH_ZLEN);
         let _size = skb.len() - skb.data_len();
         let skb_data = skb.head_data();
 
-        info!(
+        pr_info!(
             "SkBuff length: {}, head data len: {}, get size: {}\n",
             skb.len(),
             skb_data.len(),
@@ -340,7 +345,7 @@ impl net::DeviceOperations for E1000Driver {
         );
 
         dev.sent_queue(skb.len());
-
+        skb.set_tx_timestamp();
         let len = {
             let mut dev_e1k = data.dev_e1000.lock_irqdisable();
             dev_e1k.as_mut().unwrap().e1000_transmit(skb_data)
@@ -369,7 +374,7 @@ impl net::DeviceOperations for E1000Driver {
 
     /// Corresponds to `ndo_get_stats64` in `struct net_device_ops`.
     fn get_stats64(_dev: &Device, data: &NetData, stats: &mut RtnlLinkStats64) {
-        info!("get stats64\n");
+        pr_info!("get stats64\n");
 
         stats.set_rx_bytes(data.stats.rx_bytes.load(Ordering::Relaxed));
         stats.set_rx_packets(data.stats.rx_packets.load(Ordering::Relaxed));
@@ -431,8 +436,8 @@ impl pci::Driver for E1000Driver {
             irq.unwrap_or_default(),
         );
 
-        dma::set_mask(pci_dev, 0xffffffff)?;
-        dma::set_coherent_mask(pci_dev, 0xffffffff)?;
+        dma::set_mask(pci_dev, 0xffffffffffffffff)?;
+        dma::set_coherent_mask(pci_dev, 0xffffffffffffffff)?;
 
         let mut regist = net::Registration::<E1000Driver>::try_new(pci_dev)?;
         let net_dev = regist.dev_get();
@@ -480,6 +485,7 @@ impl pci::Driver for E1000Driver {
         (pci::DeviceId::new(VENDOR_ID_INTEL, DEVICE_ID_INTEL_82540EM), Some(0x1)),
         (pci::DeviceId::new(VENDOR_ID_INTEL, DEVICE_ID_INTEL_82574L), Some(0x1)),
         (pci::DeviceId::new(VENDOR_ID_INTEL, DEVICE_ID_INTEL_I219), Some(0x1)),
+        (pci::DeviceId::new(VENDOR_ID_INTEL, DEVICE_ID_INTEL_I219_LM22), Some(0x1)),
     ]}
 }
 
