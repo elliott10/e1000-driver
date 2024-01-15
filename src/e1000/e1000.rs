@@ -9,7 +9,7 @@ use kernel::pr_info;
 
 const TX_RING_SIZE: usize = 256;
 const RX_RING_SIZE: usize = 256;
-const MBUF_SIZE: usize = 4096;
+const MBUF_SIZE: usize = 2048;
 
 /// Kernel functions that drivers must use
 pub trait KernelFunc {
@@ -211,10 +211,9 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         self.regs[E1000_TCTL].write(
             E1000_TCTL_EN |  // enable
             E1000_TCTL_PSP |  // pad short packets
-            E1000_TCTL_RTLC |
-            (15 << E1000_TCTL_CT_SHIFT) & // collision stuff
+            (0x0f << E1000_TCTL_CT_SHIFT) & // collision stuff
             !(E1000_TCTL_COLD) |
-            (63 << E1000_TCTL_COLD_SHIFT)
+            (0x1ff << E1000_TCTL_COLD_SHIFT)
         );
         self.regs[E1000_TIPG].write(10 | (8 << 10) | (6 << 20)); // inter-pkt gap
 
@@ -225,20 +224,19 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         self.regs[E1000_TDT].write(0); // TX Desc Tail
         self.regs[E1000_TDH].write(0); // TX Desc Head
 
-        self.regs[E1000_TXDCTL0].write(1 << E1000_TXDCTL_GRAN_SHIFT);
-        self.regs[E1000_TXDCTL1].write(1 << E1000_TXDCTL_GRAN_SHIFT);
+        self.regs[E1000_TXDCTL0].write((1 << E1000_TXDCTL_GRAN_SHIFT) | E1000_TXDCTL_WTHRESH);
+        self.regs[E1000_TXDCTL1].write((1 << E1000_TXDCTL_GRAN_SHIFT) | E1000_TXDCTL_WTHRESH);
+        // let mut txdctl0 = self.regs[E1000_TXDCTL0].read();
+        // txdctl0 = (txdctl0 & !(E1000_TXDCTL_WTHRESH)) | E1000_TXDCTL_FULL_TX_DESC_WB;
+        // txdctl0 = (txdctl0 & !(E1000_TXDCTL_PTHRESH)) | E1000_TXDCTL_MAX_TX_DESC_PREFETCH;
+        // txdctl0 = (txdctl0 | (1 << 22));
+        // self.regs[E1000_TXDCTL0].write(0);
 
-        let mut txdctl0 = self.regs[E1000_TXDCTL0].read();
-        txdctl0 = (txdctl0 & !(E1000_TXDCTL_WTHRESH)) | E1000_TXDCTL_FULL_TX_DESC_WB;
-        txdctl0 = (txdctl0 & !(E1000_TXDCTL_PTHRESH)) | E1000_TXDCTL_MAX_TX_DESC_PREFETCH;
-        txdctl0 = (txdctl0 | (1 << 22));
-        self.regs[E1000_TXDCTL0].write(txdctl0);
-
-        let mut txdctl1 = self.regs[E1000_TXDCTL1].read();
-        txdctl1 = (txdctl1 & !(E1000_TXDCTL_WTHRESH)) | E1000_TXDCTL_FULL_TX_DESC_WB;
-        txdctl1 = (txdctl1 & !(E1000_TXDCTL_PTHRESH)) | E1000_TXDCTL_MAX_TX_DESC_PREFETCH;
-        txdctl1 = (txdctl1 | (1 << 22));
-        self.regs[E1000_TXDCTL1].write(txdctl1);
+        // let mut txdctl1 = self.regs[E1000_TXDCTL1].read();
+        // txdctl1 = (txdctl1 & !(E1000_TXDCTL_WTHRESH)) | E1000_TXDCTL_FULL_TX_DESC_WB;
+        // txdctl1 = (txdctl1 & !(E1000_TXDCTL_PTHRESH)) | E1000_TXDCTL_MAX_TX_DESC_PREFETCH;
+        // txdctl1 = (txdctl1 | (1 << 22));
+        // self.regs[E1000_TXDCTL1].write(0);
 
         // [E1000 14.4] Receive initialization
         pr_info!("rx ring 0: {:x?}\n",self.rx_ring[0]);
@@ -340,9 +338,6 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         let tdlen = self.regs[E1000_TDLEN].read() as usize;
         pr_info!("Read E1000_TDH = {:#x}\n", tdh);
         pr_info!("Read E1000_TDT = {:#x}\n", tindex);
-        pr_info!("Read E1000_TDBAH = {:#x}\n", tdbah);
-        pr_info!("Read E1000_TDBAL = {:#x}\n", tdbal);
-        pr_info!("Read E1000_TDLEN = {:#x}\n", tdlen);
 
         length as i32
     }
@@ -432,7 +427,7 @@ impl<'a, K: KernelFunc> E1000Device<'a, K> {
         // without this the e1000 won't raise any
         // further interrupts.
         let icr = self.regs[E1000_ICR].read();
-        self.regs[E1000_ICR].write(icr); //Writing a 1b to ICR any bit also clears that bit.
+        // self.regs[E1000_ICR].write(icr); //Writing a 1b to ICR any bit also clears that bit.
         icr
     }
 
