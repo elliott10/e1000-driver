@@ -81,6 +81,9 @@ pub(crate) const E1000_MDIC_INT_EN: u32 = 536870912;
 pub(crate) const E1000_MDIC_ERROR: u32 = 1073741824;
 
 pub(crate) const MII_CR_POWER_DOWN: u32 = 2048;
+pub(crate) const BMCR_SPEED10: u32 = 0x0000;
+pub(crate) const BMCR_SPEED100: u32 = 0x2000;
+pub(crate) const BMCR_SPEED1000: u32 = 0x0040;
 
 
 /* Transmit Descriptor Control */
