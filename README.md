@@ -31,6 +31,9 @@ let rx_buf = e1000_device.e1000_recv();
 ```
 
 ## Rust e1000 driver for Linux kernel module
+* THX童鞋适配了e1000e for Intel i219 物理网卡;
+* TODO: 目前网络速率只有10M; 卸载问题；
+
 ```
 cd src/linux
 make ARCH=<cpu arch> KDIR=<path to linux>
