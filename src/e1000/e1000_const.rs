@@ -29,8 +29,72 @@ pub(crate) const E1000_TIDV: usize = 0x03820 / 4; /* TX Interrupt Delay Value - 
 pub(crate) const E1000_TADV: usize = 0x0382C / 4; /* TX Interrupt Absolute Delay Val - RW */
 pub(crate) const E1000_MTA: usize = 0x05200 / 4; /* Multicast Table Array - RW Array */
 pub(crate) const E1000_RA: usize = 0x05400 / 4; /* Receive Address Low are used for unicast/multicast address filtering. - RW Array */
+pub(crate) const E1000_MDIC: usize = 0x00020 / 4; /* MDI Control Register */
 
+/* Extension features*/
 pub(crate) const E1000_RFCTL: usize = 0x05008 / 4; /* e1000e: RFCTL */
+pub(crate) const E1000_CTRL_EXT: usize = 0x0018 / 4;
+pub(crate) const E1000_TXDCTL0: usize = 0x03828 / 4; /* e1000e: RFCTL */
+pub(crate) const E1000_TXDCTL1: usize = (0x3828 + 0x100) / 4; /* e1000e: RFCTL */
+
+pub(crate) const PHY_CTRL: u32 = 0;
+
+pub(crate) const E1000_TXDCTL_GRAN_SHIFT: u32 = 24;
+pub(crate) const E1000_TXDCTL_PTHRESH: u32 = 0x0000003F;
+pub(crate) const E1000_TXDCTL_HTHRESH: u32 = 0x00003F00;
+pub(crate) const E1000_TXDCTL_WTHRESH: u32 = 0x003F0000; 
+pub(crate) const E1000_TXDCTL_FULL_TX_DESC_WB: u32 = 0x01010000;  
+pub(crate) const E1000_TXDCTL_MAX_TX_DESC_PREFETCH: u32 = 0x0100001F;
+pub(crate) const E1000_CTRL_EXT_RO_DIS: u32 = 0x00020000; 
+
+// /* Transmit Descriptor bit definitions */
+// pub(crate) const E1000_TXD_DTYP_D: u32 =      0x00100000; /* Data Descriptor */
+// pub(crate) const E1000_TXD_POPTS_IXSM: u32 = 0x01;       /* Insert IP checksum */
+// pub(crate) const E1000_TXD_POPTS_TXSM: u32 = 0x02;       /* Insert TCP/UDP checksum */
+// pub(crate) const E1000_TXD_CMD_EOP: u32 = 0x01000000; /* End of Packet */
+// pub(crate) const E1000_TXD_CMD_IFCS: u32 = 0x02000000; /* Insert FCS (Ethernet CRC) */
+// pub(crate) const E1000_TXD_CMD_IC: u32 = 0x04000000; /* Insert Checksum */
+// pub(crate) const E1000_TXD_CMD_RS: u32 = 0x08000000; /* Report Status */
+// pub(crate) const E1000_TXD_CMD_RPS: u32 = 0x10000000; /* Report Packet Sent */
+// pub(crate) const E1000_TXD_CMD_DEXT: u32 = 0x20000000; /* Descriptor extension (0 = legacy) */
+// pub(crate) const E1000_TXD_CMD_VLE: u32 = 0x40000000; /* Add VLAN tag */
+// pub(crate) const E1000_TXD_CMD_IDE: u32 = 0x80000000; /* Enable Tidv register */
+// pub(crate) const E1000_TXD_STAT_DD: u32 = 0x00000001; /* Descriptor Done */
+// pub(crate) const E1000_TXD_STAT_EC: u32 = 0x00000002; /* Excess Collisions */
+// pub(crate) const E1000_TXD_STAT_LC: u32 = 0x00000004; /* Late Collisions */
+// pub(crate) const E1000_TXD_STAT_TU: u32 = 0x00000008; /* Transmit underrun */
+// pub(crate) const E1000_TXD_CMD_TCP: u32 = 0x01000000; /* TCP packet */
+// pub(crate) const E1000_TXD_CMD_IP: u32 = 0x02000000; /* IP packet */
+// pub(crate) const E1000_TXD_CMD_TSE: u32 = 0x04000000; /* TCP Seg enable */
+// pub(crate) const E1000_TXD_STAT_TC: u32 = 0x00000004; /* Tx Underrun */
+// pub(crate) const E1000_TXD_EXTCMD_TSTAMP: u32 =	0x00000010; /* IEEE1588 Timestamp packet */
+
+pub(crate) const E1000_MDIC_DATA_MASK: u32 = 65535;
+pub(crate) const E1000_MDIC_REG_MASK: u32 = 2031616;
+pub(crate) const E1000_MDIC_REG_SHIFT: u32 = 16;
+pub(crate) const E1000_MDIC_PHY_MASK: u32 = 65011712;
+pub(crate) const E1000_MDIC_PHY_SHIFT: u32 = 21;
+pub(crate) const E1000_MDIC_OP_WRITE: u32 = 67108864;
+pub(crate) const E1000_MDIC_OP_READ: u32 = 134217728;
+pub(crate) const E1000_MDIC_READY: u32 = 268435456;
+pub(crate) const E1000_MDIC_INT_EN: u32 = 536870912;
+pub(crate) const E1000_MDIC_ERROR: u32 = 1073741824;
+
+pub(crate) const MII_CR_POWER_DOWN: u32 = 2048;
+pub(crate) const BMCR_SPEED10: u32 = 0x0000;
+pub(crate) const BMCR_SPEED100: u32 = 0x2000;
+pub(crate) const BMCR_SPEED1000: u32 = 0x0040;
+
+
+/* Transmit Descriptor Control */
+// #define E1000_TXDCTL_PTHRESH 0x0000003F /* TXDCTL Prefetch Threshold */
+// #define E1000_TXDCTL_HTHRESH 0x00003F00 /* TXDCTL Host Threshold */
+// #define E1000_TXDCTL_WTHRESH 0x003F0000 /* TXDCTL Writeback Threshold */
+// #define E1000_TXDCTL_GRAN    0x01000000 /* TXDCTL Granularity */
+// #define E1000_TXDCTL_FULL_TX_DESC_WB 0x01010000 /* GRAN=1, WTHRESH=1 */
+// #define E1000_TXDCTL_MAX_TX_DESC_PREFETCH 0x0100001F /* GRAN=1, PTHRESH=31 */
+// /* Enable the counting of desc. still to be processed. */
+// #define E1000_TXDCTL_COUNT_DESC 0x00400000
 
 /* This defines the bits that are set in the Interrupt Mask
  * Set/Read Register.  Each bit is documented below:
@@ -57,6 +121,8 @@ pub(crate) const E1000_CTL_SLU: u32 = 0x00000040; /* set link up */
 pub(crate) const E1000_CTL_FRCSPD: u32 = 0x00000800; /* force speed */
 pub(crate) const E1000_CTL_FRCDPLX: u32 = 0x00001000; /* force duplex */
 pub(crate) const E1000_CTL_RST: u32 = (1 << 26); /* Device Reset */
+pub(crate) const E1000_CTL_PHY_RST: u32 = (1 << 31); /* Phy Reset */
+pub(crate) const E1000_CTL_ASDE: u32 = (1 << 5); /* Auto-Speed Detection Enable */
 
 /* Transmit Control */
 pub(crate) const E1000_TCTL_RST: u32 = 0x00000001; /* software reset */
@@ -120,6 +186,7 @@ pub(crate) const DATA_MAX: u32 = 1518;
 /* Transmit Descriptor command definitions [E1000 3.3.3.1] */
 pub(crate) const E1000_TXD_CMD_EOP: u32 = 0x01; /* End of Packet */
 pub(crate) const E1000_TXD_CMD_RS: u32 = 0x08; /* Report Status */
+pub(crate) const E1000_TXD_CMD_IFCS: u32 = 0x02;
 
 /* Transmit Descriptor status definitions [E1000 3.3.3.2] */
 pub(crate) const E1000_TXD_STAT_DD: u32 = 0x00000001; /* Descriptor Done */
