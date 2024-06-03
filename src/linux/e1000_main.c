@@ -199,8 +199,6 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent) {
 
   adapter = netdev_priv(netdev);
   adapter->ptr = e1000;
-  // adapter->netdev = netdev;
-  // adapter->pdev = pdev;
   // adapter->msg_enable = netif_msg_init(debug, DEFAULT_MSG_ENABLE);
   adapter->bars = bars;
   //   adapter->need_ioport = need_ioport;
