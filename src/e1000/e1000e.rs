@@ -1,4 +1,7 @@
 /// E1000e driver.
+
+use crate::*;
+
 pub struct E1000e{
 
 }
@@ -11,7 +14,7 @@ impl E1000e {
 
     /// probe
     pub fn probe(&self){
-
+        info!("probe! ");
     }
 
 }
