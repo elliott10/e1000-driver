@@ -1,6 +1,8 @@
 /target
 /Cargo.lock
-.*
+/src/.cache
+/.cache
+*.cmd
 *.a
 *.asn1.[ch]
 *.bin
