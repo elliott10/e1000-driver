@@ -85,9 +85,85 @@ typedef struct BoardInfo {
   uint32_t max_hw_frame_size;
 } BoardInfo;
 
+typedef struct E1000HWStats {
+  uint64_t crcerrs;
+  uint64_t algnerrc;
+  uint64_t symerrs;
+  uint64_t rxerrc;
+  uint64_t mpc;
+  uint64_t scc;
+  uint64_t ecol;
+  uint64_t mcc;
+  uint64_t latecol;
+  uint64_t colc;
+  uint64_t dc;
+  uint64_t tncrs;
+  uint64_t sec;
+  uint64_t cexterr;
+  uint64_t rlec;
+  uint64_t xonrxc;
+  uint64_t xontxc;
+  uint64_t xoffrxc;
+  uint64_t xofftxc;
+  uint64_t fcruc;
+  uint64_t prc64;
+  uint64_t prc127;
+  uint64_t prc255;
+  uint64_t prc511;
+  uint64_t prc1023;
+  uint64_t prc1522;
+  uint64_t gprc;
+  uint64_t bprc;
+  uint64_t mprc;
+  uint64_t gptc;
+  uint64_t gorc;
+  uint64_t gotc;
+  uint64_t rnbc;
+  uint64_t ruc;
+  uint64_t rfc;
+  uint64_t roc;
+  uint64_t rjc;
+  uint64_t mgprc;
+  uint64_t mgpdc;
+  uint64_t mgptc;
+  uint64_t tor;
+  uint64_t tot;
+  uint64_t tpr;
+  uint64_t tpt;
+  uint64_t ptc64;
+  uint64_t ptc127;
+  uint64_t ptc255;
+  uint64_t ptc511;
+  uint64_t ptc1023;
+  uint64_t ptc1522;
+  uint64_t mptc;
+  uint64_t bptc;
+  uint64_t tsctc;
+  uint64_t tsctfc;
+  uint64_t iac;
+  uint64_t icrxptc;
+  uint64_t icrxatc;
+  uint64_t ictxptc;
+  uint64_t ictxatc;
+  uint64_t ictxqec;
+  uint64_t ictxqmtc;
+  uint64_t icrxdmtc;
+  uint64_t icrxoc;
+} E1000HWStats;
+
+typedef struct E1000RInfo {
+  struct E1000HWStats stats;
+  uint32_t itr;
+  uint32_t itr_setting;
+  uint16_t tx_it;
+  uint16_t rx_itr;
+} E1000RInfo;
+
 struct BoardInfo e1000r_board_info(size_t ptr);
 
 void e1000r_drop(size_t ptr);
+
+struct E1000RInfo *e1000r_info(size_t ptr);
 
 int32_t e1000r_init(size_t ptr);
 

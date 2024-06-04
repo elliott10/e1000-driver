@@ -3,6 +3,7 @@
 #include "linux/etherdevice.h"
 #include "linux/mroute.h"
 #include "linux/printk.h"
+#include "linux/refcount.h"
 #include <linux/cpu.h>
 #include <linux/delay.h>
 #include <linux/dma-mapping.h>
@@ -263,6 +264,14 @@ static const struct net_device_ops e1000e_netdev_ops = {
     .ndo_fix_features = e1000_fix_features,
     .ndo_features_check = passthru_features_check,
 };
+
+size_t e1000_get_e1000r(struct net_device* netdev)
+{
+    struct e1000_adapter* adapter = netdev_priv(netdev);
+
+    return adapter->ptr;
+}
+
 /**
  * e1000_probe - Device Initialization Routine
  * @pdev: PCI device information struct
@@ -386,7 +395,6 @@ static int e1000_probe(struct pci_dev* pdev, const struct pci_device_id* ent)
         err = -EIO;
         goto err_eeprom;
     }
-
 
     strscpy(netdev->name, "eth%d", sizeof(netdev->name));
     err = register_netdev(netdev);

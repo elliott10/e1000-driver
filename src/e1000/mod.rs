@@ -4,6 +4,7 @@ mod hw;
 mod regs;
 use core::fmt::{self, Display};
 pub use board::*;
+pub use hw::E1000HWStats;
 pub use self::e1000::*;
 
 const PAGE_SIZE: usize = 4096;

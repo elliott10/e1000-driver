@@ -3,7 +3,6 @@ use e1000::hw::Hw;
 /// E1000e driver.
 use crate::*;
 
-
 pub struct E1000<K>
 where
     K: KernelFunc,
@@ -11,6 +10,7 @@ where
     mmio: usize,
     kernel: K,
     hw: Hw,
+    info: E1000RInfo,
 }
 
 impl<K> E1000<K>
@@ -26,6 +26,7 @@ where
             mmio,
             kernel: kfun,
             hw,
+            info: E1000RInfo::default(),
         }
     }
 
@@ -55,6 +56,10 @@ where
         info!("init end");
         Ok(())
     }
+
+    pub fn info_mut(&mut self) -> &mut E1000RInfo {
+        &mut self.info
+    }
 }
 
 impl<K> Drop for E1000<K>
@@ -64,4 +69,15 @@ where
     fn drop(&mut self) {
         debug!("drop");
     }
+}
+
+#[repr(C)]
+#[derive(Debug, Default, Clone)]
+pub struct E1000RInfo {
+    pub stats: E1000HWStats,
+
+    pub itr: u32,
+    pub itr_setting: u32,
+    pub tx_it: u16,
+    pub rx_itr: u16,
 }

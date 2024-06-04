@@ -27,84 +27,84 @@ static const char e1000e_priv_flags_strings[][ETH_GSTRING_LEN] = {
 #define E1000E_PRIV_FLAGS_S0IX_ENABLED BIT(0)
     "s0ix-enabled",
 };
-// #define E1000E_PRIV_FLAGS_STR_LEN ARRAY_SIZE(e1000e_priv_flags_strings)
+#define E1000E_PRIV_FLAGS_STR_LEN ARRAY_SIZE(e1000e_priv_flags_strings)
 
-// #define E1000_STAT(str, m) { \
-// 		.stat_string = str, \
-// 		.type = E1000_STATS, \
-// 		.sizeof_stat = sizeof(((struct e1000_adapter *)0)->m), \
-// 		.stat_offset = offsetof(struct e1000_adapter, m) }
-// #define E1000_NETDEV_STAT(str, m) { \
-// 		.stat_string = str, \
-// 		.type = NETDEV_STATS, \
-// 		.sizeof_stat = sizeof(((struct rtnl_link_stats64 *)0)->m), \
-// 		.stat_offset = offsetof(struct rtnl_link_stats64, m) }
+#define E1000_STAT(str, m) { \
+		.stat_string = str, \
+		.type = E1000_STATS, \
+		.sizeof_stat = sizeof(((struct E1000RInfo *)0)->m), \
+		.stat_offset = offsetof(struct E1000RInfo, m) }
+#define E1000_NETDEV_STAT(str, m) { \
+		.stat_string = str, \
+		.type = NETDEV_STATS, \
+		.sizeof_stat = sizeof(((struct rtnl_link_stats64 *)0)->m), \
+		.stat_offset = offsetof(struct rtnl_link_stats64, m) }
 
-// static const struct e1000_stats e1000_gstrings_stats[] = {
-// 	E1000_STAT("rx_packets", stats.gprc),
-// 	E1000_STAT("tx_packets", stats.gptc),
-// 	E1000_STAT("rx_bytes", stats.gorc),
-// 	E1000_STAT("tx_bytes", stats.gotc),
-// 	E1000_STAT("rx_broadcast", stats.bprc),
-// 	E1000_STAT("tx_broadcast", stats.bptc),
-// 	E1000_STAT("rx_multicast", stats.mprc),
-// 	E1000_STAT("tx_multicast", stats.mptc),
-// 	E1000_NETDEV_STAT("rx_errors", rx_errors),
-// 	E1000_NETDEV_STAT("tx_errors", tx_errors),
-// 	E1000_NETDEV_STAT("tx_dropped", tx_dropped),
-// 	E1000_STAT("multicast", stats.mprc),
-// 	E1000_STAT("collisions", stats.colc),
-// 	E1000_NETDEV_STAT("rx_length_errors", rx_length_errors),
-// 	E1000_NETDEV_STAT("rx_over_errors", rx_over_errors),
-// 	E1000_STAT("rx_crc_errors", stats.crcerrs),
-// 	E1000_NETDEV_STAT("rx_frame_errors", rx_frame_errors),
-// 	E1000_STAT("rx_no_buffer_count", stats.rnbc),
-// 	E1000_STAT("rx_missed_errors", stats.mpc),
-// 	E1000_STAT("tx_aborted_errors", stats.ecol),
-// 	E1000_STAT("tx_carrier_errors", stats.tncrs),
-// 	E1000_NETDEV_STAT("tx_fifo_errors", tx_fifo_errors),
-// 	E1000_NETDEV_STAT("tx_heartbeat_errors", tx_heartbeat_errors),
-// 	E1000_STAT("tx_window_errors", stats.latecol),
-// 	E1000_STAT("tx_abort_late_coll", stats.latecol),
-// 	E1000_STAT("tx_deferred_ok", stats.dc),
-// 	E1000_STAT("tx_single_coll_ok", stats.scc),
-// 	E1000_STAT("tx_multi_coll_ok", stats.mcc),
-// 	E1000_STAT("tx_timeout_count", tx_timeout_count),
-// 	E1000_STAT("tx_restart_queue", restart_queue),
-// 	E1000_STAT("rx_long_length_errors", stats.roc),
-// 	E1000_STAT("rx_short_length_errors", stats.ruc),
-// 	E1000_STAT("rx_align_errors", stats.algnerrc),
-// 	E1000_STAT("tx_tcp_seg_good", stats.tsctc),
-// 	E1000_STAT("tx_tcp_seg_failed", stats.tsctfc),
-// 	E1000_STAT("rx_flow_control_xon", stats.xonrxc),
-// 	E1000_STAT("rx_flow_control_xoff", stats.xoffrxc),
-// 	E1000_STAT("tx_flow_control_xon", stats.xontxc),
-// 	E1000_STAT("tx_flow_control_xoff", stats.xofftxc),
-// 	E1000_STAT("rx_csum_offload_good", hw_csum_good),
-// 	E1000_STAT("rx_csum_offload_errors", hw_csum_err),
-// 	E1000_STAT("rx_header_split", rx_hdr_split),
-// 	E1000_STAT("alloc_rx_buff_failed", alloc_rx_buff_failed),
-// 	E1000_STAT("tx_smbus", stats.mgptc),
-// 	E1000_STAT("rx_smbus", stats.mgprc),
-// 	E1000_STAT("dropped_smbus", stats.mgpdc),
-// 	E1000_STAT("rx_dma_failed", rx_dma_failed),
-// 	E1000_STAT("tx_dma_failed", tx_dma_failed),
-// 	E1000_STAT("rx_hwtstamp_cleared", rx_hwtstamp_cleared),
-// 	E1000_STAT("uncorr_ecc_errors", uncorr_errors),
-// 	E1000_STAT("corr_ecc_errors", corr_errors),
-// 	E1000_STAT("tx_hwtstamp_timeouts", tx_hwtstamp_timeouts),
-// 	E1000_STAT("tx_hwtstamp_skipped", tx_hwtstamp_skipped),
-// };
+static const struct e1000_stats e1000_gstrings_stats[] = {
+	E1000_STAT("rx_packets", stats.gprc),
+	E1000_STAT("tx_packets", stats.gptc),
+	E1000_STAT("rx_bytes", stats.gorc),
+	E1000_STAT("tx_bytes", stats.gotc),
+	E1000_STAT("rx_broadcast", stats.bprc),
+	E1000_STAT("tx_broadcast", stats.bptc),
+	E1000_STAT("rx_multicast", stats.mprc),
+	E1000_STAT("tx_multicast", stats.mptc),
+	E1000_NETDEV_STAT("rx_errors", rx_errors),
+	E1000_NETDEV_STAT("tx_errors", tx_errors),
+	E1000_NETDEV_STAT("tx_dropped", tx_dropped),
+	E1000_STAT("multicast", stats.mprc),
+	E1000_STAT("collisions", stats.colc),
+	E1000_NETDEV_STAT("rx_length_errors", rx_length_errors),
+	E1000_NETDEV_STAT("rx_over_errors", rx_over_errors),
+	E1000_STAT("rx_crc_errors", stats.crcerrs),
+	E1000_NETDEV_STAT("rx_frame_errors", rx_frame_errors),
+	E1000_STAT("rx_no_buffer_count", stats.rnbc),
+	E1000_STAT("rx_missed_errors", stats.mpc),
+	E1000_STAT("tx_aborted_errors", stats.ecol),
+	E1000_STAT("tx_carrier_errors", stats.tncrs),
+	E1000_NETDEV_STAT("tx_fifo_errors", tx_fifo_errors),
+	E1000_NETDEV_STAT("tx_heartbeat_errors", tx_heartbeat_errors),
+	E1000_STAT("tx_window_errors", stats.latecol),
+	E1000_STAT("tx_abort_late_coll", stats.latecol),
+	E1000_STAT("tx_deferred_ok", stats.dc),
+	E1000_STAT("tx_single_coll_ok", stats.scc),
+	E1000_STAT("tx_multi_coll_ok", stats.mcc),
+	// E1000_STAT("tx_timeout_count", tx_timeout_count),
+	// E1000_STAT("tx_restart_queue", restart_queue),
+	E1000_STAT("rx_long_length_errors", stats.roc),
+	E1000_STAT("rx_short_length_errors", stats.ruc),
+	E1000_STAT("rx_align_errors", stats.algnerrc),
+	E1000_STAT("tx_tcp_seg_good", stats.tsctc),
+	E1000_STAT("tx_tcp_seg_failed", stats.tsctfc),
+	E1000_STAT("rx_flow_control_xon", stats.xonrxc),
+	E1000_STAT("rx_flow_control_xoff", stats.xoffrxc),
+	E1000_STAT("tx_flow_control_xon", stats.xontxc),
+	E1000_STAT("tx_flow_control_xoff", stats.xofftxc),
+	// E1000_STAT("rx_csum_offload_good", hw_csum_good),
+	// E1000_STAT("rx_csum_offload_errors", hw_csum_err),
+	// E1000_STAT("rx_header_split", rx_hdr_split),
+	// E1000_STAT("alloc_rx_buff_failed", alloc_rx_buff_failed),
+	E1000_STAT("tx_smbus", stats.mgptc),
+	E1000_STAT("rx_smbus", stats.mgprc),
+	E1000_STAT("dropped_smbus", stats.mgpdc),
+	// E1000_STAT("rx_dma_failed", rx_dma_failed),
+	// E1000_STAT("tx_dma_failed", tx_dma_failed),
+	// E1000_STAT("rx_hwtstamp_cleared", rx_hwtstamp_cleared),
+	// E1000_STAT("uncorr_ecc_errors", uncorr_errors),
+	// E1000_STAT("corr_ecc_errors", corr_errors),
+	// E1000_STAT("tx_hwtstamp_timeouts", tx_hwtstamp_timeouts),
+	// E1000_STAT("tx_hwtstamp_skipped", tx_hwtstamp_skipped),
+};
 
-// #define E1000_GLOBAL_STATS_LEN	ARRAY_SIZE(e1000_gstrings_stats)
-// #define E1000_STATS_LEN (E1000_GLOBAL_STATS_LEN)
-// static const char e1000_gstrings_test[][ETH_GSTRING_LEN] = {
-// 	"Register test  (offline)", "Eeprom test    (offline)",
-// 	"Interrupt test (offline)", "Loopback test  (offline)",
-// 	"Link test   (on/offline)"
-// };
+#define E1000_GLOBAL_STATS_LEN	ARRAY_SIZE(e1000_gstrings_stats)
+#define E1000_STATS_LEN (E1000_GLOBAL_STATS_LEN)
+static const char e1000_gstrings_test[][ETH_GSTRING_LEN] = {
+	"Register test  (offline)", "Eeprom test    (offline)",
+	"Interrupt test (offline)", "Loopback test  (offline)",
+	"Link test   (on/offline)"
+};
 
-// #define E1000_TEST_LEN ARRAY_SIZE(e1000_gstrings_test)
+#define E1000_TEST_LEN ARRAY_SIZE(e1000_gstrings_test)
 static int e1000_get_link_ksettings(struct net_device* netdev,
     struct ethtool_link_ksettings* cmd)
 {
@@ -262,6 +262,7 @@ static int e1000_get_coalesce(struct net_device* netdev,
     struct netlink_ext_ack* extack)
 {
     struct e1000_adapter* adapter = netdev_priv(netdev);
+    struct E1000RInfo* info = 
 
     if (adapter->itr_setting <= 4)
         ec->rx_coalesce_usecs = adapter->itr_setting;

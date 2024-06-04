@@ -74,3 +74,9 @@ extern "C" fn e1000r_init(ptr: usize) -> i32 {
         Err(e) => -99,
     }
 }
+
+#[no_mangle]
+extern "C" fn e1000r_info(ptr: usize) -> &mut E1000RInfo {
+    let dev = dev_mut(ptr);
+    dev.dev.info_mut()
+}
