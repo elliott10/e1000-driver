@@ -1,5 +1,7 @@
 #include "e1000.h"
 #include "linux/cleanup.h"
+#include "linux/etherdevice.h"
+#include "linux/mroute.h"
 #include <linux/cpu.h>
 #include <linux/delay.h>
 #include <linux/dma-mapping.h>
@@ -68,7 +70,7 @@ static void e1000_remove(struct pci_dev* pdev)
     struct net_device* netdev = pci_get_drvdata(pdev);
     struct e1000_adapter* adapter = netdev_priv(netdev);
 
-    e1000_drop(adapter->ptr);
+    e1000r_drop(adapter->ptr);
 
     unregister_netdev(netdev);
     pci_release_selected_regions(pdev, adapter->bars);
@@ -325,7 +327,7 @@ static int e1000_probe(struct pci_dev* pdev, const struct pci_device_id* ent)
     if (!hw_addr)
         goto err_ioremap;
 
-    size_t e1000 = e1000_new((size_t)hw_addr);
+    size_t e1000 = e1000r_new((size_t)hw_addr);
     if (!e1000)
         goto err_ioremap;
 
@@ -352,6 +354,13 @@ static int e1000_probe(struct pci_dev* pdev, const struct pci_device_id* ent)
     netdev->priv_flags |= IFF_SUPP_NOFCS;
     netdev->hw_features |= NETIF_F_RXALL;
 
+    u8 mac_addr[6];
+
+    e1000r_read_mac_addr(e1000, &mac_addr);
+    
+    eth_hw_addr_set(netdev, mac_addr);
+
+
     err = register_netdev(netdev);
     if (err)
         goto err_register;
@@ -373,7 +382,7 @@ err_register:
     //   err_mdio_ioremap:
     //   iounmap(hw->ce4100_gbe_mdio_base_virt);
     iounmap(hw_addr);
-    e1000_drop(e1000);
+    e1000r_drop(e1000);
 err_ioremap:
     free_netdev(netdev);
 err_alloc_etherdev:

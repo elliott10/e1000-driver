@@ -1,49 +1,49 @@
-/// E1000e driver.
+use e1000::hw::Hw;
 
+/// E1000e driver.
 use crate::*;
 
-const PAGE_SIZE: usize = 4096;
 
-
-
-pub trait KernelFunc: Clone {
-    /// Page size (usually 4K)
-    const PAGE_SIZE: usize = PAGE_SIZE;
-
-        // 或请求分配irq
-
-    /// Allocate 'contiguous physical memory' for DMA;
-    /// Return (cpu virtual address, dma physical address) which is page aligned.
-    //fn dma_alloc_coherent(pages: usize) -> usize;
-    fn dma_alloc_coherent(&mut self, pages: usize) -> (usize, usize);
-
-    /// Deallocate DMA memory by virtual address
-    fn dma_free_coherent(&mut self, vaddr: usize, pages: usize);
-}
 
 #[derive(Clone)]
-pub struct E1000{
+pub struct E1000<K>
+where
+    K: KernelFunc,
+{
     mmio: usize,
+    kernel: K,
+    hw: Hw,
 }
 
-impl E1000 {
+impl<K> E1000<K>
+where
+    K: KernelFunc,
+{
     /// new one.
-    pub fn new(mmio: usize)->Self{
+    pub fn new(kfun: K, mmio: usize) -> Self {
         debug!("new E1000 mmio base: [{:#X}]", mmio);
-        
-        Self{
-            mmio
+        let hw = Hw::new(mmio);
+        Self {
+            mmio,
+            kernel: kfun,
+            hw,
         }
     }
 
-    /// probe
-    pub fn probe(&self){
-        info!("probe! ");
+    ///  e1000_read_mac_addr_generic - Read device MAC address
+    ///
+    ///  Reads the device MAC address from the EEPROM and stores the value.
+    ///  Since devices with two ports use the same EEPROM, we increment the
+    /// last bit in the MAC address for the second port.
+    pub fn read_mac_addr_generic(&self) -> MacAddress {
+        MacAddress(self.hw.get_ra(0))
     }
-
 }
 
-impl Drop for E1000 {
+impl<K> Drop for E1000<K>
+where
+    K: KernelFunc,
+{
     fn drop(&mut self) {
         debug!("drop");
     }
