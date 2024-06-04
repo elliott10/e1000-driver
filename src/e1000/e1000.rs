@@ -29,6 +29,8 @@ pub struct E1000{
 impl E1000 {
     /// new one.
     pub fn new(mmio: usize)->Self{
+        debug!("new E1000 mmio base: [{:#X}]", mmio);
+        
         Self{
             mmio
         }
@@ -39,4 +41,10 @@ impl E1000 {
         info!("probe! ");
     }
 
+}
+
+impl Drop for E1000 {
+    fn drop(&mut self) {
+        debug!("drop");
+    }
 }

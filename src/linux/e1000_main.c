@@ -327,7 +327,7 @@ static int e1000_probe(struct pci_dev* pdev, const struct pci_device_id* ent)
 
     size_t e1000 = e1000_new((size_t)hw_addr);
     if (!e1000)
-        goto err_alloc_etherdev;
+        goto err_ioremap;
 
     adapter = netdev_priv(netdev);
     adapter->ptr = e1000;
@@ -337,13 +337,30 @@ static int e1000_probe(struct pci_dev* pdev, const struct pci_device_id* ent)
     netdev->netdev_ops = &e1000e_netdev_ops;
     netdev->watchdog_timeo = 5 * HZ;
     netif_napi_add(netdev, &adapter->napi, e1000e_poll);
+    strscpy(netdev->name, pci_name(pdev), sizeof(netdev->name));
+
+    netdev->mem_start = mmio_start;
+    netdev->mem_end = mmio_start + mmio_len;
+    adapter->bd_number = cards_found++;
+
+    /* Set initial default active device features */
+    netdev->features = (NETIF_F_SG | NETIF_F_HW_VLAN_CTAG_RX | NETIF_F_HW_VLAN_CTAG_TX | NETIF_F_TSO | NETIF_F_TSO6 | NETIF_F_RXHASH | NETIF_F_RXCSUM | NETIF_F_HW_CSUM);
+
+    /* Set user-changeable features (subset of all device features) */
+    netdev->hw_features = netdev->features;
+    netdev->hw_features |= NETIF_F_RXFCS;
+    netdev->priv_flags |= IFF_SUPP_NOFCS;
+    netdev->hw_features |= NETIF_F_RXALL;
+
+    err = register_netdev(netdev);
+    if (err)
+        goto err_register;
 
     pr_info("Intel(R) PRO/1000 Network Connection\n");
 
-    cards_found++;
     return 0;
 
-    // err_register:
+err_register:
     //   err_eeprom:
     //   e1000_phy_hw_reset(hw);
 
@@ -356,6 +373,7 @@ static int e1000_probe(struct pci_dev* pdev, const struct pci_device_id* ent)
     //   err_mdio_ioremap:
     //   iounmap(hw->ce4100_gbe_mdio_base_virt);
     iounmap(hw_addr);
+    e1000_drop(e1000);
 err_ioremap:
     free_netdev(netdev);
 err_alloc_etherdev:

@@ -56,8 +56,9 @@ extern char e1000_driver_name[];
 struct e1000_adapter {
     size_t ptr;
     int bars;
-    struct napi_struct napi;	
+    struct napi_struct napi;
     u32 msg_enable;
+    u32 bd_number;
 };
 
 #define E1000_MAX_INTR 10
