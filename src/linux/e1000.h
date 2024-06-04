@@ -2,6 +2,7 @@
 #define _E1000_H_
 
 #include "e1000_bindings.h"
+#include "hw.h"
 #include <asm/byteorder.h>
 #include <asm/io.h>
 #include <asm/irq.h>
@@ -42,17 +43,21 @@
 #define BAR_0 0
 #define BAR_1 1
 
-#define INTEL_E1000_ETHERNET_DEVICE(device_id)                                 \
-  { PCI_DEVICE(PCI_VENDOR_ID_INTEL, device_id) }
+#define INTEL_E1000_ETHERNET_DEVICE(device_id)     \
+    {                                              \
+        PCI_DEVICE(PCI_VENDOR_ID_INTEL, device_id) \
+    }
 
-extern char e1000_rs_driver_name[];
+extern char e1000_driver_name[];
 // #include "e1000_hw.h"
 
 /* board specific private data structure */
 
 struct e1000_adapter {
-  size_t ptr;
-  int bars;
+    size_t ptr;
+    int bars;
+    struct napi_struct napi;	
+    u32 msg_enable;
 };
 
 #define E1000_MAX_INTR 10
@@ -73,7 +78,7 @@ struct e1000_adapter {
 #define E1000_MIN_RXD 48
 #define E1000_MAX_82544_RXD 4096
 
-#define E1000_MIN_ITR_USECS 10    /* 100000 irq/sec */
+#define E1000_MIN_ITR_USECS 10 /* 100000 irq/sec */
 #define E1000_MAX_ITR_USECS 10000 /* 100    irq/sec */
 
 /* this is the size past which hardware will drop packets when setting LPE=0 */
@@ -100,7 +105,7 @@ struct e1000_adapter {
 
 /* Flow Control Watermarks */
 #define E1000_FC_HIGH_DIFF 0x1638 /* High: 5688 bytes below Rx FIFO size */
-#define E1000_FC_LOW_DIFF 0x1640  /* Low:  5696 bytes below Rx FIFO size */
+#define E1000_FC_LOW_DIFF 0x1640 /* Low:  5696 bytes below Rx FIFO size */
 
 #define E1000_FC_PAUSE_TIME 0xFFFF /* pause for the max or until send xon */
 
@@ -119,5 +124,28 @@ struct e1000_adapter {
 #endif
 
 #define E1000_MNG_VLAN_NONE (-1)
+
+enum e1000_mac_type {
+    e1000_82571,
+    e1000_82572,
+    e1000_82573,
+    e1000_82574,
+    e1000_82583,
+    e1000_80003es2lan,
+    e1000_ich8lan,
+    e1000_ich9lan,
+    e1000_ich10lan,
+    e1000_pchlan,
+    e1000_pch2lan,
+    e1000_pch_lpt,
+    e1000_pch_spt,
+    e1000_pch_cnp,
+    e1000_pch_tgp,
+    e1000_pch_adp,
+    e1000_pch_mtp,
+    e1000_pch_lnp,
+    e1000_pch_ptp,
+    e1000_pch_nvp,
+};
 
 #endif /* _E1000_H_ */
