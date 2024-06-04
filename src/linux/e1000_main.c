@@ -279,8 +279,10 @@ static int e1000_probe(struct pci_dev* pdev, const struct pci_device_id* ent)
     struct net_device* netdev;
     struct e1000_adapter* adapter = NULL;
     static int cards_found;
-    void* hw_addr;
+    void* hw_addr = NULL;
+    void* flash_addr = NULL;
     resource_size_t mmio_start, mmio_len;
+    resource_size_t flash_start, flash_len;
     // static int global_quad_port_a; /* global ksp3 port a indication */
     // int i, pci_using_dac;
     // u16 eeprom_data = 0;
@@ -331,11 +333,24 @@ static int e1000_probe(struct pci_dev* pdev, const struct pci_device_id* ent)
     if (!e1000)
         goto err_ioremap;
 
+    BoardInfo board_info = e1000r_board_info(e1000);
+
     adapter = netdev_priv(netdev);
     adapter->ptr = e1000;
     // adapter->msg_enable = netif_msg_init(debug, DEFAULT_MSG_ENABLE);
     adapter->bars = bars;
     adapter->msg_enable = netif_msg_init(debug, DEFAULT_MSG_ENABLE);
+
+    if (board_info.flags.has_flash && (pci_resource_flags(pdev, 1) & IORESOURCE_MEM) && (board_info.mac < e1000_pch_spt)) {
+        flash_start = pci_resource_start(pdev, 1);
+        flash_len = pci_resource_len(pdev, 1);
+        flash_addr = ioremap(flash_start, flash_len);
+        if (!flash_addr)
+            goto err_flashmap;
+        e1000r_set_flash(e1000, (size_t)flash_addr);
+    }
+
+
     netdev->netdev_ops = &e1000e_netdev_ops;
     netdev->watchdog_timeo = 5 * HZ;
     netif_napi_add(netdev, &adapter->napi, e1000e_poll);
@@ -357,9 +372,14 @@ static int e1000_probe(struct pci_dev* pdev, const struct pci_device_id* ent)
     u8 mac_addr[6];
 
     e1000r_read_mac_addr(e1000, &mac_addr);
-    
-    eth_hw_addr_set(netdev, mac_addr);
 
+    eth_hw_addr_set(netdev, mac_addr);
+    if (!is_valid_ether_addr(netdev->dev_addr)) {
+        dev_err(&pdev->dev, "Invalid MAC Address: %pM\n",
+            netdev->dev_addr);
+        err = -EIO;
+        goto err_eeprom;
+    }
 
     err = register_netdev(netdev);
     if (err)
@@ -370,7 +390,7 @@ static int e1000_probe(struct pci_dev* pdev, const struct pci_device_id* ent)
     return 0;
 
 err_register:
-    //   err_eeprom:
+err_eeprom:
     //   e1000_phy_hw_reset(hw);
 
     // if (hw->flash_address)
@@ -381,6 +401,9 @@ err_register:
     // err_sw_init:
     //   err_mdio_ioremap:
     //   iounmap(hw->ce4100_gbe_mdio_base_virt);
+    if ((flash_addr) && (board_info.mac < e1000_pch_spt))
+        iounmap(flash_addr);
+err_flashmap:
     iounmap(hw_addr);
     e1000r_drop(e1000);
 err_ioremap:

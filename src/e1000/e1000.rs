@@ -37,6 +37,24 @@ where
     pub fn read_mac_addr_generic(&self) -> MacAddress {
         MacAddress(self.hw.get_ra(0))
     }
+
+    /// board info
+    pub fn board_info(&self) -> BoardInfo {
+        self.hw.board_info()
+    }
+
+    /// set flash
+    pub fn set_flash(&mut self, flash: usize) {
+        info!("set flash: {:#X}", flash);
+        self.hw.set_flash(flash);
+    }
+
+    pub fn init(&mut self) -> Result<(), usize> {
+        info!("init begin ...");
+
+        info!("init end");
+        Ok(())
+    }
 }
 
 impl<K> Drop for E1000<K>

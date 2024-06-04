@@ -1,42 +1,21 @@
 use super::regs;
+use crate::*;
 use core::ptr::{slice_from_raw_parts, slice_from_raw_parts_mut};
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Hw {
     mmio: usize,
     board: Board,
-}
-#[allow(non_camel_case_types)]
-#[derive(Debug, Clone, Copy)]
-#[repr(usize)]
-pub enum Board {
-    board_82571,
-    board_82572,
-    board_82573,
-    board_82574,
-    board_82583,
-    board_80003es2lan,
-    board_ich8lan,
-    board_ich9lan,
-    board_ich10lan,
-    board_pchlan,
-    board_pch2lan,
-    board_pch_lpt,
-    board_pch_spt,
-    board_pch_cnp,
-    board_pch_tgp,
-    board_pch_adp,
-    board_pch_mtp,
-}
-impl From<usize> for Board {
-    fn from(value: usize) -> Self {
-        unsafe { *(&value as *const usize as *const Board) }
-    }
+    flash: Option<usize>,
 }
 
 impl Hw {
     pub(crate) fn new(mmio: usize, board: Board) -> Self {
-        Hw { mmio: mmio, board }
+        Hw {
+            mmio: mmio,
+            board,
+            flash: None,
+        }
     }
 
     fn read<T>(&self, offset: usize) -> T {
@@ -44,6 +23,13 @@ impl Hw {
             let ptr = (self.mmio + offset) as *const T;
             ptr.read_volatile()
         }
+    }
+    pub(crate) fn board_info(&self) -> BoardInfo {
+        self.board.get_info()
+    }
+
+    pub(crate) fn set_flash(&mut self, flash: usize) {
+        self.flash = Some(flash);
     }
 
     fn write<T>(&self, offset: usize, value: T) {

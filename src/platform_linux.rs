@@ -52,3 +52,16 @@ extern "C" fn e1000r_read_mac_addr(ptr: usize, mac: &mut [u8; 6]) {
     let mac_new = dev.dev.read_mac_addr_generic();
     mac.copy_from_slice(&mac_new.0);
 }
+
+#[no_mangle]
+extern "C" fn e1000r_board_info(ptr: usize) -> BoardInfo {
+    let dev = dev_mut(ptr);
+    let board_info = dev.dev.board_info();
+    board_info
+}
+
+#[no_mangle]
+extern "C" fn e1000r_set_flash(ptr: usize, flash: usize){
+    let dev = dev_mut(ptr);
+    dev.dev.set_flash(flash);
+}
