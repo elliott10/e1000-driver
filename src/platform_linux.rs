@@ -61,7 +61,16 @@ extern "C" fn e1000r_board_info(ptr: usize) -> BoardInfo {
 }
 
 #[no_mangle]
-extern "C" fn e1000r_set_flash(ptr: usize, flash: usize){
+extern "C" fn e1000r_set_flash(ptr: usize, flash: usize) {
     let dev = dev_mut(ptr);
     dev.dev.set_flash(flash);
+}
+
+#[no_mangle]
+extern "C" fn e1000r_init(ptr: usize) -> i32 {
+    let dev = dev_mut(ptr);
+    match dev.dev.init() {
+        Ok(_) => 0,
+        Err(e) => -99,
+    }
 }

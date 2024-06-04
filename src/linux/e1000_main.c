@@ -2,6 +2,7 @@
 #include "linux/cleanup.h"
 #include "linux/etherdevice.h"
 #include "linux/mroute.h"
+#include "linux/printk.h"
 #include <linux/cpu.h>
 #include <linux/delay.h>
 #include <linux/dma-mapping.h>
@@ -350,7 +351,6 @@ static int e1000_probe(struct pci_dev* pdev, const struct pci_device_id* ent)
         e1000r_set_flash(e1000, (size_t)flash_addr);
     }
 
-
     netdev->netdev_ops = &e1000e_netdev_ops;
     e1000e_set_ethtool_ops(netdev);
 
@@ -373,6 +373,10 @@ static int e1000_probe(struct pci_dev* pdev, const struct pci_device_id* ent)
 
     u8 mac_addr[6];
 
+    err = e1000r_init(e1000);
+    if (err != 0)
+        goto err_eeprom;
+
     e1000r_read_mac_addr(e1000, &mac_addr);
 
     eth_hw_addr_set(netdev, mac_addr);
@@ -383,6 +387,8 @@ static int e1000_probe(struct pci_dev* pdev, const struct pci_device_id* ent)
         goto err_eeprom;
     }
 
+
+    strscpy(netdev->name, "eth%d", sizeof(netdev->name));
     err = register_netdev(netdev);
     if (err)
         goto err_register;
