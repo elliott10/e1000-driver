@@ -337,8 +337,8 @@ static int e1000_probe(struct pci_dev* pdev, const struct pci_device_id* ent)
 
     adapter = netdev_priv(netdev);
     adapter->ptr = e1000;
-    // adapter->msg_enable = netif_msg_init(debug, DEFAULT_MSG_ENABLE);
     adapter->bars = bars;
+    adapter->pdev = pdev;
     adapter->msg_enable = netif_msg_init(debug, DEFAULT_MSG_ENABLE);
 
     if (board_info.flags.has_flash && (pci_resource_flags(pdev, 1) & IORESOURCE_MEM) && (board_info.mac < e1000_pch_spt)) {
@@ -352,6 +352,8 @@ static int e1000_probe(struct pci_dev* pdev, const struct pci_device_id* ent)
 
 
     netdev->netdev_ops = &e1000e_netdev_ops;
+    e1000e_set_ethtool_ops(netdev);
+
     netdev->watchdog_timeo = 5 * HZ;
     netif_napi_add(netdev, &adapter->napi, e1000e_poll);
     strscpy(netdev->name, pci_name(pdev), sizeof(netdev->name));

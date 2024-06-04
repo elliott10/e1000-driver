@@ -1,5 +1,5 @@
 obj-m := e1000_rs.o
-e1000_rs-y := linux/e1000_main.o platform_linux.o 
+e1000_rs-y := linux/e1000_main.o platform_linux.o linux/ethtool.o
 
 
 KDIR ?= /lib/modules/$(shell uname -r)/build

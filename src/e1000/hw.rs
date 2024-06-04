@@ -2,7 +2,7 @@ use super::regs;
 use crate::*;
 use core::ptr::{slice_from_raw_parts, slice_from_raw_parts_mut};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 pub(crate) struct Hw {
     mmio: usize,
     board: Board,

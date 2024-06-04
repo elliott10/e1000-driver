@@ -8,7 +8,7 @@ pub use self::e1000::*;
 
 const PAGE_SIZE: usize = 4096;
 
-pub trait KernelFunc: Clone {
+pub trait KernelFunc {
     /// Page size (usually 4K)
     const PAGE_SIZE: usize = PAGE_SIZE;
 

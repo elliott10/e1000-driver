@@ -3,7 +3,7 @@ use e1000::hw::Hw;
 /// E1000e driver.
 use crate::*;
 
-#[derive(Clone)]
+
 pub struct E1000<K>
 where
     K: KernelFunc,
