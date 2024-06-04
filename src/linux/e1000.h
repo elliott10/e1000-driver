@@ -59,7 +59,16 @@ struct e1000_adapter {
     struct napi_struct napi;
     u32 msg_enable;
     u32 bd_number;
-    struct pci_dev *pdev;
+    struct pci_dev* pdev;
+
+    /* track device up/down/testing state */
+    unsigned long state;
+
+    /* Interrupt Throttle Rate */
+    u32 itr;
+    u32 itr_setting;
+    u16 tx_itr;
+    u16 rx_itr;
 };
 
 #define E1000_MAX_INTR 10
@@ -127,5 +136,5 @@ struct e1000_adapter {
 
 #define E1000_MNG_VLAN_NONE (-1)
 
-void e1000e_set_ethtool_ops(struct net_device *netdev);
+void e1000e_set_ethtool_ops(struct net_device* netdev);
 #endif /* _E1000_H_ */

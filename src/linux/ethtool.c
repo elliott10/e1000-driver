@@ -13,18 +13,19 @@
 #include <linux/slab.h>
 #include <linux/vmalloc.h>
 
-enum { NETDEV_STATS, E1000_STATS };
+enum { NETDEV_STATS,
+    E1000_STATS };
 
 struct e1000_stats {
-	char stat_string[ETH_GSTRING_LEN];
-	int type;
-	int sizeof_stat;
-	int stat_offset;
+    char stat_string[ETH_GSTRING_LEN];
+    int type;
+    int sizeof_stat;
+    int stat_offset;
 };
 
 static const char e1000e_priv_flags_strings[][ETH_GSTRING_LEN] = {
-#define E1000E_PRIV_FLAGS_S0IX_ENABLED	BIT(0)
-	"s0ix-enabled",
+#define E1000E_PRIV_FLAGS_S0IX_ENABLED BIT(0)
+    "s0ix-enabled",
 };
 // #define E1000E_PRIV_FLAGS_STR_LEN ARRAY_SIZE(e1000e_priv_flags_strings)
 
@@ -110,7 +111,6 @@ static int e1000_get_link_ksettings(struct net_device* netdev,
 
     return 0;
 }
-
 
 static int e1000_set_link_ksettings(struct net_device* netdev,
     const struct ethtool_link_ksettings* cmd)
@@ -201,8 +201,6 @@ static int e1000_set_ringparam(struct net_device* netdev,
     return 0;
 }
 
-
-
 #define REG_PATTERN_TEST_ARRAY(reg, offset, mask, write)               \
     do {                                                               \
         if (reg_pattern_test(adapter, data, reg, offset, mask, write)) \
@@ -216,8 +214,6 @@ static int e1000_set_ringparam(struct net_device* netdev,
         if (reg_set_and_check(adapter, data, reg, mask, write)) \
             return 1;                                           \
     } while (0)
-
-
 
 static int e1000e_get_sset_count(struct net_device __always_unused* netdev,
     int sset)
@@ -243,7 +239,6 @@ static void e1000_get_wol(struct net_device* netdev,
     struct ethtool_wolinfo* wol)
 {
 
-
     wol->supported = 0;
     wol->wolopts = 0;
 }
@@ -251,14 +246,12 @@ static void e1000_get_wol(struct net_device* netdev,
 static int e1000_set_wol(struct net_device* netdev, struct ethtool_wolinfo* wol)
 {
 
-
     return 0;
 }
 
 static int e1000_set_phys_id(struct net_device* netdev,
     enum ethtool_phys_id_state state)
 {
-
 
     return 0;
 }
@@ -268,8 +261,12 @@ static int e1000_get_coalesce(struct net_device* netdev,
     struct kernel_ethtool_coalesce* kernel_coal,
     struct netlink_ext_ack* extack)
 {
+    struct e1000_adapter* adapter = netdev_priv(netdev);
 
-
+    if (adapter->itr_setting <= 4)
+        ec->rx_coalesce_usecs = adapter->itr_setting;
+    else
+        ec->rx_coalesce_usecs = 1000000 / adapter->itr_setting;
     return 0;
 }
 
@@ -278,13 +275,34 @@ static int e1000_set_coalesce(struct net_device* netdev,
     struct kernel_ethtool_coalesce* kernel_coal,
     struct netlink_ext_ack* extack)
 {
+    struct e1000_adapter* adapter = netdev_priv(netdev);
+    if ((ec->rx_coalesce_usecs > E1000_MAX_ITR_USECS) || ((ec->rx_coalesce_usecs > 4) && (ec->rx_coalesce_usecs < E1000_MIN_ITR_USECS)) || (ec->rx_coalesce_usecs == 2))
+        return -EINVAL;
 
+    if (ec->rx_coalesce_usecs == 4) {
+        adapter->itr_setting = 4;
+        adapter->itr = adapter->itr_setting;
+    } else if (ec->rx_coalesce_usecs <= 3) {
+        adapter->itr = 20000;
+        adapter->itr_setting = ec->rx_coalesce_usecs;
+    } else {
+        adapter->itr = (1000000 / ec->rx_coalesce_usecs);
+        adapter->itr_setting = adapter->itr & ~3;
+    }
+
+    pm_runtime_get_sync(netdev->dev.parent);
+
+    // if (adapter->itr_setting != 0)
+    // e1000e_write_itr(adapter, adapter->itr);
+    // else
+    // e1000e_write_itr(adapter, 0);
+
+    pm_runtime_put_sync(netdev->dev.parent);
     return 0;
 }
 
 static int e1000_nway_reset(struct net_device* netdev)
 {
-  
 
     return 0;
 }
@@ -293,13 +311,11 @@ static void e1000_get_ethtool_stats(struct net_device* netdev,
     struct ethtool_stats __always_unused* stats,
     u64* data)
 {
-  
 }
 
 static void e1000_get_strings(struct net_device __always_unused* netdev,
     u32 stringset, u8* data)
 {
-
 }
 
 static int e1000_get_rxnfc(struct net_device* netdev,
