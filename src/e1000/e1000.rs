@@ -3,8 +3,6 @@ use e1000::hw::Hw;
 /// E1000e driver.
 use crate::*;
 
-
-
 #[derive(Clone)]
 pub struct E1000<K>
 where
@@ -20,9 +18,10 @@ where
     K: KernelFunc,
 {
     /// new one.
-    pub fn new(kfun: K, mmio: usize) -> Self {
-        debug!("new E1000 mmio base: [{:#X}]", mmio);
-        let hw = Hw::new(mmio);
+    pub fn new(kfun: K, mmio: usize, board: Board) -> Self {
+        info!("New E1000 mmio base: [{:#X}], board: {:?}", mmio, board);
+        let hw = Hw::new(mmio, board);
+
         Self {
             mmio,
             kernel: kfun,

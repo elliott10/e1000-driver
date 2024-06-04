@@ -28,13 +28,12 @@ fn dev_mut<'a>(ptr: usize) -> &'a mut Device {
 }
 
 #[no_mangle]
-extern "C" fn e1000r_new(mmio: usize) -> usize {
+extern "C" fn e1000r_new(mmio: usize, board: usize) -> usize {
     let dev = Box::init(kernel::init!(Device {
-        dev: E1000::new(KFun {}, mmio)
+        dev: E1000::new(KFun {}, mmio, Board::from(board))
     }))
     .unwrap();
     let ptr = unsafe { Box::into_raw(dev) as usize };
-    pr_info!("e1000_new ptr {:#X}\n", ptr);
     ptr
 }
 
@@ -45,12 +44,11 @@ extern "C" fn e1000r_drop(ptr: usize) {
     }
 }
 
-const __LOG_PREFIX: &[u8] = b"e1000-rs\0";
+const __LOG_PREFIX: &[u8] = b"E1000 Rust\0";
 
 #[no_mangle]
 extern "C" fn e1000r_read_mac_addr(ptr: usize, mac: &mut [u8; 6]) {
     let dev = dev_mut(ptr);
     let mac_new = dev.dev.read_mac_addr_generic();
-    info!("e1000r_read_mac_addr {}\n", mac_new);
     mac.copy_from_slice(&mac_new.0);
 }

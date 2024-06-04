@@ -1,11 +1,8 @@
-// mod e1000;
-// mod e1000_const;
-
 mod e1000;
 mod hw;
 mod regs;
 use core::fmt::{self, Display};
-
+pub use hw::Board;
 pub use self::e1000::*;
 
 const PAGE_SIZE: usize = 4096;

@@ -327,7 +327,7 @@ static int e1000_probe(struct pci_dev* pdev, const struct pci_device_id* ent)
     if (!hw_addr)
         goto err_ioremap;
 
-    size_t e1000 = e1000r_new((size_t)hw_addr);
+    size_t e1000 = e1000r_new((size_t)hw_addr, (size_t)ent->driver_data);
     if (!e1000)
         goto err_ioremap;
 
