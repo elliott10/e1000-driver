@@ -130,4 +130,5 @@ struct e1000_adapter {
 
 void e1000e_set_ethtool_ops(struct net_device* netdev);
 size_t e1000e_get_e1000(struct net_device* netdev);
+struct E1000Status* e1000_status(struct net_device* netdev);
 #endif /* _E1000_H_ */

@@ -1,15 +1,17 @@
 mod board;
+pub(crate) mod dev_id;
 mod e1000;
+pub mod err;
 mod hw;
 mod regs;
-use core::fmt::{self, Display};
-pub use board::*;
-pub use hw::E1000HWStats;
 pub use self::e1000::*;
+pub use board::*;
+use core::fmt::{self, Display};
+pub use hw::E1000HWStats;
 
 const PAGE_SIZE: usize = 4096;
 
-pub trait KernelFunc {
+pub trait KernelFunc: Send + Sync {
     /// Page size (usually 4K)
     const PAGE_SIZE: usize = PAGE_SIZE;
 
@@ -18,10 +20,16 @@ pub trait KernelFunc {
     /// Allocate 'contiguous physical memory' for DMA;
     /// Return (cpu virtual address, dma physical address) which is page aligned.
     //fn dma_alloc_coherent(pages: usize) -> usize;
-    fn dma_alloc_coherent(&mut self, pages: usize) -> (usize, usize);
+    fn dma_alloc_coherent(&self, pages: usize) -> (usize, usize);
 
     /// Deallocate DMA memory by virtual address
-    fn dma_free_coherent(&mut self, vaddr: usize, pages: usize);
+    fn dma_free_coherent(&self, vaddr: usize, pages: usize);
+
+    /// BAR remap address
+    fn bar_n_remap(&self, bar: usize) -> usize;
+
+    /// iounmap address
+    fn iounmap(&self, addr: usize);
 }
 
 #[repr(transparent)]

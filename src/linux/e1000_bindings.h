@@ -85,6 +85,24 @@ typedef struct BoardInfo {
   uint32_t max_hw_frame_size;
 } BoardInfo;
 
+/**
+ * 通过bar获取到映射地址
+ * return: 映射地址
+ */
+typedef size_t (*E1000CbBarNremap)(const void *pdev, size_t bar);
+
+/**
+ * 释放映射地址
+ */
+typedef void (*E1000CbIounmap)(size_t addr);
+
+typedef struct E1000Config {
+  uint32_t device_id;
+  E1000CbBarNremap cb_bar_n_remap;
+  E1000CbIounmap cb_iounmap;
+  const void *pdev;
+} E1000Config;
+
 typedef struct E1000HWStats {
   uint64_t crcerrs;
   uint64_t algnerrc;
@@ -151,24 +169,22 @@ typedef struct E1000HWStats {
   uint64_t icrxoc;
 } E1000HWStats;
 
-typedef struct E1000RInfo {
+typedef struct E1000Status {
   struct E1000HWStats stats;
   uint32_t itr;
   uint32_t itr_setting;
   uint16_t tx_it;
   uint16_t rx_itr;
-} E1000RInfo;
+} E1000Status;
 
 struct BoardInfo e1000r_board_info(size_t ptr);
 
 void e1000r_drop(size_t ptr);
 
-struct E1000RInfo *e1000r_info(size_t ptr);
-
 int32_t e1000r_init(size_t ptr);
 
-size_t e1000r_new(size_t mmio, size_t board);
+size_t e1000r_new(struct E1000Config config);
 
 void e1000r_read_mac_addr(size_t ptr, uint8_t (*mac)[6]);
 
-void e1000r_set_flash(size_t ptr, size_t flash);
+struct E1000Status *e1000r_status(size_t ptr);

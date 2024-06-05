@@ -1,7 +1,9 @@
+use super::dev_id::*;
+
 const DEFAULT_JUMBO: u32 = 9234;
 
 #[allow(non_camel_case_types)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 #[repr(u32)]
 pub enum Board {
     board_82571,
@@ -84,7 +86,7 @@ pub struct Flags2 {
     pub enable_s0ix_flows: bool,
 }
 #[allow(non_camel_case_types)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 #[repr(u32)]
 pub enum E1000MacType {
     e1000_82571,
@@ -206,5 +208,20 @@ impl Board {
                 max_hw_frame_size: 9022,
             },
         }
+    }
+
+    pub fn from_dev_id(id: u32) -> Option<Self> {
+        use Board::*;
+        let one = match id {
+            E1000_DEV_ID_82574L => board_82574,
+            E1000_DEV_ID_82574LA => board_82574,
+            E1000_DEV_ID_PCH_TGP_I219_LM13 => board_pch_tgp,
+            E1000_DEV_ID_PCH_TGP_I219_V13 => board_pch_tgp,
+            E1000_DEV_ID_PCH_RPL_I219_LM22 => board_pch_adp,
+            E1000_DEV_ID_PCH_RPL_I219_V22 => board_pch_adp,
+            _ => return None,
+        };
+
+        Some(one)
     }
 }
