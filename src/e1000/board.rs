@@ -121,7 +121,7 @@ pub struct BoardInfo {
 }
 
 impl Board {
-    pub fn get_info(&self) -> BoardInfo {
+    pub fn new_default_info(&self) -> BoardInfo {
         match self {
             Board::board_82571 => todo!(),
             Board::board_82572 => todo!(),

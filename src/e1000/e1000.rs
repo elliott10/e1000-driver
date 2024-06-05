@@ -27,10 +27,13 @@ where
         })?;
 
         let mmio = kfun.bar_n_remap(0);
-        info!("new e1000e driver, mmio: {:#X}, board: {:?}", mmio, board);
+        info!(
+            "New E1000 rust driver, mmio: {:#X}, device: {:#X} board: {:?}",
+            mmio, device_id, board
+        );
 
         let mut flash = None;
-        let board_info = board.get_info();
+        let board_info = board.new_default_info();
         if board_info.flags.has_flash && board_info.mac < E1000MacType::e1000_pch_spt {
             let addr = kfun.bar_n_remap(1);
             if addr > 0 {
@@ -64,13 +67,14 @@ where
 
     /// board info
     pub fn board_info(&self) -> BoardInfo {
-        self.hw.board_info()
+        self.hw.board_info.clone()
     }
 
     pub fn init(&mut self) -> Result {
         info!("init begin ...");
+        self.check_opention();
 
-        info!("init end");
+        info!("init ok");
         Ok(())
     }
 
@@ -78,6 +82,75 @@ where
         &mut self.status
     }
 
+    fn check_opention(&mut self) {
+        self.status.check_opention(self.board_info());
+        self.check_opention();
+        self.write_protect_nvm();
+        
+    }
+
+    fn crc_stripping(&mut self) {
+        self.hw.board_info.flags2.crc_stripping = true;
+        self.hw.board_info.flags2.dflt_crc_stripping = true;
+    }
+
+    fn write_protect_nvm(&mut self) {
+        if self.hw.board_info.flags.is_ich {
+            self.hw.board_info.flags.read_only_nvm = true;
+        }
+    }
+}
+
+impl E1000Status {
+    fn check_opention(&mut self, board: BoardInfo) {
+        use super::params::*;
+        //TODO 检查最大网卡数量
+
+        self.tx_int_delay = DEFAULT_TIDV;
+        self.tx_abs_int_delay = DEFAULT_TADV;
+
+        self.rx_int_delay = DEFAULT_RDTR;
+        self.rx_abs_int_delay = DEFAULT_RADV;
+
+        if board.flags2.dma_burst {
+            self.rx_int_delay = BURST_RDTR;
+            self.rx_abs_int_delay = BURST_RADV;
+        }
+        /* Interrupt Throttling Rate */
+        {
+            let opt_name = "Interrupt Throttling Rate (ints/sec)";
+            self.itr = DEFAULT_ITR;
+            self.itr_setting = self.itr;
+
+            match self.itr {
+                0 => {
+                    info!("{} turned off", opt_name);
+                }
+                1 => {
+                    info!("{} set to dynamic mode", opt_name);
+                    self.itr = 20000;
+                }
+                2 => {
+                    info!("{} Invalid mode - setting default", opt_name);
+                    self.itr_setting = DEFAULT_ITR;
+                }
+                3 => {
+                    info!("{} set to dynamic conservative mode", opt_name);
+                    self.itr = 20000;
+                }
+                4 => {
+                    info!("{} set to simplified (2000-8000 ints) mode", opt_name);
+                }
+                _ => {
+                    // Save the setting, because the dynamic bits change itr.
+                    // Clear the lower two bits because they are used as control.
+                    self.itr_setting &= !3;
+                }
+            }
+        }
+
+        //TODO Interrupt Mode
+    }
 }
 
 impl<K> Drop for E1000<K>
@@ -103,4 +176,15 @@ pub struct E1000Status {
     pub itr_setting: u32,
     pub tx_it: u16,
     pub rx_itr: u16,
+
+    pub tx_int_delay: u32,
+    pub tx_abs_int_delay: u32,
+
+    pub rx_int_delay: u32,
+    pub rx_abs_int_delay: u32,
+
+    pub total_tx_bytes: u32,
+    pub total_tx_packets: u32,
+    pub total_rx_bytes: u32,
+    pub total_rx_packets: u32,
 }

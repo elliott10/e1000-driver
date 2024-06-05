@@ -1,5 +1,6 @@
 mod board;
 pub(crate) mod dev_id;
+pub(crate) mod params;
 mod e1000;
 pub mod err;
 mod hw;

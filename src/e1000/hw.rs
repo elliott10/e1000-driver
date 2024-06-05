@@ -5,9 +5,10 @@ use core::ptr::{slice_from_raw_parts, slice_from_raw_parts_mut};
 #[derive(Debug)]
 pub(crate) struct Hw {
     mmio: usize,
-    board: Board,
-    flash: Option<usize>,
+    pub(crate) board: Board,
+    pub(crate) flash: Option<usize>,
     pub(crate) stats: E1000HWStats,
+    pub(crate) board_info: BoardInfo,
 }
 
 impl Hw {
@@ -17,6 +18,7 @@ impl Hw {
             board,
             flash: None,
             stats: Default::default(),
+            board_info: board.new_default_info(),
         }
     }
 
@@ -25,9 +27,6 @@ impl Hw {
             let ptr = (self.mmio + offset) as *const T;
             ptr.read_volatile()
         }
-    }
-    pub(crate) fn board_info(&self) -> BoardInfo {
-        self.board.get_info()
     }
 
     pub(crate) fn set_flash(&mut self, flash: usize) {
