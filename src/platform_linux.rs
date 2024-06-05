@@ -17,6 +17,7 @@ pub struct Device {
 struct KFun {
     cb_bar_n_remap: E1000CbBarNremap,
     cb_iounmap: E1000CbIounmap,
+    cb_udelay: E1000CbUdelay,
     pdev: *const c_void,
 }
 
@@ -36,6 +37,12 @@ impl KernelFunc for KFun {
     fn iounmap(&self, addr: usize) {
         unsafe { (self.cb_iounmap)(addr) }
     }
+
+    fn delay(&self, nanos: u64) {
+        unsafe {
+            ((self.cb_udelay)((nanos / 1000) as u32));
+        }
+    }
 }
 
 type DevicePtr = *mut Device;
@@ -49,11 +56,14 @@ pub type E1000CbBarNremap = unsafe extern "C" fn(pdev: *const c_void, bar: usize
 /// 释放映射地址
 pub type E1000CbIounmap = unsafe extern "C" fn(addr: usize);
 
+pub type E1000CbUdelay = unsafe extern "C" fn(usecs: u32);
+
 #[repr(C)]
 pub struct E1000Config {
     device_id: u32,
     cb_bar_n_remap: E1000CbBarNremap,
     cb_iounmap: E1000CbIounmap,
+    cb_udelay: E1000CbUdelay,
     pdev: *const c_void,
 }
 
@@ -72,6 +82,7 @@ extern "C" fn e1000r_new(config: E1000Config) -> usize {
     let mut kfun = KFun {
         cb_bar_n_remap: config.cb_bar_n_remap,
         cb_iounmap: config.cb_iounmap,
+        cb_udelay: config.cb_udelay,
         pdev: config.pdev,
     };
     let e1000 = match E1000::new(kfun, config.device_id) {
@@ -126,4 +137,10 @@ unsafe extern "C" fn e1000r_status<'a>(ptr: usize) -> &'a mut E1000Status {
 unsafe extern "C" fn e1000r_irq_handle(ptr: usize, irq: i32) -> i32 {
     let dev = dev_mut(ptr);
     rfn(|| dev.dev.intr(irq))
+}
+
+#[no_mangle]
+unsafe extern "C" fn e1000r_set_flags(ptr: usize, flags: Flags) {
+    let dev = dev_mut(ptr);
+    dev.dev.set_flags(flags);
 }

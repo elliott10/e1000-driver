@@ -1,9 +1,9 @@
 mod board;
 pub(crate) mod dev_id;
-pub(crate) mod params;
 mod e1000;
 pub mod err;
 mod hw;
+pub(crate) mod params;
 mod regs;
 pub use self::e1000::*;
 pub use board::*;
@@ -31,6 +31,9 @@ pub trait KernelFunc: Send + Sync {
 
     /// iounmap address
     fn iounmap(&self, addr: usize);
+
+    /// TODO linux Duration 无法编译通过
+    fn delay(&self, nanos: u64);
 }
 
 #[repr(transparent)]

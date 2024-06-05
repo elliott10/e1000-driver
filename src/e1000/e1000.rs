@@ -99,6 +99,10 @@ where
         }
     }
 
+    pub fn set_flags(&mut self, flags: Flags){
+        self.hw.board_info.flags = flags;
+    }
+
     /**
      * sw_init - Initialize general software structures (struct e1000_adapter)
      *
@@ -117,6 +121,10 @@ where
         Ok(())
     }
 
+
+    pub fn irq_disable(&mut self, is_msix_enabled: bool){
+        
+    }
 }
 
 impl E1000Status {

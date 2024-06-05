@@ -96,10 +96,13 @@ typedef size_t (*E1000CbBarNremap)(const void *pdev, size_t bar);
  */
 typedef void (*E1000CbIounmap)(size_t addr);
 
+typedef void (*E1000CbUdelay)(uint32_t usecs);
+
 typedef struct E1000Config {
   uint32_t device_id;
   E1000CbBarNremap cb_bar_n_remap;
   E1000CbIounmap cb_iounmap;
+  E1000CbUdelay cb_udelay;
   const void *pdev;
 } E1000Config;
 
@@ -191,10 +194,10 @@ void e1000r_drop(size_t ptr);
 
 int32_t e1000r_init(size_t ptr);
 
-int32_t e1000r_irq_handle(int32_t irq);
-
 size_t e1000r_new(struct E1000Config config);
 
 void e1000r_read_mac_addr(size_t ptr, uint8_t (*mac)[6]);
+
+void e1000r_set_flags(size_t ptr, struct Flags flags);
 
 struct E1000Status *e1000r_status(size_t ptr);
