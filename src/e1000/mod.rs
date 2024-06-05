@@ -1,3 +1,4 @@
+pub(crate) mod defines;
 mod board;
 pub(crate) mod dev_id;
 mod e1000;

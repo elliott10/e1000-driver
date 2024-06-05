@@ -1,4 +1,5 @@
 use super::board::E1000MacType;
+use super::defines;
 use super::hw::{self, Hw};
 use super::regs;
 use crate::err::{Error, Result};
@@ -12,6 +13,7 @@ where
     kernel: K,
     hw: Hw,
     status: E1000Status,
+    eiac_mask: u32,
 }
 
 impl<K> E1000<K>
@@ -50,6 +52,7 @@ where
             flash,
             kernel: kfun,
             hw,
+            eiac_mask: 0,
             status: E1000Status::default(),
         })
     }
@@ -118,14 +121,31 @@ where
         Ok(())
     }
 
+    pub fn irq_enable(&mut self, is_msix_enabled: bool) {
+        info!("Enable interrupts");
+
+        if is_msix_enabled {
+            // 当使用MSI-X中断时
+            self.ew32(regs::EIAC_82574, self.eiac_mask & regs::EIAC_MASK_82574);
+            self.ew32(
+                regs::IMS,
+                self.eiac_mask | defines::IMS_OTHER | defines::IMS_OTHER_MASK,
+            );
+        } else if self.hw.board_info.mac >= E1000MacType::e1000_pch_lpt {
+            self.ew32(regs::IMS, defines::IMS_ENABLE_MASK | defines::IMS_ECCER);
+        } else {
+            self.ew32(regs::IMS, defines::IMS_ENABLE_MASK);
+        }
+        self.e1e_flush();
+    }
+
     pub fn irq_disable(&mut self, is_msix_enabled: bool) {
         info!("Disable interrupts");
 
         self.ew32(regs::IMC, !0);
 
         if is_msix_enabled {
-            // EIAC_82574
-            self.ew32(0x000DC, 0);
+            self.ew32(regs::EIAC_82574, 0);
         }
         self.e1e_flush();
     }

@@ -8,9 +8,8 @@ pub(crate) const MDIC: usize = 0x00020; // MDI Control - RW
 pub(crate) const SCTL: usize = 0x00024; // SerDes Control - RW
 pub(crate) const FCAL: usize = 0x00028; // Flow Control Address Low - RW
 pub(crate) const FCAH: usize = 0x0002C; // Flow Control Address High - RW
-// 注意：E1000_FEXT 和 E1000_FCAH 有相同的值，需要确认是否是故意的
+                                        // 注意：E1000_FEXT 和 E1000_FCAH 有相同的值，需要确认是否是故意的
 pub(crate) const FEXT: usize = 0x0002C; // Future Extended - RW
-
 
 pub(crate) const FCT: usize = 0x00030; // Flow Control Type - RW
 pub(crate) const VET: usize = 0x00038; // VLAN Ether Type - RW
@@ -30,3 +29,6 @@ pub(crate) const FACTPS: usize = 0x05B30; /* Function Active and Power State to 
 pub(crate) const SWSM: usize = 0x05B50; /* SW Semaphore */
 pub(crate) const FWSM: usize = 0x05B54; /* FW Semaphore */
 pub(crate) const EXFWSM: usize = 0x05B58; /* Extended FW Semaphore */
+
+pub(crate) const EIAC_82574: usize = 0x000DC;
+pub(crate) const EIAC_MASK_82574: u32 = 0x01F00000;
