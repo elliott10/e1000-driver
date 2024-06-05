@@ -10,6 +10,8 @@ pub(crate) use linux::print::*;
 pub mod e1000;
 use e1000::*;
 
+
+
 pub struct Device {
     dev: E1000<KFun>,
 }
@@ -25,6 +27,8 @@ unsafe impl Send for KFun {}
 
 impl KernelFunc for KFun {
     fn dma_alloc_coherent(&self, pages: usize) -> (usize, usize) {
+        kernel::sync::SpinLock::new
+
         (0, 0)
     }
 

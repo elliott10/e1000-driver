@@ -268,6 +268,21 @@ size_t cb_bar_n_remap(const void *pdev_v, size_t bar) {
 }
 void cb_io_unmap(size_t addr) { iounmap((void *)addr); }
 
+
+/**
+ * e1000_sw_init - Initialize general software structures (struct e1000_adapter)
+ * @adapter: board private structure to initialize
+ *
+ * e1000_sw_init initializes the Adapter private data structure.
+ * Fields are initialized based on PCI device information and
+ * OS network device settings (MTU size).
+ **/
+static int e1000_sw_init(struct e1000_adapter *adapter) {
+  spin_lock_init(&adapter->stats64_lock);
+  spin_lock_init(&adapter->systim_lock);
+  return 0;
+}
+
 /**
  * e1000_probe - Device Initialization Routine
  * @pdev: PCI device information struct
@@ -338,10 +353,11 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent) {
   adapter->ptr = e1000;
   adapter->bars = bars;
   adapter->pdev = pdev;
+  adapter->netdev = netdev;
   adapter->msg_enable = netif_msg_init(debug, DEFAULT_MSG_ENABLE);
 
   struct BoardInfo board = e1000r_board_info(e1000);
-  
+
   /* Set default EEE advertisement */
   if (board.flags2.has_eee)
     adapter->eee_advert = MDIO_EEE_100TX | MDIO_EEE_1000T;
@@ -374,6 +390,10 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent) {
   if (err != 0)
     goto err_eeprom;
 
+  err = e1000_sw_init(adapter);
+  if (err)
+    goto err_sw_init;
+
   e1000r_read_mac_addr(e1000, &mac_addr);
 
   eth_hw_addr_set(netdev, mac_addr);
@@ -394,20 +414,21 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent) {
 
 err_register:
 err_eeprom:
-  //   e1000_phy_hw_reset(hw);
+//   e1000_phy_hw_reset(hw);
 
-  // if (hw->flash_address)
-  // iounmap(hw->flash_address);
-  // kfree(adapter->tx_ring);
-  // kfree(adapter->rx_ring);
-  // err_dma:
-  // err_sw_init:
+// if (hw->flash_address)
+// iounmap(hw->flash_address);
+// kfree(adapter->tx_ring);
+// kfree(adapter->rx_ring);
+// err_dma:
+err_sw_init:
   //   err_mdio_ioremap:
   //   iounmap(hw->ce4100_gbe_mdio_base_virt);
   //   if ((flash_addr) && (board_info.mac < e1000_pch_spt))
   //     iounmap(flash_addr);
   // err_flashmap:
   //   iounmap(hw_addr);
+
   e1000r_drop(e1000);
 err_e1000r:
   free_netdev(netdev);

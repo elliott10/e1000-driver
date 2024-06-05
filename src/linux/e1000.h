@@ -21,6 +21,7 @@
 #include <linux/ipv6.h>
 #include <linux/kernel.h>
 #include <linux/list.h>
+#include <linux/mdio.h>
 #include <linux/mii.h>
 #include <linux/mm.h>
 #include <linux/module.h>
@@ -39,15 +40,12 @@
 #include <linux/vmalloc.h>
 #include <net/checksum.h>
 #include <net/pkt_sched.h>
-#include <linux/mdio.h>
 
 #define BAR_0 0
 #define BAR_1 1
 
-#define INTEL_E1000_ETHERNET_DEVICE(device_id)     \
-    {                                              \
-        PCI_DEVICE(PCI_VENDOR_ID_INTEL, device_id) \
-    }
+#define INTEL_E1000_ETHERNET_DEVICE(device_id)                                 \
+  { PCI_DEVICE(PCI_VENDOR_ID_INTEL, device_id) }
 
 extern char e1000_driver_name[];
 // #include "e1000_hw.h"
@@ -55,13 +53,21 @@ extern char e1000_driver_name[];
 /* board specific private data structure */
 
 struct e1000_adapter {
-    size_t ptr;
-    int bars;
-    struct napi_struct napi;
-    u32 msg_enable;
-    u32 bd_number;
-    struct pci_dev* pdev;
-    u16 eee_advert;
+  size_t ptr;
+  int bars;
+  struct napi_struct napi;
+  u32 msg_enable;
+  u32 bd_number;
+  
+  /* OS defined structs */
+  struct net_device *netdev;
+  struct pci_dev *pdev;
+
+
+  u16 eee_advert;
+
+  spinlock_t stats64_lock; /* protects statistics counters */
+  spinlock_t systim_lock;  /* protects SYSTIML/H regsters */
 };
 
 #define E1000_MAX_INTR 10
@@ -82,7 +88,7 @@ struct e1000_adapter {
 #define E1000_MIN_RXD 48
 #define E1000_MAX_82544_RXD 4096
 
-#define E1000_MIN_ITR_USECS 10 /* 100000 irq/sec */
+#define E1000_MIN_ITR_USECS 10    /* 100000 irq/sec */
 #define E1000_MAX_ITR_USECS 10000 /* 100    irq/sec */
 
 /* this is the size past which hardware will drop packets when setting LPE=0 */
@@ -109,7 +115,7 @@ struct e1000_adapter {
 
 /* Flow Control Watermarks */
 #define E1000_FC_HIGH_DIFF 0x1638 /* High: 5688 bytes below Rx FIFO size */
-#define E1000_FC_LOW_DIFF 0x1640 /* Low:  5696 bytes below Rx FIFO size */
+#define E1000_FC_LOW_DIFF 0x1640  /* Low:  5696 bytes below Rx FIFO size */
 
 #define E1000_FC_PAUSE_TIME 0xFFFF /* pause for the max or until send xon */
 
@@ -129,7 +135,7 @@ struct e1000_adapter {
 
 #define E1000_MNG_VLAN_NONE (-1)
 
-void e1000e_set_ethtool_ops(struct net_device* netdev);
-size_t e1000e_get_e1000(struct net_device* netdev);
-struct E1000Status* e1000_status(struct net_device* netdev);
+void e1000e_set_ethtool_ops(struct net_device *netdev);
+size_t e1000e_get_e1000(struct net_device *netdev);
+struct E1000Status *e1000_status(struct net_device *netdev);
 #endif /* _E1000_H_ */

@@ -4,6 +4,7 @@ use crate::err::{Error, Result};
 use crate::*;
 use e1000::hw::Hw;
 
+
 pub struct E1000<K>
 where
     K: KernelFunc,
@@ -72,7 +73,7 @@ where
 
     pub fn init(&mut self) -> Result {
         info!("init begin ...");
-    
+
         self.check_opention();
 
         info!("init ok");
@@ -98,6 +99,19 @@ where
         if self.hw.board_info.flags.is_ich {
             self.hw.board_info.flags.read_only_nvm = true;
         }
+    }
+
+    /**
+     * sw_init - Initialize general software structures (struct e1000_adapter)
+     *
+     * sw_init initializes the Adapter private data structure.
+     * Fields are initialized based on PCI device information and
+     * OS network device settings (MTU size).
+     **/
+    fn sw_init(&self) {
+
+
+
     }
 }
 
@@ -187,5 +201,4 @@ pub struct E1000Status {
     pub total_tx_packets: u32,
     pub total_rx_bytes: u32,
     pub total_rx_packets: u32,
-
 }
