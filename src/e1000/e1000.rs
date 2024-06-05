@@ -118,7 +118,17 @@ where
         Ok(())
     }
 
-    pub fn irq_disable(&mut self, is_msix_enabled: bool) {}
+    pub fn irq_disable(&mut self, is_msix_enabled: bool) {
+        info!("Disable interrupts");
+
+        self.ew32(regs::IMC, !0);
+
+        if is_msix_enabled {
+            // EIAC_82574
+            self.ew32(0x000DC, 0);
+        }
+        self.e1e_flush();
+    }
 
     fn read<T>(&self, offset: usize) -> T {
         unsafe {
@@ -146,6 +156,10 @@ where
             let ptr = (self.hw.mmio + offset) as *mut u32;
             ptr.write_volatile(value);
         }
+    }
+
+    fn e1e_flush(&self) {
+        self.er32(regs::STATUS);
     }
 }
 

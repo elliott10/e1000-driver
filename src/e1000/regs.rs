@@ -1,3 +1,27 @@
+pub(crate) const CTRL: usize = 0x00000; // Device Control - RW
+pub(crate) const STATUS: usize = 0x00008; // Device Status - RO
+pub(crate) const EECD: usize = 0x00010; // EEPROM/Flash Control - RW
+pub(crate) const EERD: usize = 0x00014; // EEPROM Read - RW
+pub(crate) const CTRL_EXT: usize = 0x00018; // Extended Device Control - RW
+pub(crate) const FLA: usize = 0x0001C; // Flash Access - RW
+pub(crate) const MDIC: usize = 0x00020; // MDI Control - RW
+pub(crate) const SCTL: usize = 0x00024; // SerDes Control - RW
+pub(crate) const FCAL: usize = 0x00028; // Flow Control Address Low - RW
+pub(crate) const FCAH: usize = 0x0002C; // Flow Control Address High - RW
+// 注意：E1000_FEXT 和 E1000_FCAH 有相同的值，需要确认是否是故意的
+pub(crate) const FEXT: usize = 0x0002C; // Future Extended - RW
+
+
+pub(crate) const FCT: usize = 0x00030; // Flow Control Type - RW
+pub(crate) const VET: usize = 0x00038; // VLAN Ether Type - RW
+pub(crate) const ICR: usize = 0x000C0; // Interrupt Cause Read - R/clr
+pub(crate) const ITR: usize = 0x000C4; // Interrupt Throttling Rate - RW
+pub(crate) const ICS: usize = 0x000C8; // Interrupt Cause Set - WO
+pub(crate) const IMS: usize = 0x000D0; // Interrupt Mask Set - RW
+pub(crate) const IMC: usize = 0x000D8; // Interrupt Mask Clear - WO
+pub(crate) const IAM: usize = 0x000E0; // Interrupt Acknowledge Auto Mask
+pub(crate) const IVAR: usize = 0x000E4; // Interrupt Vector Allocation Register - RW
+
 pub(crate) const RA: usize = 0x5400;
 pub(crate) const SW_FW_SYNC: usize = 0x05B5C; /* SW-FW Synchronization - RW */
 pub(crate) const GCR: usize = 0x05B00; /* PCI-Ex Control */
