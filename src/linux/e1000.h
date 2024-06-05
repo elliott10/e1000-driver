@@ -41,8 +41,15 @@
 #include <net/checksum.h>
 #include <net/pkt_sched.h>
 
-#define BAR_0 0
-#define BAR_1 1
+#define e_err(format, arg...) netdev_err(adapter->netdev, format, ##arg)
+#define e_info(format, arg...) netdev_info(adapter->netdev, format, ##arg)
+#define e_warn(format, arg...) netdev_warn(adapter->netdev, format, ##arg)
+#define e_notice(format, arg...) netdev_notice(adapter->netdev, format, ##arg)
+
+/* Interrupt modes, as used by the IntMode parameter */
+#define E1000E_INT_MODE_LEGACY 0
+#define E1000E_INT_MODE_MSI 1
+#define E1000E_INT_MODE_MSIX 2
 
 #define INTEL_E1000_ETHERNET_DEVICE(device_id)                                 \
   { PCI_DEVICE(PCI_VENDOR_ID_INTEL, device_id) }
@@ -58,11 +65,14 @@ struct e1000_adapter {
   struct napi_struct napi;
   u32 msg_enable;
   u32 bd_number;
-  
+
+  unsigned int num_vectors;
+  struct msix_entry *msix_entries;
+  int int_mode;
+
   /* OS defined structs */
   struct net_device *netdev;
   struct pci_dev *pdev;
-
 
   u16 eee_advert;
 

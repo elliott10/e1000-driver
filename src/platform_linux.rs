@@ -144,3 +144,10 @@ unsafe extern "C" fn e1000r_set_flags(ptr: usize, flags: Flags) {
     let dev = dev_mut(ptr);
     dev.dev.set_flags(flags);
 }
+
+
+#[no_mangle]
+extern "C" fn e1000r_irq_disable(ptr: usize, misx_enabled: bool) {
+    let dev = dev_mut(ptr);
+    dev.dev.irq_disable(misx_enabled);
+}

@@ -194,6 +194,10 @@ void e1000r_drop(size_t ptr);
 
 int32_t e1000r_init(size_t ptr);
 
+void e1000r_irq_disable(size_t ptr, bool misx_enabled);
+
+int32_t e1000r_irq_handle(size_t ptr, int32_t irq);
+
 size_t e1000r_new(struct E1000Config config);
 
 void e1000r_read_mac_addr(size_t ptr, uint8_t (*mac)[6]);

@@ -227,7 +227,93 @@ static netdev_features_t e1000_fix_features(struct net_device *netdev,
                                             netdev_features_t features) {
   return features;
 }
+void e1000e_reset_interrupt_capability(struct e1000_adapter *adapter) {
+  size_t e1000 = e1000e_get_e1000(adapter->netdev);
+  struct BoardInfo board = e1000r_board_info(e1000);
+  struct Flags flags = board.flags;
+  if (adapter->msix_entries) {
+    pci_disable_msix(adapter->pdev);
+    kfree(adapter->msix_entries);
+    adapter->msix_entries = NULL;
+  } else if (flags.msi_enabled) {
+    pci_disable_msi(adapter->pdev);
+    flags.msi_enabled = false;
+    e1000r_set_flags(e1000, flags);
+  }
+}
+/**
+ * e1000e_set_interrupt_capability - set MSI or MSI-X if supported
+ * @adapter: board private structure
+ *
+ * Attempt to configure interrupts using the best available
+ * capabilities of the hardware and kernel.
+ **/
+void e1000e_set_interrupt_capability(struct e1000_adapter *adapter) {
+  int err;
+  int i;
+  size_t e1000 = e1000e_get_e1000(adapter->netdev);
+  struct BoardInfo board = e1000r_board_info(e1000);
+  struct Flags flags = board.flags;
 
+  switch (adapter->int_mode) {
+  case E1000E_INT_MODE_MSIX:
+    if (flags.has_msix) {
+      adapter->num_vectors = 3; /* RxQ0, TxQ0 and other */
+      adapter->msix_entries =
+          kcalloc(adapter->num_vectors, sizeof(struct msix_entry), GFP_KERNEL);
+      if (adapter->msix_entries) {
+        struct e1000_adapter *a = adapter;
+
+        for (i = 0; i < adapter->num_vectors; i++)
+          adapter->msix_entries[i].entry = i;
+
+        err = pci_enable_msix_range(a->pdev, a->msix_entries, a->num_vectors,
+                                    a->num_vectors);
+        if (err > 0)
+          return;
+      }
+      /* MSI-X failed, so fall through and try MSI */
+      e_err("Failed to initialize MSI-X interrupts.  Falling back to MSI "
+            "interrupts.\n");
+      e1000e_reset_interrupt_capability(adapter);
+    }
+    adapter->int_mode = E1000E_INT_MODE_MSI;
+    fallthrough;
+  case E1000E_INT_MODE_MSI:
+    if (!pci_enable_msi(adapter->pdev)) {
+      flags.msi_enabled = true;
+      e1000r_set_flags(e1000, flags);
+    } else {
+      adapter->int_mode = E1000E_INT_MODE_LEGACY;
+      e_err("Failed to initialize MSI interrupts.  Falling back to legacy "
+            "interrupts.\n");
+    }
+    fallthrough;
+  case E1000E_INT_MODE_LEGACY:
+    /* Don't do anything; this is the system default */
+    break;
+  }
+
+  /* store the number of vectors being used */
+  adapter->num_vectors = 1;
+}
+/**
+ * e1000_irq_disable - Mask off interrupt generation on the NIC
+ * @adapter: board private structure
+ **/
+static void e1000_irq_disable(struct e1000_adapter *adapter)
+{
+	e1000r_irq_disable(e1000e_get_e1000(adapter->netdev), adapter->msix_entries);
+
+	if (adapter->msix_entries) {
+		int i;
+
+		for (i = 0; i < adapter->num_vectors; i++)
+			synchronize_irq(adapter->msix_entries[i].vector);
+	} else {
+		synchronize_irq(adapter->pdev->irq);
+	}
+}
 static const struct net_device_ops e1000e_netdev_ops = {
     .ndo_open = e1000e_open,
     .ndo_stop = e1000e_close,
@@ -268,6 +354,11 @@ size_t cb_bar_n_remap(const void *pdev_v, size_t bar) {
 }
 void cb_io_unmap(size_t addr) { iounmap((void *)addr); }
 
+size_t e1000e_get_e1000(struct net_device *netdev){
+  struct e1000_adapter *adapter = netdev_priv(netdev);
+  return adapter->ptr;
+}
+
 
 /**
  * e1000_sw_init - Initialize general software structures (struct e1000_adapter)
@@ -280,6 +371,10 @@ void cb_io_unmap(size_t addr) { iounmap((void *)addr); }
 static int e1000_sw_init(struct e1000_adapter *adapter) {
   spin_lock_init(&adapter->stats64_lock);
   spin_lock_init(&adapter->systim_lock);
+
+  e1000e_set_interrupt_capability(adapter);
+  /* Explicitly disable IRQ since the NIC can be in any state. */
+  e1000_irq_disable(adapter);
   return 0;
 }
 
