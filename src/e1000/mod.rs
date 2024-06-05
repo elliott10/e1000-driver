@@ -1,11 +1,12 @@
-pub(crate) mod defines;
 mod board;
+pub(crate) mod defines;
 pub(crate) mod dev_id;
 mod e1000;
 pub mod err;
 mod hw;
 pub(crate) mod params;
 mod regs;
+pub(crate) mod ring;
 pub use self::e1000::*;
 pub use board::*;
 use core::fmt::{self, Display};
@@ -13,7 +14,7 @@ pub use hw::E1000HWStats;
 
 const PAGE_SIZE: usize = 4096;
 
-pub trait KernelFunc: Send + Sync {
+pub trait KernelFunc: Send + Sync + Clone {
     /// Page size (usually 4K)
     const PAGE_SIZE: usize = PAGE_SIZE;
 

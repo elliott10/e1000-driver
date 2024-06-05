@@ -1,7 +1,10 @@
-use super::board::E1000MacType;
+use e1000::board;
+
+use super::board::{E1000MacType};
 use super::defines;
 use super::hw::{self, Hw};
 use super::regs;
+use super::ring::*;
 use crate::err::{Error, Result};
 use crate::*;
 
@@ -9,11 +12,13 @@ pub struct E1000<K>
 where
     K: KernelFunc,
 {
-    flash: Option<usize>,
+    pub(crate) flash: Option<usize>,
     kernel: K,
-    hw: Hw,
-    status: E1000Status,
-    eiac_mask: u32,
+    pub(crate) hw: Hw,
+    pub(crate) status: E1000Status,
+    pub(crate) eiac_mask: u32,
+    pub(crate) tx_ring: Ring<K>,
+    pub(crate) rx_ring: Ring<K>,
 }
 
 impl<K> E1000<K>
@@ -47,12 +52,16 @@ where
         }
 
         let hw = Hw::new(mmio, board);
+        let tx_ring = Ring::new(kfun.clone());
+        let rx_ring = Ring::new(kfun.clone());
 
         Ok(Self {
             flash,
             kernel: kfun,
             hw,
             eiac_mask: 0,
+            rx_ring,
+            tx_ring,
             status: E1000Status::default(),
         })
     }
@@ -72,11 +81,12 @@ where
     }
 
     pub fn init(&mut self) -> Result {
-        info!("init begin ...");
-
+        info!("Init begin ...");
         self.check_opention();
+        self.init_rings();
+        self.get_variants();
 
-        info!("init ok");
+        info!("Init ok");
         Ok(())
     }
 
@@ -105,14 +115,7 @@ where
         self.hw.board_info.flags = flags;
     }
 
-    /**
-     * sw_init - Initialize general software structures (struct e1000_adapter)
-     *
-     * sw_init initializes the Adapter private data structure.
-     * Fields are initialized based on PCI device information and
-     * OS network device settings (MTU size).
-     **/
-    fn sw_init(&self) {}
+    fn init_rings(&self) {}
 
     /// interrupt handler
     pub fn intr(&mut self, irq: i32) -> Result {
@@ -262,7 +265,7 @@ impl E1000Status {
     }
 }
 
-impl<K> Drop for E1000<K>
+impl<K> Drop for E1000< K>
 where
     K: KernelFunc,
 {

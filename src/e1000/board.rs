@@ -1,4 +1,7 @@
 use super::dev_id::*;
+mod b82571;
+mod ich8lan;
+use crate::{KernelFunc, E1000};
 
 const DEFAULT_JUMBO: u32 = 9234;
 
@@ -110,6 +113,14 @@ pub enum E1000MacType {
     e1000_pch_ptp,
     e1000_pch_nvp,
 }
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub enum E1000GetVariants {
+    B82571,
+    Ich8lan,
+}
+
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct BoardInfo {
@@ -118,6 +129,7 @@ pub struct BoardInfo {
     pub flags2: Flags2,
     pub pba: u32,
     pub max_hw_frame_size: u32,
+    pub get_variants: E1000GetVariants,
 }
 
 impl Board {
@@ -151,6 +163,7 @@ impl Board {
                 },
                 pba: 32,
                 max_hw_frame_size: DEFAULT_JUMBO,
+                get_variants: E1000GetVariants::B82571,
             },
             Board::board_82583 => todo!(),
             Board::board_80003es2lan => todo!(),
@@ -162,7 +175,29 @@ impl Board {
             Board::board_pch_lpt => todo!(),
             Board::board_pch_spt => todo!(),
             Board::board_pch_cnp => todo!(),
-            Board::board_pch_tgp => todo!(),
+            Board::board_pch_tgp => BoardInfo {
+                mac: E1000MacType::e1000_pch_adp,
+                flags: Flags {
+                    is_ich: true,
+                    has_wol: true,
+                    has_hw_timestamp: true,
+                    has_ctrlext_on_load: true,
+                    has_amt: true,
+                    has_flash: true,
+                    has_jumbo_frames: true,
+                    apme_in_wuc: true,
+
+                    ..Default::default()
+                },
+                flags2: Flags2 {
+                    has_phy_stats: true,
+                    has_eee: true,
+                    ..Default::default()
+                },
+                pba: 26,
+                max_hw_frame_size: 9022,
+                get_variants: E1000GetVariants::Ich8lan,
+            },
             Board::board_pch_adp => BoardInfo {
                 mac: E1000MacType::e1000_pch_adp,
                 flags: Flags {
@@ -184,6 +219,7 @@ impl Board {
                 },
                 pba: 26,
                 max_hw_frame_size: 9022,
+                get_variants: E1000GetVariants::Ich8lan,
             },
             Board::board_pch_mtp => BoardInfo {
                 mac: E1000MacType::e1000_pch_mtp,
@@ -206,6 +242,7 @@ impl Board {
                 },
                 pba: 26,
                 max_hw_frame_size: 9022,
+                get_variants: E1000GetVariants::Ich8lan,
             },
         }
     }
@@ -223,5 +260,17 @@ impl Board {
         };
 
         Some(one)
+    }
+}
+
+impl<K> E1000< K>
+where
+    K: KernelFunc,
+{
+    pub(crate) fn get_variants(&mut self) {
+        match self.hw.board_info.get_variants {
+            E1000GetVariants::B82571 => self.get_variants_82571(),
+            E1000GetVariants::Ich8lan => self.get_variants_ich8lan(),
+        }
     }
 }
