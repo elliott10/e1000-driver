@@ -29,59 +29,16 @@ impl Hw {
         }
     }
 
-    fn read<T>(&self, offset: usize) -> T {
-        unsafe {
-            let ptr = (self.mmio + offset) as *const T;
-            ptr.read_volatile()
-        }
-    }
-
     pub(crate) fn set_flash(&mut self, flash: usize) {
         self.flash = Some(flash);
     }
 
-    fn write<T>(&self, offset: usize, value: T) {
-        unsafe {
-            let ptr = (self.mmio + offset) as *mut T;
-            ptr.write_volatile(value);
-        }
-    }
-
-    fn ral(&self, index: usize) -> usize {
+    pub(crate) fn ral(&self, index: usize) -> usize {
         regs::RA + index * 8
     }
 
-    fn rah(&self, index: usize) -> usize {
+    pub(crate) fn rah(&self, index: usize) -> usize {
         regs::RA + index * 8 + 4
-    }
-
-    pub(crate) fn get_ra(&self, index: usize) -> [u8; 6] {
-        let ral = self.read::<u32>(self.ral(index));
-        let rah = self.read::<u32>(self.rah(index));
-        [
-            ral as u8,
-            (ral >> 8) as u8,
-            (ral >> 16) as u8,
-            (ral >> 24) as u8,
-            rah as u8,
-            (rah >> 8) as u8,
-        ]
-    }
-
-    pub(crate) fn set_ra(&self, index: usize, mac: [u8; 6]) {
-        unsafe {
-            let mut ral = 0;
-            let mut rah = 0;
-
-            ral = (mac[0] as u32)
-                | ((mac[1] as u32) << 8)
-                | ((mac[2] as u32) << 16)
-                | ((mac[3] as u32) << 24);
-            rah = (mac[4] as u32) | ((mac[5] as u32) << 8);
-
-            self.write::<u32>(self.ral(index), ral);
-            self.write::<u32>(self.rah(index), rah);
-        }
     }
 }
 

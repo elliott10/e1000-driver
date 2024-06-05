@@ -60,7 +60,7 @@ where
     ///  Since devices with two ports use the same EEPROM, we increment the
     /// last bit in the MAC address for the second port.
     pub fn read_mac_addr_generic(&self) -> MacAddress {
-        MacAddress(self.hw.get_ra(0))
+        MacAddress(self.get_ra(0))
     }
 
     /// board info
@@ -129,7 +129,34 @@ where
         }
         self.e1e_flush();
     }
+    fn get_ra(&self, index: usize) -> [u8; 6] {
+        let ral = self.er32(self.hw.ral(index));
+        let rah = self.er32(self.hw.rah(index));
+        [
+            ral as u8,
+            (ral >> 8) as u8,
+            (ral >> 16) as u8,
+            (ral >> 24) as u8,
+            rah as u8,
+            (rah >> 8) as u8,
+        ]
+    }
 
+    fn set_ra(&self, index: usize, mac: [u8; 6]) {
+        unsafe {
+            let mut ral = 0;
+            let mut rah = 0;
+
+            ral = (mac[0] as u32)
+                | ((mac[1] as u32) << 8)
+                | ((mac[2] as u32) << 16)
+                | ((mac[3] as u32) << 24);
+            rah = (mac[4] as u32) | ((mac[5] as u32) << 8);
+
+            self.ew32(self.hw.ral(index), ral);
+            self.ew32(self.hw.rah(index), rah);
+        }
+    }
     fn read<T>(&self, offset: usize) -> T {
         unsafe {
             let ptr = (self.hw.mmio + offset) as *const T;
