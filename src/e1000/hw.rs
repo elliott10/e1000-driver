@@ -2,9 +2,16 @@ use super::regs;
 use crate::*;
 use core::ptr::{slice_from_raw_parts, slice_from_raw_parts_mut};
 
+pub(crate) const E1000_ICH_FWSM_RSPCIPHY: u32 = 0x00000040; // Reset PHY on PCI Reset
+pub(crate) const E1000_ICH_FWSM_FW_VALID: u32 = 0x00008000; // FW established a valid mode
+pub(crate) const E1000_ICH_FWSM_PCIM2PCI: u32 = 0x01000000; // ME PCIm-to-PCI active
+pub(crate) const E1000_ICH_FWSM_PCIM2PCI_COUNT: u32 = 2000;
+
+pub(crate) const E1000_ICH_MNG_IAMT_MODE: u32 = 0x2;
+
 #[derive(Debug)]
 pub(crate) struct Hw {
-    mmio: usize,
+    pub(crate) mmio: usize,
     pub(crate) board: Board,
     pub(crate) flash: Option<usize>,
     pub(crate) stats: E1000HWStats,

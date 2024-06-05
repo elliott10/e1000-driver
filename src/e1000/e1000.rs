@@ -1,13 +1,13 @@
 use super::board::E1000MacType;
+use super::hw::{self, Hw};
+use super::regs;
 use crate::err::{Error, Result};
 use crate::*;
-use e1000::hw::Hw;
 
 pub struct E1000<K>
 where
     K: KernelFunc,
 {
-    mmio: usize,
     flash: Option<usize>,
     kernel: K,
     hw: Hw,
@@ -47,7 +47,6 @@ where
         let hw = Hw::new(mmio, board);
 
         Ok(Self {
-            mmio,
             flash,
             kernel: kfun,
             hw,
@@ -99,7 +98,7 @@ where
         }
     }
 
-    pub fn set_flags(&mut self, flags: Flags){
+    pub fn set_flags(&mut self, flags: Flags) {
         self.hw.board_info.flags = flags;
     }
 
@@ -113,17 +112,40 @@ where
     fn sw_init(&self) {}
 
     /// interrupt handler
-    pub fn intr(&mut self, irq: i32)->Result{
-
-
-
+    pub fn intr(&mut self, irq: i32) -> Result {
+        info!("intr {}!", irq);
 
         Ok(())
     }
 
+    pub fn irq_disable(&mut self, is_msix_enabled: bool) {}
 
-    pub fn irq_disable(&mut self, is_msix_enabled: bool){
-        
+    fn read<T>(&self, offset: usize) -> T {
+        unsafe {
+            let ptr = (self.hw.mmio + offset) as *const T;
+            ptr.read_volatile()
+        }
+    }
+    fn er32(&self, offset: usize) -> u32 {
+        self.read(offset)
+    }
+    fn ew32_prepare(&self) {
+        let mut i = hw::E1000_ICH_FWSM_PCIM2PCI_COUNT;
+
+        while ((self.er32(regs::FWSM) & hw::E1000_ICH_FWSM_PCIM2PCI) != 0) && i > 0 {
+            self.kernel.delay(50_000);
+            i -= 1;
+        }
+    }
+    fn ew32(&self, offset: usize, value: u32) {
+        if self.hw.board_info.flags2.pcim2pci_arbiter_wa {
+            self.ew32_prepare();
+        }
+
+        unsafe {
+            let ptr = (self.hw.mmio + offset) as *mut u32;
+            ptr.write_volatile(value);
+        }
     }
 }
 
@@ -184,8 +206,8 @@ where
     K: KernelFunc,
 {
     fn drop(&mut self) {
-        debug!("unmap mmio {:#X}", self.mmio);
-        self.kernel.iounmap(self.mmio);
+        debug!("unmap mmio {:#X}", self.hw.mmio);
+        self.kernel.iounmap(self.hw.mmio);
         if let Some(flash) = self.flash {
             debug!("unmap flash {:#X}", flash);
             self.kernel.iounmap(flash);
