@@ -4,6 +4,7 @@
 #include "linux/mroute.h"
 #include "linux/printk.h"
 #include "linux/refcount.h"
+#include "linux/stddef.h"
 #include <linux/cpu.h>
 #include <linux/delay.h>
 #include <linux/dma-mapping.h>
@@ -322,10 +323,7 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent) {
 
   mmio_start = pci_resource_start(pdev, 0);
   mmio_len = pci_resource_len(pdev, 0);
-  //   err = -EIO;
-  //   hw_addr = ioremap(mmio_start, mmio_len);
-  //   if (!hw_addr)
-  //     goto err_ioremap;
+
   E1000Config config;
   config.pdev = pdev;
   config.device_id = ent->device;
@@ -336,24 +334,17 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent) {
   if (!e1000)
     goto err_e1000r;
 
-  //   BoardInfo board_info = e1000r_board_info(e1000);
-
   adapter = netdev_priv(netdev);
   adapter->ptr = e1000;
   adapter->bars = bars;
   adapter->pdev = pdev;
   adapter->msg_enable = netif_msg_init(debug, DEFAULT_MSG_ENABLE);
 
-  //   if (board_info.flags.has_flash &&
-  //       (pci_resource_flags(pdev, 1) & IORESOURCE_MEM) &&
-  //       (board_info.mac < e1000_pch_spt)) {
-  //     flash_start = pci_resource_start(pdev, 1);
-  //     flash_len = pci_resource_len(pdev, 1);
-  //     flash_addr = ioremap(flash_start, flash_len);
-  //     if (!flash_addr)
-  //       goto err_flashmap;
-  //     e1000r_set_flash(e1000, (size_t)flash_addr);
-  //   }
+  struct BoardInfo board = e1000r_board_info(e1000);
+  
+  /* Set default EEE advertisement */
+  if (board.flags2.has_eee)
+    adapter->eee_advert = MDIO_EEE_100TX | MDIO_EEE_1000T;
 
   netdev->netdev_ops = &e1000e_netdev_ops;
   e1000e_set_ethtool_ops(netdev);

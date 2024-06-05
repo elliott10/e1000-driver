@@ -72,6 +72,7 @@ where
 
     pub fn init(&mut self) -> Result {
         info!("init begin ...");
+    
         self.check_opention();
 
         info!("init ok");
@@ -84,9 +85,8 @@ where
 
     fn check_opention(&mut self) {
         self.status.check_opention(self.board_info());
-        self.check_opention();
+        self.crc_stripping();
         self.write_protect_nvm();
-        
     }
 
     fn crc_stripping(&mut self) {
@@ -187,4 +187,5 @@ pub struct E1000Status {
     pub total_tx_packets: u32,
     pub total_rx_bytes: u32,
     pub total_rx_packets: u32,
+
 }

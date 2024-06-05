@@ -39,6 +39,7 @@
 #include <linux/vmalloc.h>
 #include <net/checksum.h>
 #include <net/pkt_sched.h>
+#include <linux/mdio.h>
 
 #define BAR_0 0
 #define BAR_1 1
@@ -60,7 +61,7 @@ struct e1000_adapter {
     u32 msg_enable;
     u32 bd_number;
     struct pci_dev* pdev;
-
+    u16 eee_advert;
 };
 
 #define E1000_MAX_INTR 10
