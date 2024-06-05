@@ -175,6 +175,14 @@ typedef struct E1000Status {
   uint32_t itr_setting;
   uint16_t tx_it;
   uint16_t rx_itr;
+  uint32_t tx_int_delay;
+  uint32_t tx_abs_int_delay;
+  uint32_t rx_int_delay;
+  uint32_t rx_abs_int_delay;
+  uint32_t total_tx_bytes;
+  uint32_t total_tx_packets;
+  uint32_t total_rx_bytes;
+  uint32_t total_rx_packets;
 } E1000Status;
 
 struct BoardInfo e1000r_board_info(size_t ptr);
@@ -182,6 +190,8 @@ struct BoardInfo e1000r_board_info(size_t ptr);
 void e1000r_drop(size_t ptr);
 
 int32_t e1000r_init(size_t ptr);
+
+int32_t e1000r_irq_handle(int32_t irq);
 
 size_t e1000r_new(struct E1000Config config);
 

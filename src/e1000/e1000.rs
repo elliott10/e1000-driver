@@ -1,9 +1,7 @@
 use super::board::E1000MacType;
 use crate::err::{Error, Result};
-/// E1000e driver.
 use crate::*;
 use e1000::hw::Hw;
-
 
 pub struct E1000<K>
 where
@@ -108,11 +106,17 @@ where
      * Fields are initialized based on PCI device information and
      * OS network device settings (MTU size).
      **/
-    fn sw_init(&self) {
+    fn sw_init(&self) {}
+
+    /// interrupt handler
+    pub fn intr(&mut self, irq: i32)->Result{
 
 
 
+
+        Ok(())
     }
+
 }
 
 impl E1000Status {

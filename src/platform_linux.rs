@@ -10,8 +10,6 @@ pub(crate) use linux::print::*;
 pub mod e1000;
 use e1000::*;
 
-
-
 pub struct Device {
     dev: E1000<KFun>,
 }
@@ -27,8 +25,6 @@ unsafe impl Send for KFun {}
 
 impl KernelFunc for KFun {
     fn dma_alloc_coherent(&self, pages: usize) -> (usize, usize) {
-        kernel::sync::SpinLock::new
-
         (0, 0)
     }
 
@@ -124,4 +120,10 @@ extern "C" fn e1000r_init(ptr: usize) -> i32 {
 unsafe extern "C" fn e1000r_status<'a>(ptr: usize) -> &'a mut E1000Status {
     let dev = dev_mut(ptr);
     dev.dev.status_mut()
+}
+
+#[no_mangle]
+unsafe extern "C" fn e1000r_irq_handle(ptr: usize, irq: i32) -> i32 {
+    let dev = dev_mut(ptr);
+    rfn(|| dev.dev.intr(irq))
 }
