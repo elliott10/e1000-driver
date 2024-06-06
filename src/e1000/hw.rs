@@ -1,6 +1,6 @@
+use super::ich8lan::DevSpecIch8lan;
 use super::regs::*;
 use crate::err::{Error, Result};
-use super::ich8lan::DevSpecIch8lan;
 use crate::*;
 use core::alloc::Layout;
 use core::ptr::NonNull;
@@ -262,23 +262,12 @@ where
     pub(crate) flags: Flags,
     pub(crate) flags2: Flags2,
     pub(crate) variant: BoardVariant,
-    pub(crate) dev_spec: DevSpec,
 }
 
 impl<K> Hw<K>
 where
     K: KernelFunc,
 {
-    pub(crate) fn get_variants(&mut self) -> Result {
-        if let Err(e) = match self.variant {
-            BoardVariant::B82571 => b82571::get_variants(self),
-            BoardVariant::Ich8lan => ich8lan::get_variants(self),
-        } {
-            error!("Get variants error: {}", e);
-            return Err(e);
-        }
-        Ok(())
-    }
     pub(crate) fn crc_stripping(&mut self) {
         self.flags2.crc_stripping = true;
         self.flags2.dflt_crc_stripping = true;
@@ -329,9 +318,13 @@ where
     }
 }
 
+#[derive(Clone)]
 pub(crate) struct HwRc<K>(NonNull<Hw<K>>)
 where
     K: KernelFunc;
+
+unsafe impl<K: KernelFunc> Send for HwRc<K> {}
+
 
 impl<K> HwRc<K>
 where
@@ -354,10 +347,7 @@ where
             hw.flags = board.flags;
             hw.flags2 = board.flags2;
             hw.variant = board.variant;
-            hw.dev_spec = match board.variant {
-                BoardVariant::B82571 => DevSpec::E82571,
-                BoardVariant::Ich8lan => DevSpec::Ich8lan(Default::default()),
-            };
+
             Self(NonNull::new_unchecked(ptr))
         }
     }
@@ -415,4 +405,12 @@ pub(crate) enum DevSpec {
     E82571,
     E80003es2lan,
     Ich8lan(DevSpecIch8lan),
+}
+pub(crate) struct DevSpecParam<'a> {
+    pub(crate) nvm: &'a mut NvmInfo,
+    pub(crate) phy: &'a mut PhyInfo,
+    pub(crate) mac: &'a mut MacInfo,
+    pub(crate) mmio: usize,
+    pub(crate) flash: &'a mut Option<usize>,
+    pub(crate) strap: u32,
 }

@@ -1,13 +1,13 @@
-use core::alloc::Layout;
-use core::borrow::Borrow;
-use core::ptr::NonNull;
-use e1000::board;
 use super::defines;
-use super::hw::{self, Hw, HwRc, MacType};
+use super::hw::{self, DevSpec, Hw, HwRc, MacType};
 use super::regs;
 use super::ring::*;
 use crate::err::{Error, Result};
 use crate::*;
+use core::alloc::Layout;
+use core::borrow::Borrow;
+use core::ptr::NonNull;
+use e1000::board;
 
 pub struct E1000<K>
 where
@@ -18,6 +18,7 @@ where
     pub(crate) tx_ring: Ring<K>,
     pub(crate) rx_ring: Ring<K>,
     hw: HwRc<K>,
+    pub(crate) dev_spec: DevSpec,
 }
 
 impl<K> E1000<K>
@@ -44,12 +45,18 @@ where
         let tx_ring = Ring::new(kfun.clone());
         let rx_ring = Ring::new(kfun.clone());
 
+        let dev_spec = match board_info.variant {
+            BoardVariant::B82571 => DevSpec::E82571,
+            BoardVariant::Ich8lan => DevSpec::Ich8lan(Default::default()),
+        };
+
         Ok(Self {
             hw: hw_rc,
             eiac_mask: 0,
             rx_ring,
             tx_ring,
             status: E1000Status::default(),
+            dev_spec,
         })
     }
 
@@ -70,7 +77,7 @@ where
         info!("Init begin ...");
         self.check_opention();
         self.init_rings();
-        self.hw.as_mut().get_variants()?;
+        self.get_variants()?;
 
         info!("Init ok");
         Ok(())
@@ -80,10 +87,10 @@ where
         &mut self.status
     }
 
-    pub fn flags(&self)->Flags{
+    pub fn flags(&self) -> Flags {
         self.hw.as_ref().flags.clone()
     }
-    pub fn flags2(&self)->Flags2{
+    pub fn flags2(&self) -> Flags2 {
         self.hw.as_ref().flags2.clone()
     }
 
@@ -121,7 +128,14 @@ where
         }
         self.e1e_flush();
     }
-
+    fn get_variants(&mut self) -> Result {
+        let mut hw = self.hw.clone();
+        match &mut self.dev_spec {
+            DevSpec::E82571 => Ok(()),
+            DevSpec::E80003es2lan => Ok(()),
+            DevSpec::Ich8lan(i) => i.get_variants(hw.as_mut()),
+        }
+    }
     fn ew32(&self, offset: usize, value: u32) {
         self.hw.as_ref().ew32(offset, value);
     }

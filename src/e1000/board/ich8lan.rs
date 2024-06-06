@@ -1,13 +1,16 @@
 use core::mem::size_of;
 
 use super::super::regs::*;
-use super::Hw;
+use super::DevSpec;
+use super::NvmInfo;
 use super::NvmType;
+use super::{DevSpecParam, Hw};
 use crate::err::*;
 use crate::BoardVariant;
 use crate::KernelFunc;
 use crate::MacType;
 use crate::MediaType;
+use crate::PhyInfo;
 use crate::E1000;
 
 const E1000_ICH_RAR_ENTRIES: u16 = 7;
@@ -51,76 +54,94 @@ impl Default for DevSpecIch8lan {
     }
 }
 
-pub(crate) fn get_variants<K: KernelFunc>(hw: &mut Hw<K>) -> Result {
-    init_mac_params(hw)?;
-    init_nvm_params(hw)?;
-    Ok(())
-}
+// impl<K> Hw<K>
+// where
+//     K: KernelFunc,
+// {
+//     pub(crate) fn get_variants_ich8lan(&mut self) -> Result {
+//         let nvm = &mut self.nvm;
+//         if let DevSpec::Ich8lan(dev) = &mut self.dev_spec {
+//             if nvm.word_size == 0 {
+//                 return Err(Error::Notsupport);
+//             }
+//         }
+//         Ok(())
+//     }
+// }
 
-fn init_mac_params<K: KernelFunc>(hw: &mut Hw<K>) -> Result {
-    hw.phy.media_type = MediaType::media_type_copper;
-    /* Set mta register count */
-    hw.mac.mta_reg_count = 32;
-    /* Set rar entry count */
-    hw.mac.rar_entry_count = E1000_ICH_RAR_ENTRIES;
-    if hw.mac.kind == MacType::e1000_ich8lan {
-        hw.mac.rar_entry_count -= 1;
+impl DevSpecIch8lan {
+    pub(crate) fn get_variants<K: KernelFunc>(&mut self, hw: &mut Hw<K>) -> Result {
+        info!("Ich8lan init");
+        self.init_mac_params(hw)?;
+        self.init_nvm_params(hw)?;
+        Ok(())
     }
 
-    hw.mac.has_fwsm = true;
-
-    hw.mac.arc_subsystem_valid = false;
-
-    hw.mac.adaptive_ifs = true;
-
-    // TODO led
-
-    if hw.mac.kind > MacType::e1000_pch_lpt {
-        hw.mac.rar_entry_count = E1000_PCH_LPT_RAR_ENTRIES;
-    }
-
-    /* Enable PCS Lock-loss workaround for ICH8 */
-    // if hw.mac.kind == MacType::e1000_ich8lan{
-    //     if let BoardVariant
-
-    //     set_kmrn_lock_loss_workaround_ich8lan(hw);
-    // }
-
-    Ok(())
-}
-fn init_nvm_params<K: KernelFunc>(hw: &mut Hw<K>) -> Result {
-    let mut nvm_size = 0;
-
-    hw.nvm.kind = NvmType::FlashSw;
-
-    if hw.mac.kind >= MacType::e1000_pch_spt {
-        hw.nvm.flash_base_addr = 0;
-        let strap_value = hw.er32(STRAP);
-        nvm_size = (((strap_value >> 1) & 0x1F) + 1) * NVM_SIZE_MULTIPLIER;
-
-        hw.nvm.flash_bank_size = nvm_size / 2;
-
-        hw.nvm.flash_bank_size /= (size_of::<u16>() as u32);
-
-        hw.flash = Some(hw.mmio + E1000_FLASH_BASE_ADDR);
-    } else {
-        if hw.flash.is_none() {
-            return Err(Error::Config("Flash registers not mapped"));
+    fn init_mac_params<K: KernelFunc>(&mut self, hw: &mut Hw<K>) -> Result {
+        hw.phy.media_type = MediaType::media_type_copper;
+        /* Set mta register count */
+        hw.mac.mta_reg_count = 32;
+        // /* Set rar entry count */
+        hw.mac.rar_entry_count = E1000_ICH_RAR_ENTRIES;
+        if hw.mac.kind == MacType::e1000_ich8lan {
+            hw.mac.rar_entry_count -= 1;
         }
+
+        hw.mac.has_fwsm = true;
+
+        hw.mac.arc_subsystem_valid = false;
+
+        hw.mac.adaptive_ifs = true;
+
+        // // TODO led
+
+        if hw.mac.kind > MacType::e1000_pch_lpt {
+            hw.mac.rar_entry_count = E1000_PCH_LPT_RAR_ENTRIES;
+        }
+
+        /* Enable PCS Lock-loss workaround for ICH8 */
+        // if hw.mac.kind == MacType::e1000_ich8lan{
+        //     if let BoardVariant
+
+        //     set_kmrn_lock_loss_workaround_ich8lan(hw);
+        // }
+
+        Ok(())
     }
+    fn init_nvm_params<K: KernelFunc>(&mut self, hw: &mut Hw<K>) -> Result {
+        let mut nvm_size = 0;
 
-    hw.nvm.word_size = E1000_ICH8_SHADOW_RAM_WORDS as _;
+        hw.nvm.kind = NvmType::FlashSw;
 
-    Ok(())
-}
-/**
- *  e1000e_set_kmrn_lock_loss_workaround_ich8lan - Set Kumeran workaround state
- *  @hw: pointer to the HW structure
- *  @state: boolean value used to set the current Kumeran workaround state
- *
- *  If ICH8, set the current Kumeran workaround state (enabled - true
- *  /disabled - false).
- **/
-fn set_kmrn_lock_loss_workaround_ich8lan<K: KernelFunc>(base: &mut Hw<K>) {
-    // dev_spec->kmrn_lock_loss_workaround_enabled = state;
+        if hw.mac.kind >= MacType::e1000_pch_spt {
+            hw.nvm.flash_base_addr = 0;
+            let strap_value = hw.er32(STRAP);
+            nvm_size = (((strap_value >> 1) & 0x1F) + 1) * NVM_SIZE_MULTIPLIER;
+
+            hw.nvm.flash_bank_size = nvm_size / 2;
+
+            hw.nvm.flash_bank_size /= (size_of::<u16>() as u32);
+
+            hw.flash = Some(hw.mmio + E1000_FLASH_BASE_ADDR);
+        } else {
+            if hw.flash.is_none() {
+                return Err(Error::Config("Flash registers not mapped"));
+            }
+        }
+
+        hw.nvm.word_size = E1000_ICH8_SHADOW_RAM_WORDS as _;
+
+        Ok(())
+    }
+    /**
+     *  e1000e_set_kmrn_lock_loss_workaround_ich8lan - Set Kumeran workaround state
+     *  @hw: pointer to the HW structure
+     *  @state: boolean value used to set the current Kumeran workaround state
+     *
+     *  If ICH8, set the current Kumeran workaround state (enabled - true
+     *  /disabled - false).
+     **/
+    fn set_kmrn_lock_loss_workaround_ich8lan<K: KernelFunc>(&mut self, base: &mut Hw<K>) {
+        // dev_spec->kmrn_lock_loss_workaround_enabled = state;
+    }
 }
