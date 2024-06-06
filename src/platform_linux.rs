@@ -5,8 +5,9 @@
 mod linux;
 use core::ffi::{self, c_void};
 
-use kernel::prelude::*;
+pub(crate) use kernel::prelude::*;
 pub(crate) use linux::print::*;
+pub(crate) use alloc::alloc;
 pub mod e1000;
 use e1000::*;
 

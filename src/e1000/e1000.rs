@@ -1,5 +1,5 @@
-use alloc::{alloc, dealloc, Layout};
 use base::Base;
+use core::alloc::Layout;
 use core::ptr::NonNull;
 use e1000::board;
 
@@ -21,7 +21,7 @@ where
     pub(crate) eiac_mask: u32,
     pub(crate) tx_ring: Ring<K>,
     pub(crate) rx_ring: Ring<K>,
-    base: NonNull<Base<K>>,
+    _base: NonNull<Base<K>>,
 }
 
 impl<K> E1000<K>
@@ -37,7 +37,7 @@ where
 
         let base = unsafe {
             let layout = Layout::new::<Base<K>>();
-            let ptr = alloc(layout) as *mut Base<K>;
+            let ptr = alloc::alloc(layout) as *mut Base<K>;
             (&mut *ptr).kernal = kfun.clone();
             NonNull::new_unchecked(ptr)
         };
@@ -68,7 +68,7 @@ where
 
         Ok(Self {
             flash,
-            base,
+            _base: base,
             hw,
             eiac_mask: 0,
             rx_ring,
@@ -77,8 +77,11 @@ where
         })
     }
 
+    fn base(&mut self) -> &mut Base<K> {
+        unsafe { self._base.as_mut() }
+    }
     fn kernel(&self) -> &K {
-        unsafe { &self.base.as_ref().kernal }
+        unsafe { &self._base.as_ref().kernal }
     }
 
     ///  e1000_read_mac_addr_generic - Read device MAC address
@@ -293,8 +296,8 @@ where
         }
         unsafe {
             let layout = Layout::new::<Base<K>>();
-            let ptr = self.base.as_ptr() as *mut u8;
-            dealloc(ptr, layout);
+            let ptr = self._base.as_ptr() as *mut u8;
+            alloc::dealloc(ptr, layout);
         }
     }
 }
