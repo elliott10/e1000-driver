@@ -1,8 +1,8 @@
 use core::ptr::NonNull;
 
 use super::dev_id::*;
-mod b82571;
-mod ich8lan;
+pub mod b82571;
+pub mod ich8lan;
 use crate::{base::Base, err::*, KernelFunc, E1000};
 
 const DEFAULT_JUMBO: u32 = 9234;
@@ -271,17 +271,6 @@ impl BoardType {
     }
 }
 
-impl<K> E1000<K>
-where
-    K: KernelFunc,
-{
-    pub(crate) fn get_variants(&mut self) {
-        match self.hw.board_info.get_variants {
-            E1000GetVariants::B82571 => self.get_variants_82571(),
-            E1000GetVariants::Ich8lan => self.get_variants_ich8lan(),
-        }
-    }
-}
 
 #[derive(Debug)]
 pub enum BoardVariant {

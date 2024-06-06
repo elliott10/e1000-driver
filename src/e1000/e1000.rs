@@ -89,7 +89,8 @@ where
         info!("Init begin ...");
         self.check_opention();
         self.init_rings();
-        self.get_variants();
+        self.base.as_mut().get_variants();
+
 
         info!("Init ok");
         Ok(())

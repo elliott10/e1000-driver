@@ -22,6 +22,13 @@ impl<K> Base<K>
 where
     K: KernelFunc,
 {
+    pub(crate) fn get_variants(&mut self) {
+        match self.board.variant {
+            BoardVariant::B82571 => b82571::get_variants(self),
+            BoardVariant::Ich8lan => ich8lan::get_variants(self),
+        }
+    }
+
     fn read<T>(&self, offset: usize) -> T {
         unsafe {
             let ptr = (self.mmio + offset) as *const T;
