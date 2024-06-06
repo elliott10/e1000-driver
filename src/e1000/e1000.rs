@@ -1,3 +1,7 @@
+use ::alloc::alloc::alloc;
+use alloc::{alloc, Layout};
+use base::Base;
+use core::ptr::NonNull;
 use e1000::board;
 
 use super::board::E1000MacType;
@@ -13,12 +17,12 @@ where
     K: KernelFunc,
 {
     pub(crate) flash: Option<usize>,
-    kernel: K,
     pub(crate) hw: Hw,
     pub(crate) status: E1000Status,
     pub(crate) eiac_mask: u32,
     pub(crate) tx_ring: Ring<K>,
     pub(crate) rx_ring: Ring<K>,
+    base: NonNull<Base<K>>,
 }
 
 impl<K> E1000<K>
@@ -32,7 +36,15 @@ where
             return Error::Unknown("unknown device id");
         })?;
 
-        let mmio = kfun.bar_n_remap(0);
+        let base = unsafe {
+            let layout = Layout::new::<Base<K>>();
+            let ptr = alloc(layout) as *mut Base<K>;
+            (&mut *ptr).kernal = kfun.clone();
+            NonNull::new_unchecked(ptr)
+        };
+
+        // let mmio = kfun.bar_n_remap(0);
+        let mmio = unsafe { base.as_ref().kernal.bar_n_remap(0) };
         info!(
             "New E1000 rust driver, mmio: {:#X}, device: {:#X} board: {:?}",
             mmio, device_id, board
@@ -57,13 +69,17 @@ where
 
         Ok(Self {
             flash,
-            kernel: kfun,
+            base,
             hw,
             eiac_mask: 0,
             rx_ring,
             tx_ring,
             status: E1000Status::default(),
         })
+    }
+
+    fn kernel(&self) -> &K {
+        unsafe { &self.base.as_ref().kernal }
     }
 
     ///  e1000_read_mac_addr_generic - Read device MAC address
@@ -193,7 +209,7 @@ where
         let mut i = hw::E1000_ICH_FWSM_PCIM2PCI_COUNT;
 
         while ((self.er32(regs::FWSM) & hw::E1000_ICH_FWSM_PCIM2PCI) != 0) && i > 0 {
-            self.kernel.delay(50_000);
+            self.kernel().delay(50_000);
             i -= 1;
         }
     }
@@ -265,16 +281,16 @@ impl E1000Status {
     }
 }
 
-impl<K> Drop for E1000< K>
+impl<K> Drop for E1000<K>
 where
     K: KernelFunc,
 {
     fn drop(&mut self) {
         debug!("unmap mmio {:#X}", self.hw.mmio);
-        self.kernel.iounmap(self.hw.mmio);
+        self.kernel().iounmap(self.hw.mmio);
         if let Some(flash) = self.flash {
             debug!("unmap flash {:#X}", flash);
-            self.kernel.iounmap(flash);
+            self.kernel().iounmap(flash);
         }
     }
 }
