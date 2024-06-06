@@ -16,17 +16,22 @@ where
     pub(crate) board: Board,
     pub(crate) flash: Option<usize>,
     pub(crate) stats: E1000HWStats,
+    pub(crate) phy: PhyInfo,
 }
 
 impl<K> Base<K>
 where
     K: KernelFunc,
 {
-    pub(crate) fn get_variants(&mut self) {
-        match self.board.variant {
+    pub(crate) fn get_variants(&mut self) -> Result {
+        if let Err(e) = match self.board.variant {
             BoardVariant::B82571 => b82571::get_variants(self),
             BoardVariant::Ich8lan => ich8lan::get_variants(self),
+        } {
+            error!("Get variants error: {}", e);
+            return Err(e);
         }
+        Ok(())
     }
 
     fn read<T>(&self, offset: usize) -> T {
@@ -88,13 +93,14 @@ where
             base.board = board;
             base.flash = None;
             base.stats = E1000HWStats::default();
+            base.phy = Default::default();
             Self(NonNull::new_unchecked(ptr))
         }
     }
     pub(crate) fn init(&mut self) -> Result {
         let base = self.as_mut();
 
-        if base.board.flags.has_flash && base.board.mac.kind < E1000MacType::e1000_pch_spt {
+        if base.board.flags.has_flash && base.board.mac.kind < MacType::e1000_pch_spt {
             let addr = base.kernel.bar_n_remap(1);
             if addr > 0 {
                 info!("flash: {:#X}", addr);

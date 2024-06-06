@@ -4,6 +4,7 @@ use super::dev_id::*;
 pub mod b82571;
 pub mod ich8lan;
 use crate::{base::Base, err::*, KernelFunc, E1000};
+use super::hw::*;
 
 const DEFAULT_JUMBO: u32 = 9234;
 
@@ -90,33 +91,9 @@ pub struct Flags2 {
     pub check_systim_overflow: bool,
     pub enable_s0ix_flows: bool,
 }
-#[allow(non_camel_case_types)]
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-#[repr(u32)]
-pub enum E1000MacType {
-    e1000_82571,
-    e1000_82572,
-    e1000_82573,
-    e1000_82574,
-    e1000_82583,
-    e1000_80003es2lan,
-    e1000_ich8lan,
-    e1000_ich9lan,
-    e1000_ich10lan,
-    e1000_pchlan,
-    e1000_pch2lan,
-    e1000_pch_lpt,
-    e1000_pch_spt,
-    e1000_pch_cnp,
-    e1000_pch_tgp,
-    e1000_pch_adp,
-    e1000_pch_mtp,
-    e1000_pch_lnp,
-    e1000_pch_ptp,
-    e1000_pch_nvp,
-}
 
-impl Default for E1000MacType {
+
+impl Default for MacType {
     fn default() -> Self {
         Self::e1000_82571
     }
@@ -132,7 +109,7 @@ pub enum E1000GetVariants {
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct BoardInfo {
-    pub mac: E1000MacType,
+    pub mac: MacType,
     pub flags: Flags,
     pub flags2: Flags2,
     pub pba: u32,
@@ -147,7 +124,7 @@ impl BoardType {
             BoardType::board_82572 => todo!(),
             BoardType::board_82573 => todo!(),
             BoardType::board_82574 => BoardInfo {
-                mac: E1000MacType::e1000_82574,
+                mac: MacType::e1000_82574,
                 flags: Flags {
                     has_hw_vlan_filter: true,
                     has_msix: true,
@@ -184,7 +161,7 @@ impl BoardType {
             BoardType::board_pch_spt => todo!(),
             BoardType::board_pch_cnp => todo!(),
             BoardType::board_pch_tgp => BoardInfo {
-                mac: E1000MacType::e1000_pch_adp,
+                mac: MacType::e1000_pch_adp,
                 flags: Flags {
                     is_ich: true,
                     has_wol: true,
@@ -207,7 +184,7 @@ impl BoardType {
                 get_variants: E1000GetVariants::Ich8lan,
             },
             BoardType::board_pch_adp => BoardInfo {
-                mac: E1000MacType::e1000_pch_adp,
+                mac: MacType::e1000_pch_adp,
                 flags: Flags {
                     is_ich: true,
                     has_wol: true,
@@ -230,7 +207,7 @@ impl BoardType {
                 get_variants: E1000GetVariants::Ich8lan,
             },
             BoardType::board_pch_mtp => BoardInfo {
-                mac: E1000MacType::e1000_pch_mtp,
+                mac: MacType::e1000_pch_mtp,
                 flags: Flags {
                     is_ich: true,
                     has_wol: true,
@@ -277,10 +254,7 @@ pub enum BoardVariant {
     B82571,
     Ich8lan,
 }
-#[derive(Debug, Clone, Default)]
-pub struct MacInfo {
-    pub kind: E1000MacType,
-}
+
 
 pub struct Board {
     pub kind: BoardType,
@@ -335,7 +309,7 @@ impl Board {
     }
 
     fn init_pch(&mut self) {
-        self.mac.kind = E1000MacType::e1000_pch_mtp;
+        self.mac.kind = MacType::e1000_pch_mtp;
         self.flags = Flags {
             is_ich: true,
             has_wol: true,
@@ -359,7 +333,7 @@ impl Board {
     }
 
     fn init_8754(&mut self) {
-        self.mac.kind = E1000MacType::e1000_82574;
+        self.mac.kind = MacType::e1000_82574;
 
         self.flags = Flags {
             has_hw_vlan_filter: true,

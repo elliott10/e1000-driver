@@ -42,6 +42,84 @@ impl Hw {
     }
 }
 
+#[allow(non_camel_case_types)]
+#[repr(C)]
+pub enum MediaType {
+    media_type_unknown = 0,
+    media_type_copper = 1,
+    media_type_fiber = 2,
+    media_type_internal_serdes = 3,
+    num_media_types,
+}
+#[allow(non_camel_case_types)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[repr(u32)]
+pub enum MacType {
+    e1000_82571,
+    e1000_82572,
+    e1000_82573,
+    e1000_82574,
+    e1000_82583,
+    e1000_80003es2lan,
+    e1000_ich8lan,
+    e1000_ich9lan,
+    e1000_ich10lan,
+    e1000_pchlan,
+    e1000_pch2lan,
+    e1000_pch_lpt,
+    e1000_pch_spt,
+    e1000_pch_cnp,
+    e1000_pch_tgp,
+    e1000_pch_adp,
+    e1000_pch_mtp,
+    e1000_pch_lnp,
+    e1000_pch_ptp,
+    e1000_pch_nvp,
+}
+const MAX_MTA_REG: usize = 128;
+
+#[derive(Debug, Clone, Default)]
+pub struct MacInfo {
+    pub addr: [u8; 6],
+    pub perm_addr: [u8; 6],
+
+    pub kind: MacType,
+
+    pub collision_delta: u32,
+    pub ledctl_default: u32,
+    pub ledctl_mode1: u32,
+    pub ledctl_mode2: u32,
+    pub mc_filter_type: u32,
+    pub tx_packet_delta: u32,
+    pub txcw: u32,
+
+    pub current_ifs_val: u16,
+    pub ifs_max_val: u16,
+    pub ifs_min_val: u16,
+    pub ifs_ratio: u16,
+    pub ifs_step_size: u16,
+    pub mta_reg_count: u16,
+
+    // Maximum size of the MTA register table in all supported adapters
+    // pub mta_shadow: [u32; MAX_MTA_REG],
+    pub rar_entry_count: u16,
+
+    pub forced_speed_duplex: u8,
+
+    pub adaptive_ifs: bool,
+    pub has_fwsm: bool,
+    pub arc_subsystem_valid: bool,
+    pub autoneg: bool,
+    pub autoneg_failed: bool,
+    pub get_link_status: bool,
+    pub in_ifs_mode: bool,
+    pub serdes_has_link: bool,
+    pub tx_pkt_filtering: bool,
+}
+
+
+
+
 #[repr(C)]
 #[derive(Debug, Default, Clone)]
 pub struct E1000HWStats {
@@ -108,4 +186,51 @@ pub struct E1000HWStats {
     pub ictxqmtc: u64,
     pub icrxdmtc: u64,
     pub icrxoc: u64,
+}
+#[derive(Debug, PartialEq)]
+pub enum PhyType {
+    Unknown,
+    None,
+    M88,
+    Igp,
+    Igp2,
+    Gg82563,
+    Igp3,
+    Ife,
+    Bm,
+    I2578,
+    I2577,
+    I2579,
+    I217,
+}
+impl Default for MediaType {
+    fn default() -> Self {
+        Self::media_type_unknown
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct PhyInfo {
+    pub type_: PhyType,
+
+    pub addr: u32,
+    pub id: u32,
+    pub reset_delay_us: u32, // in microseconds
+    pub revision: u32,
+
+    pub media_type: MediaType,
+
+    pub autoneg_advertised: u16,
+    pub autoneg_mask: u16,
+    pub cable_length: u16,
+    pub max_cable_length: u16,
+    pub min_cable_length: u16,
+
+    pub mdix: u8,
+
+    pub disable_polarity_correction: bool,
+    pub is_mdix: bool,
+    pub polarity_correction: bool,
+    pub speed_downgraded: bool,
+    pub autoneg_wait_to_complete: bool,
 }

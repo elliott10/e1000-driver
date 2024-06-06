@@ -1,6 +1,11 @@
 #include "linux/types.h"
 
 
+typedef enum E1000GetVariants {
+  B82571,
+  Ich8lan,
+} E1000GetVariants;
+
 enum E1000MacType {
   e1000_82571,
   e1000_82572,
@@ -83,6 +88,7 @@ typedef struct BoardInfo {
   struct Flags2 flags2;
   uint32_t pba;
   uint32_t max_hw_frame_size;
+  enum E1000GetVariants get_variants;
 } BoardInfo;
 
 /**

@@ -5,9 +5,8 @@ use core::ptr::NonNull;
 use e1000::board;
 
 pub use super::board::Board;
-use super::board::E1000MacType;
 use super::defines;
-use super::hw::{self, Hw};
+use super::hw::{self, Hw, MacType};
 use super::regs;
 use super::ring::*;
 use crate::err::{Error, Result};
@@ -89,7 +88,7 @@ where
         info!("Init begin ...");
         self.check_opention();
         self.init_rings();
-        self.base.as_mut().get_variants();
+        self.base.as_mut().get_variants()?;
 
 
         info!("Init ok");
@@ -140,7 +139,7 @@ where
                 regs::IMS,
                 self.eiac_mask | defines::IMS_OTHER | defines::IMS_OTHER_MASK,
             );
-        } else if self.hw.board_info.mac >= E1000MacType::e1000_pch_lpt {
+        } else if self.base.as_ref().board.mac.kind >= MacType::e1000_pch_lpt {
             self.ew32(regs::IMS, defines::IMS_ENABLE_MASK | defines::IMS_ECCER);
         } else {
             self.ew32(regs::IMS, defines::IMS_ENABLE_MASK);
