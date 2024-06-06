@@ -353,7 +353,11 @@ where
             hw.mac.kind = board.mac;
             hw.flags = board.flags;
             hw.flags2 = board.flags2;
-            hw.variant = board.variant.clone();
+            hw.variant = board.variant;
+            hw.dev_spec = match board.variant {
+                BoardVariant::B82571 => DevSpec::E82571,
+                BoardVariant::Ich8lan => DevSpec::Ich8lan(Default::default()),
+            };
             Self(NonNull::new_unchecked(ptr))
         }
     }

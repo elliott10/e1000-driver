@@ -22,7 +22,7 @@ const E1000_CTRL_EXT_NVMVS: u32 = 0x3; // NVM valid sector
 const E1000_TARC0_CB_MULTIQ_3_REQ: u32 = 0x30000000;
 const E1000_TARC0_CB_MULTIQ_2_REQ: u32 = 0x20000000;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct ShadowRam {
     pub(crate) value: u16,
     pub(crate) modified: bool,
@@ -37,6 +37,18 @@ pub(crate) struct DevSpecIch8lan {
     pub(crate) eee_disable: bool,
     pub(crate) eee_lp_ability: u16,
     // pub ulp_state: E1000UlpState,
+}
+
+impl Default for DevSpecIch8lan {
+    fn default() -> Self {
+        Self {
+            kmrn_lock_loss_workaround_enabled: Default::default(),
+            shadow_ram: [ShadowRam::default(); E1000_ICH8_SHADOW_RAM_WORDS],
+            nvm_k1_enabled: Default::default(),
+            eee_disable: Default::default(),
+            eee_lp_ability: Default::default(),
+        }
+    }
 }
 
 pub(crate) fn get_variants<K: KernelFunc>(hw: &mut Hw<K>) -> Result {
