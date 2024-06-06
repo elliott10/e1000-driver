@@ -32,3 +32,9 @@ pub(crate) const EXFWSM: usize = 0x05B58; /* Extended FW Semaphore */
 
 pub(crate) const EIAC_82574: usize = 0x000DC;
 pub(crate) const EIAC_MASK_82574: u32 = 0x01F00000;
+
+pub(crate) const STRAP: usize = 0x0000C;
+pub(crate) const STRAP_SMBUS_ADDRESS_MASK: usize = 0x00FE0000;
+pub(crate) const STRAP_SMBUS_ADDRESS_SHIFT: usize = 17;
+pub(crate) const STRAP_SMT_FREQ_MASK: usize = 0x00003000;
+pub(crate) const STRAP_SMT_FREQ_SHIFT: usize = 12;

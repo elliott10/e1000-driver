@@ -246,8 +246,10 @@ impl BoardType {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum BoardVariant {
     B82571,
     Ich8lan,
 }
+
+

@@ -4,6 +4,7 @@ use core::fmt;
 pub enum Error {
     Unknown(&'static str),
     Notsupport,
+    Config(&'static str),
 }
 
 impl fmt::Display for Error {
@@ -11,6 +12,7 @@ impl fmt::Display for Error {
         match self {
             Error::Unknown(e) => write!(f, "error: {}", e),
             Error::Notsupport => write!(f, "error: not support"),
+            Error::Config(e) => write!(f, "error: config error: {}", e),
         }
     }
 }

@@ -1,5 +1,6 @@
 use super::regs::*;
 use crate::err::{Error, Result};
+use super::ich8lan::DevSpecIch8lan;
 use crate::*;
 use core::alloc::Layout;
 use core::ptr::NonNull;
@@ -208,6 +209,45 @@ pub struct PhyInfo {
     pub autoneg_wait_to_complete: bool,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum NvmType {
+    Unknown = 0,
+    None,
+    EepromSpi,
+    FlashHw,
+    FlashSw,
+}
+impl Default for NvmType {
+    fn default() -> Self {
+        Self::Unknown
+    }
+}
+#[derive(Default)]
+pub(crate) struct NvmInfo {
+    pub(crate) kind: NvmType,
+    pub(crate) nvm_override: NvmOverride,
+
+    pub(crate) flash_bank_size: u32,
+    pub(crate) flash_base_addr: u32,
+
+    pub(crate) word_size: u16,
+    pub(crate) delay_usec: u16,
+    pub(crate) address_bits: u16,
+    pub(crate) opcode_bits: u16,
+    pub(crate) page_size: u16,
+}
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum NvmOverride {
+    None = 0,
+    SpiSmall,
+    SpiLarge,
+}
+impl Default for NvmOverride {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
 pub(crate) struct Hw<K>
 where
     K: KernelFunc,
@@ -218,9 +258,11 @@ where
     pub(crate) stats: E1000HWStats,
     pub(crate) phy: PhyInfo,
     pub(crate) mac: MacInfo,
+    pub(crate) nvm: NvmInfo,
     pub(crate) flags: Flags,
     pub(crate) flags2: Flags2,
     pub(crate) variant: BoardVariant,
+    pub(crate) dev_spec: DevSpec,
 }
 
 impl<K> Hw<K>
@@ -307,10 +349,11 @@ where
             hw.stats = E1000HWStats::default();
             hw.phy = Default::default();
             hw.mac = Default::default();
+            hw.nvm = Default::default();
             hw.mac.kind = board.mac;
             hw.flags = board.flags;
             hw.flags2 = board.flags2;
-            hw.variant = board.variant;
+            hw.variant = board.variant.clone();
             Self(NonNull::new_unchecked(ptr))
         }
     }
@@ -362,4 +405,10 @@ where
     fn as_mut(&mut self) -> &mut Hw<K> {
         unsafe { self.0.as_mut() }
     }
+}
+
+pub(crate) enum DevSpec {
+    E82571,
+    E80003es2lan,
+    Ich8lan(DevSpecIch8lan),
 }
