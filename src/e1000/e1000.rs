@@ -1,5 +1,4 @@
-use ::alloc::alloc::alloc;
-use alloc::{alloc, Layout};
+use alloc::{alloc, dealloc, Layout};
 use base::Base;
 use core::ptr::NonNull;
 use e1000::board;
@@ -291,6 +290,11 @@ where
         if let Some(flash) = self.flash {
             debug!("unmap flash {:#X}", flash);
             self.kernel().iounmap(flash);
+        }
+        unsafe {
+            let layout = Layout::new::<Base<K>>();
+            let ptr = self.base.as_ptr() as *mut u8;
+            dealloc(ptr, layout);
         }
     }
 }
