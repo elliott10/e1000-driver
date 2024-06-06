@@ -42,10 +42,11 @@ where
         base.init()?;
         let mmio = base.as_ref().mmio;
 
-
         info!(
             "New E1000 rust driver, mmio: {:#X}, device: {:#X} board: {:?}",
-            mmio, device_id, board_type
+            mmio,
+            device_id,
+            base.as_ref().board.kind
         );
 
         let mut flash = None;
@@ -146,6 +147,17 @@ where
         self.e1e_flush();
     }
 
+    fn ew32(&self, offset: usize, value: u32) {
+        self.base.as_ref().ew32(offset, value);
+    }
+
+    fn er32(&self, offset: usize) -> u32 {
+        self.base.as_ref().er32(offset)
+    }
+    fn e1e_flush(&self) {
+        self.base.as_ref().e1e_flush();
+    }
+
     pub fn irq_disable(&mut self, is_msix_enabled: bool) {
         info!("Disable interrupts");
 
@@ -157,8 +169,8 @@ where
         self.e1e_flush();
     }
     fn get_ra(&self, index: usize) -> [u8; 6] {
-        let ral = self.er32(self.hw.ral(index));
-        let rah = self.er32(self.hw.rah(index));
+        let ral = self.er32(self.base.as_ref().ral(index));
+        let rah = self.er32(self.base.as_ref().rah(index));
         [
             ral as u8,
             (ral >> 8) as u8,
@@ -180,40 +192,10 @@ where
                 | ((mac[3] as u32) << 24);
             rah = (mac[4] as u32) | ((mac[5] as u32) << 8);
 
-            self.ew32(self.hw.ral(index), ral);
-            self.ew32(self.hw.rah(index), rah);
+            let reg = self.base.as_ref();
+            self.ew32(reg.ral(index), ral);
+            self.ew32(reg.rah(index), rah);
         }
-    }
-    fn read<T>(&self, offset: usize) -> T {
-        unsafe {
-            let ptr = (self.hw.mmio + offset) as *const T;
-            ptr.read_volatile()
-        }
-    }
-    fn er32(&self, offset: usize) -> u32 {
-        self.read(offset)
-    }
-    fn ew32_prepare(&self) {
-        let mut i = hw::E1000_ICH_FWSM_PCIM2PCI_COUNT;
-
-        while ((self.er32(regs::FWSM) & hw::E1000_ICH_FWSM_PCIM2PCI) != 0) && i > 0 {
-            self.kernel().delay(50_000);
-            i -= 1;
-        }
-    }
-    fn ew32(&self, offset: usize, value: u32) {
-        if self.hw.board_info.flags2.pcim2pci_arbiter_wa {
-            self.ew32_prepare();
-        }
-
-        unsafe {
-            let ptr = (self.hw.mmio + offset) as *mut u32;
-            ptr.write_volatile(value);
-        }
-    }
-
-    fn e1e_flush(&self) {
-        self.er32(regs::STATUS);
     }
 }
 

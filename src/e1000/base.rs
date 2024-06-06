@@ -1,9 +1,12 @@
 use super::board::*;
+use super::hw::*;
+use super::regs::*;
 use crate::err::{Error, Result};
 use crate::*;
 use core::alloc::Layout;
 pub(crate) use core::borrow::*;
 use core::ptr::NonNull;
+
 pub(crate) struct Base<K>
 where
     K: KernelFunc,
@@ -15,7 +18,49 @@ where
     pub(crate) stats: E1000HWStats,
 }
 
-impl<K> Base<K> where K: KernelFunc {}
+impl<K> Base<K>
+where
+    K: KernelFunc,
+{
+    fn read<T>(&self, offset: usize) -> T {
+        unsafe {
+            let ptr = (self.mmio + offset) as *const T;
+            ptr.read_volatile()
+        }
+    }
+    pub(crate) fn er32(&self, offset: usize) -> u32 {
+        self.read(offset)
+    }
+    fn ew32_prepare(&self) {
+        let mut i = E1000_ICH_FWSM_PCIM2PCI_COUNT;
+
+        while ((self.er32(FWSM) & E1000_ICH_FWSM_PCIM2PCI) != 0) && i > 0 {
+            self.kernel.delay(50_000);
+            i -= 1;
+        }
+    }
+    pub(crate) fn ew32(&self, offset: usize, value: u32) {
+        if self.board.flags2.pcim2pci_arbiter_wa {
+            self.ew32_prepare();
+        }
+        unsafe {
+            let ptr = (self.mmio + offset) as *mut u32;
+            ptr.write_volatile(value);
+        }
+    }
+
+    pub(crate) fn e1e_flush(&self) {
+        self.er32(STATUS);
+    }
+
+    pub(crate) fn ral(&self, index: usize) -> usize {
+        RA + index * 8
+    }
+
+    pub(crate) fn rah(&self, index: usize) -> usize {
+        RA + index * 8 + 4
+    }
+}
 
 pub(crate) struct BaseRc<K>(NonNull<Base<K>>)
 where
