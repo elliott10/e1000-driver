@@ -1,3 +1,5 @@
+use b82571::DevSpec82571;
+
 use super::ich8lan::DevSpecIch8lan;
 use super::regs::*;
 use crate::err::{Error, Result};
@@ -402,7 +404,7 @@ where
 }
 
 pub(crate) enum DevSpec {
-    E82571,
+    E82571(DevSpec82571),
     E80003es2lan,
     Ich8lan(DevSpecIch8lan),
 }

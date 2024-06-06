@@ -46,7 +46,7 @@ where
         let rx_ring = Ring::new(kfun.clone());
 
         let dev_spec = match board_info.variant {
-            BoardVariant::B82571 => DevSpec::E82571,
+            BoardVariant::B82571 => DevSpec::E82571(Default::default()),
             BoardVariant::Ich8lan => DevSpec::Ich8lan(Default::default()),
         };
 
@@ -131,11 +131,10 @@ where
     fn get_variants(&mut self) -> Result {
         let mut hw = self.hw.clone();
         match &mut self.dev_spec {
-            DevSpec::E82571 => Ok(()),
+            DevSpec::E82571(i) => i.get_variants(hw.as_mut()),
             DevSpec::E80003es2lan => Ok(()),
             DevSpec::Ich8lan(i) => i.get_variants(hw.as_mut()),
         }
-        Ok(())
     }
     fn ew32(&self, offset: usize, value: u32) {
         self.hw.as_ref().ew32(offset, value);
