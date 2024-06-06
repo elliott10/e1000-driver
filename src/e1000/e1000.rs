@@ -1,6 +1,6 @@
 use e1000::board;
 
-use super::board::{E1000MacType};
+use super::board::E1000MacType;
 use super::defines;
 use super::hw::{self, Hw};
 use super::regs;
