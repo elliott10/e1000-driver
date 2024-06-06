@@ -35,7 +35,7 @@ const E1000_ICH8_SHADOW_RAM_WORDS: usize = 2048;
 #[derive(Debug, Clone)]
 pub(crate) struct DevSpecIch8lan {
     pub(crate) kmrn_lock_loss_workaround_enabled: bool,
-    pub(crate) shadow_ram: [ShadowRam; E1000_ICH8_SHADOW_RAM_WORDS],
+    // pub(crate) shadow_ram: [ShadowRam; E1000_ICH8_SHADOW_RAM_WORDS],
     pub(crate) nvm_k1_enabled: bool,
     pub(crate) eee_disable: bool,
     pub(crate) eee_lp_ability: u16,
@@ -46,28 +46,14 @@ impl Default for DevSpecIch8lan {
     fn default() -> Self {
         Self {
             kmrn_lock_loss_workaround_enabled: Default::default(),
-            shadow_ram: [ShadowRam::default(); E1000_ICH8_SHADOW_RAM_WORDS],
+            // TODO 会引起内核崩溃
+            // shadow_ram: [ShadowRam::default(); E1000_ICH8_SHADOW_RAM_WORDS],
             nvm_k1_enabled: Default::default(),
             eee_disable: Default::default(),
             eee_lp_ability: Default::default(),
         }
     }
 }
-
-// impl<K> Hw<K>
-// where
-//     K: KernelFunc,
-// {
-//     pub(crate) fn get_variants_ich8lan(&mut self) -> Result {
-//         let nvm = &mut self.nvm;
-//         if let DevSpec::Ich8lan(dev) = &mut self.dev_spec {
-//             if nvm.word_size == 0 {
-//                 return Err(Error::Notsupport);
-//             }
-//         }
-//         Ok(())
-//     }
-// }
 
 impl DevSpecIch8lan {
     pub(crate) fn get_variants<K: KernelFunc>(&mut self, hw: &mut Hw<K>) -> Result {
@@ -141,7 +127,7 @@ impl DevSpecIch8lan {
      *  If ICH8, set the current Kumeran workaround state (enabled - true
      *  /disabled - false).
      **/
-    fn set_kmrn_lock_loss_workaround_ich8lan<K: KernelFunc>(&mut self, base: &mut Hw<K>) {
-        // dev_spec->kmrn_lock_loss_workaround_enabled = state;
+    fn set_kmrn_lock_loss_workaround_ich8lan<K: KernelFunc>(&mut self, base: &mut Hw<K>, state: bool) {
+        self.kmrn_lock_loss_workaround_enabled = state;
     }
 }

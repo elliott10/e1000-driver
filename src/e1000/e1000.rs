@@ -135,6 +135,7 @@ where
             DevSpec::E80003es2lan => Ok(()),
             DevSpec::Ich8lan(i) => i.get_variants(hw.as_mut()),
         }
+        Ok(())
     }
     fn ew32(&self, offset: usize, value: u32) {
         self.hw.as_ref().ew32(offset, value);
