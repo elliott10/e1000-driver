@@ -1,35 +1,6 @@
 #include "linux/types.h"
 
 
-typedef enum E1000GetVariants {
-  B82571,
-  Ich8lan,
-} E1000GetVariants;
-
-enum E1000MacType {
-  e1000_82571,
-  e1000_82572,
-  e1000_82573,
-  e1000_82574,
-  e1000_82583,
-  e1000_80003es2lan,
-  e1000_ich8lan,
-  e1000_ich9lan,
-  e1000_ich10lan,
-  e1000_pchlan,
-  e1000_pch2lan,
-  e1000_pch_lpt,
-  e1000_pch_spt,
-  e1000_pch_cnp,
-  e1000_pch_tgp,
-  e1000_pch_adp,
-  e1000_pch_mtp,
-  e1000_pch_lnp,
-  e1000_pch_ptp,
-  e1000_pch_nvp,
-};
-typedef uint32_t E1000MacType;
-
 typedef struct Flags {
   bool has_amt;
   bool has_flash;
@@ -82,14 +53,10 @@ typedef struct Flags2 {
   bool enable_s0ix_flows;
 } Flags2;
 
-typedef struct BoardInfo {
-  E1000MacType mac;
+typedef struct e1000r_info_all {
   struct Flags flags;
   struct Flags2 flags2;
-  uint32_t pba;
-  uint32_t max_hw_frame_size;
-  enum E1000GetVariants get_variants;
-} BoardInfo;
+} e1000r_info_all;
 
 /**
  * 通过bar获取到映射地址
@@ -194,9 +161,9 @@ typedef struct E1000Status {
   uint32_t total_rx_packets;
 } E1000Status;
 
-struct BoardInfo e1000r_board_info(size_t ptr);
-
 void e1000r_drop(size_t ptr);
+
+struct e1000r_info_all e1000r_get_info_all(size_t ptr);
 
 int32_t e1000r_init(size_t ptr);
 

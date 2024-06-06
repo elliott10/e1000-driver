@@ -1,12 +1,9 @@
-use base::*;
 use core::alloc::Layout;
 use core::borrow::Borrow;
 use core::ptr::NonNull;
 use e1000::board;
-
-pub use super::board::Board;
 use super::defines;
-use super::hw::{self, Hw, MacType};
+use super::hw::{self, Hw, HwRc, MacType};
 use super::regs;
 use super::ring::*;
 use crate::err::{Error, Result};
@@ -16,13 +13,11 @@ pub struct E1000<K>
 where
     K: KernelFunc,
 {
-    pub(crate) flash: Option<usize>,
-    pub(crate) hw: Hw,
     pub(crate) status: E1000Status,
     pub(crate) eiac_mask: u32,
     pub(crate) tx_ring: Ring<K>,
     pub(crate) rx_ring: Ring<K>,
-    base: BaseRc<K>,
+    hw: HwRc<K>,
 }
 
 impl<K> E1000<K>
@@ -35,30 +30,22 @@ where
             error!("unknown device id: {:#X}", device_id);
             return Error::Unknown("unknown device id");
         })?;
+        let board_info = board_type.new_default_info();
+        let mut hw_rc = HwRc::new(kfun.clone(), &board_info);
+        hw_rc.init()?;
 
-        let board = board::Board::new(device_id)?;
-        let mut base = BaseRc::new(kfun.clone(), board);
-        base.init()?;
-        let mmio = base.as_ref().mmio;
+        let mmio = hw_rc.as_ref().mmio;
 
         info!(
-            "New E1000 rust driver, mmio: {:#X}, device: {:#X} board: {:?}",
-            mmio,
-            device_id,
-            base.as_ref().board.kind
+            "New E1000 rust driver, mmio: {:#X}, device: {:#X}, board: {:?}, variant: {:?}",
+            mmio, device_id, board_type, board_info.variant
         );
 
-        let mut flash = None;
-        let board_info = board_type.new_default_info();
-
-        let hw = Hw::new(mmio, board_type);
         let tx_ring = Ring::new(kfun.clone());
         let rx_ring = Ring::new(kfun.clone());
 
         Ok(Self {
-            flash,
-            base,
-            hw,
+            hw: hw_rc,
             eiac_mask: 0,
             rx_ring,
             tx_ring,
@@ -67,7 +54,7 @@ where
     }
 
     fn kernel(&self) -> &K {
-        &self.base.as_ref().kernel
+        &self.hw.as_ref().kernel
     }
 
     ///  e1000_read_mac_addr_generic - Read device MAC address
@@ -79,17 +66,11 @@ where
         MacAddress(self.get_ra(0))
     }
 
-    /// board info
-    pub fn board_info(&self) -> BoardInfo {
-        self.hw.board_info.clone()
-    }
-
     pub fn init(&mut self) -> Result {
         info!("Init begin ...");
         self.check_opention();
         self.init_rings();
-        self.base.as_mut().get_variants()?;
-
+        self.hw.as_mut().get_variants()?;
 
         info!("Init ok");
         Ok(())
@@ -99,25 +80,17 @@ where
         &mut self.status
     }
 
+    pub fn flags(&self)->Flags{
+        self.hw.as_ref().flags.clone()
+    }
+    pub fn flags2(&self)->Flags2{
+        self.hw.as_ref().flags2.clone()
+    }
+
     fn check_opention(&mut self) {
-        self.status.check_opention(self.board_info());
-        self.crc_stripping();
-        self.write_protect_nvm();
-    }
-
-    fn crc_stripping(&mut self) {
-        self.hw.board_info.flags2.crc_stripping = true;
-        self.hw.board_info.flags2.dflt_crc_stripping = true;
-    }
-
-    fn write_protect_nvm(&mut self) {
-        if self.hw.board_info.flags.is_ich {
-            self.hw.board_info.flags.read_only_nvm = true;
-        }
-    }
-
-    pub fn set_flags(&mut self, flags: Flags) {
-        self.hw.board_info.flags = flags;
+        self.status.check_opention(&self.hw.as_ref().flags2);
+        self.hw.as_mut().crc_stripping();
+        self.hw.as_mut().write_protect_nvm();
     }
 
     fn init_rings(&self) {}
@@ -128,7 +101,9 @@ where
 
         Ok(())
     }
-
+    pub fn set_flags(&mut self, flags: Flags) {
+        self.hw.as_mut().flags = flags;
+    }
     pub fn irq_enable(&mut self, is_msix_enabled: bool) {
         info!("Enable interrupts");
 
@@ -139,7 +114,7 @@ where
                 regs::IMS,
                 self.eiac_mask | defines::IMS_OTHER | defines::IMS_OTHER_MASK,
             );
-        } else if self.base.as_ref().board.mac.kind >= MacType::e1000_pch_lpt {
+        } else if self.hw.as_ref().mac.kind >= MacType::e1000_pch_lpt {
             self.ew32(regs::IMS, defines::IMS_ENABLE_MASK | defines::IMS_ECCER);
         } else {
             self.ew32(regs::IMS, defines::IMS_ENABLE_MASK);
@@ -148,14 +123,14 @@ where
     }
 
     fn ew32(&self, offset: usize, value: u32) {
-        self.base.as_ref().ew32(offset, value);
+        self.hw.as_ref().ew32(offset, value);
     }
 
     fn er32(&self, offset: usize) -> u32 {
-        self.base.as_ref().er32(offset)
+        self.hw.as_ref().er32(offset)
     }
     fn e1e_flush(&self) {
-        self.base.as_ref().e1e_flush();
+        self.hw.as_ref().e1e_flush();
     }
 
     pub fn irq_disable(&mut self, is_msix_enabled: bool) {
@@ -169,8 +144,8 @@ where
         self.e1e_flush();
     }
     fn get_ra(&self, index: usize) -> [u8; 6] {
-        let ral = self.er32(self.base.as_ref().ral(index));
-        let rah = self.er32(self.base.as_ref().rah(index));
+        let ral = self.er32(self.hw.as_ref().ral(index));
+        let rah = self.er32(self.hw.as_ref().rah(index));
         [
             ral as u8,
             (ral >> 8) as u8,
@@ -192,7 +167,7 @@ where
                 | ((mac[3] as u32) << 24);
             rah = (mac[4] as u32) | ((mac[5] as u32) << 8);
 
-            let reg = self.base.as_ref();
+            let reg = self.hw.as_ref();
             self.ew32(reg.ral(index), ral);
             self.ew32(reg.rah(index), rah);
         }
@@ -200,7 +175,7 @@ where
 }
 
 impl E1000Status {
-    fn check_opention(&mut self, board: BoardInfo) {
+    fn check_opention(&mut self, flags2: &Flags2) {
         use super::params::*;
         //TODO 检查最大网卡数量
 
@@ -210,7 +185,7 @@ impl E1000Status {
         self.rx_int_delay = DEFAULT_RDTR;
         self.rx_abs_int_delay = DEFAULT_RADV;
 
-        if board.flags2.dma_burst {
+        if flags2.dma_burst {
             self.rx_int_delay = BURST_RDTR;
             self.rx_abs_int_delay = BURST_RADV;
         }
@@ -262,7 +237,7 @@ where
         //     debug!("unmap flash {:#X}", flash);
         //     self.kernel().iounmap(flash);
         // }
-        self.base.drop();
+        self.hw.drop();
     }
 }
 

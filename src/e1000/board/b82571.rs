@@ -1,5 +1,6 @@
-use crate::{base::Base, err::*, KernelFunc};
+use crate::{err::*, KernelFunc};
+use super::Hw;
 
-pub(crate) fn get_variants<K: KernelFunc>(base: &mut Base<K>) -> Result {
+pub(crate) fn get_variants<K: KernelFunc>(base: &mut Hw<K>) -> Result {
     Ok(())
 }

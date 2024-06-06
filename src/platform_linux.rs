@@ -5,9 +5,9 @@
 mod linux;
 use core::ffi::{self, c_void};
 
+pub(crate) use alloc::alloc;
 pub(crate) use kernel::prelude::*;
 pub(crate) use linux::print::*;
-pub(crate) use alloc::alloc;
 pub mod e1000;
 use e1000::*;
 
@@ -113,13 +113,6 @@ extern "C" fn e1000r_read_mac_addr(ptr: usize, mac: &mut [u8; 6]) {
 }
 
 #[no_mangle]
-extern "C" fn e1000r_board_info(ptr: usize) -> BoardInfo {
-    let dev = dev_mut(ptr);
-    let board_info = dev.dev.board_info();
-    board_info
-}
-
-#[no_mangle]
 extern "C" fn e1000r_init(ptr: usize) -> i32 {
     let dev = dev_mut(ptr);
     rfn(|| {
@@ -150,4 +143,21 @@ unsafe extern "C" fn e1000r_set_flags(ptr: usize, flags: Flags) {
 extern "C" fn e1000r_irq_disable(ptr: usize, misx_enabled: bool) {
     let dev = dev_mut(ptr);
     dev.dev.irq_disable(misx_enabled);
+}
+
+#[no_mangle]
+extern "C" fn e1000r_get_info_all(ptr: usize) -> e1000r_info_all {
+    let dev = dev_mut(ptr);
+
+    e1000r_info_all {
+        flags: dev.dev.flags(),
+        flags2: dev.dev.flags2(),
+    }
+}
+
+#[allow(non_camel_case_types)]
+#[repr(C)]
+pub struct e1000r_info_all {
+    pub flags: Flags,
+    pub flags2: Flags2,
 }

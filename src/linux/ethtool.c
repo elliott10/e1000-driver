@@ -311,7 +311,7 @@ static int e1000e_get_ts_info(struct net_device *netdev,
 static u32 e1000e_get_priv_flags(struct net_device *netdev) {
   struct e1000_adapter *adapter = netdev_priv(netdev);
   u32 priv_flags = 0;
-  Flags2 flags2 = e1000r_board_info(adapter->ptr).flags2;
+  Flags2 flags2 = e1000r_get_info_all(adapter->ptr).flags2;
 
   if (flags2.enable_s0ix_flows)
     priv_flags |= E1000E_PRIV_FLAGS_S0IX_ENABLED;

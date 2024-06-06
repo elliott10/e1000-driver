@@ -229,8 +229,8 @@ static netdev_features_t e1000_fix_features(struct net_device *netdev,
 }
 void e1000e_reset_interrupt_capability(struct e1000_adapter *adapter) {
   size_t e1000 = e1000e_get_e1000(adapter->netdev);
-  struct BoardInfo board = e1000r_board_info(e1000);
-  struct Flags flags = board.flags;
+  struct e1000r_info_all info = e1000r_get_info_all(e1000);
+  struct Flags flags = info.flags;
   if (adapter->msix_entries) {
     pci_disable_msix(adapter->pdev);
     kfree(adapter->msix_entries);
@@ -252,8 +252,8 @@ void e1000e_set_interrupt_capability(struct e1000_adapter *adapter) {
   int err;
   int i;
   size_t e1000 = e1000e_get_e1000(adapter->netdev);
-  struct BoardInfo board = e1000r_board_info(e1000);
-  struct Flags flags = board.flags;
+  struct e1000r_info_all info = e1000r_get_info_all(e1000);
+  struct Flags flags = info.flags;
 
   switch (adapter->int_mode) {
   case E1000E_INT_MODE_MSIX:
@@ -451,10 +451,11 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent) {
   adapter->netdev = netdev;
   adapter->msg_enable = netif_msg_init(debug, DEFAULT_MSG_ENABLE);
 
-  struct BoardInfo board = e1000r_board_info(e1000);
+  struct e1000r_info_all info = e1000r_get_info_all(e1000);
+  struct Flags2 flags2 = info.flags2;
 
   /* Set default EEE advertisement */
-  if (board.flags2.has_eee)
+  if (flags2.has_eee)
     adapter->eee_advert = MDIO_EEE_100TX | MDIO_EEE_1000T;
 
   netdev->netdev_ops = &e1000e_netdev_ops;

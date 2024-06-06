@@ -1,49 +1,19 @@
-use super::regs;
+use super::regs::*;
+use crate::err::{Error, Result};
 use crate::*;
+use core::alloc::Layout;
+use core::ptr::NonNull;
 use core::ptr::{slice_from_raw_parts, slice_from_raw_parts_mut};
 
 pub(crate) const E1000_ICH_FWSM_RSPCIPHY: u32 = 0x00000040; // Reset PHY on PCI Reset
 pub(crate) const E1000_ICH_FWSM_FW_VALID: u32 = 0x00008000; // FW established a valid mode
 pub(crate) const E1000_ICH_FWSM_PCIM2PCI: u32 = 0x01000000; // ME PCIm-to-PCI active
 pub(crate) const E1000_ICH_FWSM_PCIM2PCI_COUNT: u32 = 2000;
-
 pub(crate) const E1000_ICH_MNG_IAMT_MODE: u32 = 0x2;
-
-#[derive(Debug)]
-pub(crate) struct Hw {
-    pub(crate) mmio: usize,
-    pub(crate) board: BoardType,
-    pub(crate) flash: Option<usize>,
-    pub(crate) stats: E1000HWStats,
-    pub(crate) board_info: BoardInfo,
-}
-
-impl Hw {
-    pub(crate) fn new(mmio: usize, board: BoardType) -> Self {
-        Hw {
-            mmio: mmio,
-            board,
-            flash: None,
-            stats: Default::default(),
-            board_info: board.new_default_info(),
-        }
-    }
-
-    pub(crate) fn set_flash(&mut self, flash: usize) {
-        self.flash = Some(flash);
-    }
-
-    pub(crate) fn ral(&self, index: usize) -> usize {
-        regs::RA + index * 8
-    }
-
-    pub(crate) fn rah(&self, index: usize) -> usize {
-        regs::RA + index * 8 + 4
-    }
-}
 
 #[allow(non_camel_case_types)]
 #[repr(C)]
+#[derive(Debug, Clone, PartialOrd, PartialEq)]
 pub enum MediaType {
     media_type_unknown = 0,
     media_type_copper = 1,
@@ -116,9 +86,6 @@ pub struct MacInfo {
     pub serdes_has_link: bool,
     pub tx_pkt_filtering: bool,
 }
-
-
-
 
 #[repr(C)]
 #[derive(Debug, Default, Clone)]
@@ -203,6 +170,12 @@ pub enum PhyType {
     I2579,
     I217,
 }
+impl Default for PhyType {
+    fn default() -> Self {
+        Self::Unknown
+    }
+}
+
 impl Default for MediaType {
     fn default() -> Self {
         Self::media_type_unknown
@@ -211,7 +184,7 @@ impl Default for MediaType {
 
 #[derive(Debug, Default)]
 pub struct PhyInfo {
-    pub type_: PhyType,
+    pub kind: PhyType,
 
     pub addr: u32,
     pub id: u32,
@@ -233,4 +206,160 @@ pub struct PhyInfo {
     pub polarity_correction: bool,
     pub speed_downgraded: bool,
     pub autoneg_wait_to_complete: bool,
+}
+
+pub(crate) struct Hw<K>
+where
+    K: KernelFunc,
+{
+    pub(crate) kernel: K,
+    pub(crate) mmio: usize,
+    pub(crate) flash: Option<usize>,
+    pub(crate) stats: E1000HWStats,
+    pub(crate) phy: PhyInfo,
+    pub(crate) mac: MacInfo,
+    pub(crate) flags: Flags,
+    pub(crate) flags2: Flags2,
+    pub(crate) variant: BoardVariant,
+}
+
+impl<K> Hw<K>
+where
+    K: KernelFunc,
+{
+    pub(crate) fn get_variants(&mut self) -> Result {
+        if let Err(e) = match self.variant {
+            BoardVariant::B82571 => b82571::get_variants(self),
+            BoardVariant::Ich8lan => ich8lan::get_variants(self),
+        } {
+            error!("Get variants error: {}", e);
+            return Err(e);
+        }
+        Ok(())
+    }
+    pub(crate) fn crc_stripping(&mut self) {
+        self.flags2.crc_stripping = true;
+        self.flags2.dflt_crc_stripping = true;
+    }
+
+    pub(crate) fn write_protect_nvm(&mut self) {
+        if self.flags.is_ich {
+            self.flags.read_only_nvm = true;
+        }
+    }
+    fn read<T>(&self, offset: usize) -> T {
+        unsafe {
+            let ptr = (self.mmio + offset) as *const T;
+            ptr.read_volatile()
+        }
+    }
+    pub(crate) fn er32(&self, offset: usize) -> u32 {
+        self.read(offset)
+    }
+    fn ew32_prepare(&self) {
+        let mut i = E1000_ICH_FWSM_PCIM2PCI_COUNT;
+
+        while ((self.er32(FWSM) & E1000_ICH_FWSM_PCIM2PCI) != 0) && i > 0 {
+            self.kernel.delay(50_000);
+            i -= 1;
+        }
+    }
+    pub(crate) fn ew32(&self, offset: usize, value: u32) {
+        if self.flags2.pcim2pci_arbiter_wa {
+            self.ew32_prepare();
+        }
+        unsafe {
+            let ptr = (self.mmio + offset) as *mut u32;
+            ptr.write_volatile(value);
+        }
+    }
+
+    pub(crate) fn e1e_flush(&self) {
+        self.er32(STATUS);
+    }
+
+    pub(crate) fn ral(&self, index: usize) -> usize {
+        RA + index * 8
+    }
+
+    pub(crate) fn rah(&self, index: usize) -> usize {
+        RA + index * 8 + 4
+    }
+}
+
+pub(crate) struct HwRc<K>(NonNull<Hw<K>>)
+where
+    K: KernelFunc;
+
+impl<K> HwRc<K>
+where
+    K: KernelFunc,
+{
+    pub(crate) fn new(kfun: K, board: &BoardInfo) -> Self {
+        unsafe {
+            let mmio = kfun.bar_n_remap(0);
+            let layout = Layout::new::<Hw<K>>();
+            let ptr = alloc::alloc(layout) as *mut Hw<K>;
+            let hw = &mut *ptr;
+            hw.kernel = kfun;
+            hw.mmio = mmio;
+            hw.flash = None;
+            hw.stats = E1000HWStats::default();
+            hw.phy = Default::default();
+            hw.mac = Default::default();
+            hw.mac.kind = board.mac;
+            hw.flags = board.flags;
+            hw.flags2 = board.flags2;
+            hw.variant = board.variant;
+            Self(NonNull::new_unchecked(ptr))
+        }
+    }
+    pub(crate) fn init(&mut self) -> Result {
+        let hw = self.as_mut();
+
+        if hw.flags.has_flash && hw.mac.kind < MacType::e1000_pch_spt {
+            let addr = hw.kernel.bar_n_remap(1);
+            if addr > 0 {
+                info!("flash: {:#X}", addr);
+                hw.flash = Some(addr);
+            } else {
+                error!("remap bar1 failed");
+                return Err(Error::Unknown("remap bar1 failed"));
+            }
+        }
+        Ok(())
+    }
+
+    pub(crate) fn drop(&mut self) {
+        let base = self.as_mut();
+        debug!("unmap mmio {:#X}", base.mmio);
+        base.kernel.iounmap(base.mmio);
+        if let Some(flash) = base.flash {
+            debug!("unmap flash {:#X}", flash);
+            base.kernel.iounmap(flash);
+        }
+        unsafe {
+            let layout = Layout::new::<Hw<K>>();
+            let ptr = self.0.as_ptr() as *mut u8;
+            alloc::dealloc(ptr, layout);
+        }
+    }
+}
+
+impl<K> AsRef<Hw<K>> for HwRc<K>
+where
+    K: KernelFunc,
+{
+    fn as_ref(&self) -> &Hw<K> {
+        unsafe { self.0.as_ref() }
+    }
+}
+
+impl<K> AsMut<Hw<K>> for HwRc<K>
+where
+    K: KernelFunc,
+{
+    fn as_mut(&mut self) -> &mut Hw<K> {
+        unsafe { self.0.as_mut() }
+    }
 }

@@ -2,7 +2,6 @@ use alloc::{alloc, Layout};
 mod board;
 pub(crate) mod defines;
 pub(crate) mod dev_id;
-pub(crate) mod base;
 mod e1000;
 pub mod err;
 mod hw;
@@ -12,7 +11,7 @@ pub(crate) mod ring;
 pub use self::e1000::*;
 pub use board::*;
 use core::fmt::{self, Display};
-pub use hw::{E1000HWStats, MacInfo, MacType, MediaType};
+pub use hw::{E1000HWStats, MacInfo, MacType, MediaType, PhyInfo, PhyType};
 
 const PAGE_SIZE: usize = 4096;
 
@@ -53,4 +52,3 @@ impl Display for MacAddress {
         )
     }
 }
-

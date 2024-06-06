@@ -3,8 +3,8 @@ use core::ptr::NonNull;
 use super::dev_id::*;
 pub mod b82571;
 pub mod ich8lan;
-use crate::{base::Base, err::*, KernelFunc, E1000};
 use super::hw::*;
+use crate::{err::*, KernelFunc, E1000};
 
 const DEFAULT_JUMBO: u32 = 9234;
 
@@ -92,7 +92,6 @@ pub struct Flags2 {
     pub enable_s0ix_flows: bool,
 }
 
-
 impl Default for MacType {
     fn default() -> Self {
         Self::e1000_82571
@@ -106,7 +105,6 @@ pub enum E1000GetVariants {
     Ich8lan,
 }
 
-#[repr(C)]
 #[derive(Debug, Clone)]
 pub struct BoardInfo {
     pub mac: MacType,
@@ -114,7 +112,7 @@ pub struct BoardInfo {
     pub flags2: Flags2,
     pub pba: u32,
     pub max_hw_frame_size: u32,
-    pub get_variants: E1000GetVariants,
+    pub variant: BoardVariant,
 }
 
 impl BoardType {
@@ -148,7 +146,7 @@ impl BoardType {
                 },
                 pba: 32,
                 max_hw_frame_size: DEFAULT_JUMBO,
-                get_variants: E1000GetVariants::B82571,
+                variant: BoardVariant::B82571,
             },
             BoardType::board_82583 => todo!(),
             BoardType::board_80003es2lan => todo!(),
@@ -181,7 +179,7 @@ impl BoardType {
                 },
                 pba: 26,
                 max_hw_frame_size: 9022,
-                get_variants: E1000GetVariants::Ich8lan,
+                variant: BoardVariant::Ich8lan,
             },
             BoardType::board_pch_adp => BoardInfo {
                 mac: MacType::e1000_pch_adp,
@@ -204,7 +202,7 @@ impl BoardType {
                 },
                 pba: 26,
                 max_hw_frame_size: 9022,
-                get_variants: E1000GetVariants::Ich8lan,
+                variant: BoardVariant::Ich8lan,
             },
             BoardType::board_pch_mtp => BoardInfo {
                 mac: MacType::e1000_pch_mtp,
@@ -227,7 +225,7 @@ impl BoardType {
                 },
                 pba: 26,
                 max_hw_frame_size: 9022,
-                get_variants: E1000GetVariants::Ich8lan,
+                variant: BoardVariant::Ich8lan,
             },
         }
     }
@@ -248,117 +246,8 @@ impl BoardType {
     }
 }
 
-
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum BoardVariant {
     B82571,
     Ich8lan,
-}
-
-
-pub struct Board {
-    pub kind: BoardType,
-    pub variant: BoardVariant,
-    pub mac: MacInfo,
-    pub flags: Flags,
-    pub flags2: Flags2,
-    pub pba: u32,
-    pub max_hw_frame_size: u32,
-}
-
-impl Board {
-    pub fn new(device_id: u32) -> Result<Self> {
-        let kind = BoardType::from_dev_id(device_id).ok_or_else(|| {
-            error!("device_id: {:#X} is not support", device_id);
-            Error::Notsupport
-        })?;
-
-        let mut s = Self {
-            kind,
-            variant: BoardVariant::B82571,
-            mac: Default::default(),
-            flags: Default::default(),
-            flags2: Default::default(),
-            pba: 0,
-            max_hw_frame_size: 0,
-        };
-        s.init();
-        Ok(s)
-    }
-
-    fn init(&mut self) {
-        match self.kind {
-            BoardType::board_82571 => todo!(),
-            BoardType::board_82572 => todo!(),
-            BoardType::board_82573 => todo!(),
-            BoardType::board_82574 => self.init_8754(),
-            BoardType::board_82583 => todo!(),
-            BoardType::board_80003es2lan => todo!(),
-            BoardType::board_ich8lan => todo!(),
-            BoardType::board_ich9lan => todo!(),
-            BoardType::board_ich10lan => todo!(),
-            BoardType::board_pchlan => self.init_pch(),
-            BoardType::board_pch2lan => self.init_pch(),
-            BoardType::board_pch_lpt => self.init_pch(),
-            BoardType::board_pch_spt => self.init_pch(),
-            BoardType::board_pch_cnp => self.init_pch(),
-            BoardType::board_pch_tgp => self.init_pch(),
-            BoardType::board_pch_adp => self.init_pch(),
-            BoardType::board_pch_mtp => self.init_pch(),
-        }
-    }
-
-    fn init_pch(&mut self) {
-        self.mac.kind = MacType::e1000_pch_mtp;
-        self.flags = Flags {
-            is_ich: true,
-            has_wol: true,
-            has_hw_timestamp: true,
-            has_ctrlext_on_load: true,
-            has_amt: true,
-            has_flash: true,
-            has_jumbo_frames: true,
-            apme_in_wuc: true,
-
-            ..Default::default()
-        };
-        self.flags2 = Flags2 {
-            has_phy_stats: true,
-            has_eee: true,
-            ..Default::default()
-        };
-        self.pba = 26;
-        self.max_hw_frame_size = 9022;
-        self.variant = BoardVariant::Ich8lan;
-    }
-
-    fn init_8754(&mut self) {
-        self.mac.kind = MacType::e1000_82574;
-
-        self.flags = Flags {
-            has_hw_vlan_filter: true,
-            has_msix: true,
-            has_jumbo_frames: true,
-            has_wol: true,
-            has_hw_timestamp: true,
-            apme_in_ctrl3: true,
-            has_smart_power_down: true,
-            has_amt: true,
-            has_ctrlext_on_load: true,
-            ..Default::default()
-        };
-
-        self.flags2 = Flags2 {
-            check_phy_hang: true,
-            disable_aspm_l0s: true,
-            disable_aspm_l1: true,
-            no_disable_rx: true,
-            dma_burst: true,
-            check_systim_overflow: true,
-            ..Default::default()
-        };
-        self.pba = 32;
-        self.max_hw_frame_size = DEFAULT_JUMBO;
-        self.variant = BoardVariant::B82571;
-    }
 }
