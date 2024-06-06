@@ -8,7 +8,7 @@ const DEFAULT_JUMBO: u32 = 9234;
 #[allow(non_camel_case_types)]
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 #[repr(u32)]
-pub enum Board {
+pub enum BoardType {
     board_82571,
     board_82572,
     board_82573,
@@ -27,9 +27,9 @@ pub enum Board {
     board_pch_adp,
     board_pch_mtp,
 }
-impl From<usize> for Board {
+impl From<usize> for BoardType {
     fn from(value: usize) -> Self {
-        unsafe { *(&value as *const usize as *const Board) }
+        unsafe { *(&value as *const usize as *const BoardType) }
     }
 }
 
@@ -132,13 +132,13 @@ pub struct BoardInfo {
     pub get_variants: E1000GetVariants,
 }
 
-impl Board {
+impl BoardType {
     pub fn new_default_info(&self) -> BoardInfo {
         match self {
-            Board::board_82571 => todo!(),
-            Board::board_82572 => todo!(),
-            Board::board_82573 => todo!(),
-            Board::board_82574 => BoardInfo {
+            BoardType::board_82571 => todo!(),
+            BoardType::board_82572 => todo!(),
+            BoardType::board_82573 => todo!(),
+            BoardType::board_82574 => BoardInfo {
                 mac: E1000MacType::e1000_82574,
                 flags: Flags {
                     has_hw_vlan_filter: true,
@@ -165,17 +165,17 @@ impl Board {
                 max_hw_frame_size: DEFAULT_JUMBO,
                 get_variants: E1000GetVariants::B82571,
             },
-            Board::board_82583 => todo!(),
-            Board::board_80003es2lan => todo!(),
-            Board::board_ich8lan => todo!(),
-            Board::board_ich9lan => todo!(),
-            Board::board_ich10lan => todo!(),
-            Board::board_pchlan => todo!(),
-            Board::board_pch2lan => todo!(),
-            Board::board_pch_lpt => todo!(),
-            Board::board_pch_spt => todo!(),
-            Board::board_pch_cnp => todo!(),
-            Board::board_pch_tgp => BoardInfo {
+            BoardType::board_82583 => todo!(),
+            BoardType::board_80003es2lan => todo!(),
+            BoardType::board_ich8lan => todo!(),
+            BoardType::board_ich9lan => todo!(),
+            BoardType::board_ich10lan => todo!(),
+            BoardType::board_pchlan => todo!(),
+            BoardType::board_pch2lan => todo!(),
+            BoardType::board_pch_lpt => todo!(),
+            BoardType::board_pch_spt => todo!(),
+            BoardType::board_pch_cnp => todo!(),
+            BoardType::board_pch_tgp => BoardInfo {
                 mac: E1000MacType::e1000_pch_adp,
                 flags: Flags {
                     is_ich: true,
@@ -198,7 +198,7 @@ impl Board {
                 max_hw_frame_size: 9022,
                 get_variants: E1000GetVariants::Ich8lan,
             },
-            Board::board_pch_adp => BoardInfo {
+            BoardType::board_pch_adp => BoardInfo {
                 mac: E1000MacType::e1000_pch_adp,
                 flags: Flags {
                     is_ich: true,
@@ -221,7 +221,7 @@ impl Board {
                 max_hw_frame_size: 9022,
                 get_variants: E1000GetVariants::Ich8lan,
             },
-            Board::board_pch_mtp => BoardInfo {
+            BoardType::board_pch_mtp => BoardInfo {
                 mac: E1000MacType::e1000_pch_mtp,
                 flags: Flags {
                     is_ich: true,
@@ -248,7 +248,7 @@ impl Board {
     }
 
     pub fn from_dev_id(id: u32) -> Option<Self> {
-        use Board::*;
+        use BoardType::*;
         let one = match id {
             E1000_DEV_ID_82574L => board_82574,
             E1000_DEV_ID_82574LA => board_82574,
@@ -273,4 +273,16 @@ where
             E1000GetVariants::Ich8lan => self.get_variants_ich8lan(),
         }
     }
+}
+
+
+pub(crate) enum BoardVariant {
+    B82571,
+    Ich8lan,
+}
+
+pub(crate) struct Board{
+    pub(crate) kind: BoardType,
+    pub(crate) variant: BoardVariant,
+    
 }

@@ -12,14 +12,14 @@ pub(crate) const E1000_ICH_MNG_IAMT_MODE: u32 = 0x2;
 #[derive(Debug)]
 pub(crate) struct Hw {
     pub(crate) mmio: usize,
-    pub(crate) board: Board,
+    pub(crate) board: BoardType,
     pub(crate) flash: Option<usize>,
     pub(crate) stats: E1000HWStats,
     pub(crate) board_info: BoardInfo,
 }
 
 impl Hw {
-    pub(crate) fn new(mmio: usize, board: Board) -> Self {
+    pub(crate) fn new(mmio: usize, board: BoardType) -> Self {
         Hw {
             mmio: mmio,
             board,

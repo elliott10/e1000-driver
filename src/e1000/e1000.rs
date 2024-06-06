@@ -30,7 +30,7 @@ where
 {
     /// new one.
     pub fn new(kfun: K, device_id: u32) -> Result<Self> {
-        let board: Board = Board::from_dev_id(device_id).ok_or_else(|| {
+        let board: BoardType = BoardType::from_dev_id(device_id).ok_or_else(|| {
             error!("unknown device id: {:#X}", device_id);
             return Error::Unknown("unknown device id");
         })?;
