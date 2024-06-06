@@ -1,8 +1,10 @@
-use base::Base;
+use base::*;
 use core::alloc::Layout;
+use core::borrow::Borrow;
 use core::ptr::NonNull;
 use e1000::board;
 
+pub use super::board::Board;
 use super::board::E1000MacType;
 use super::defines;
 use super::hw::{self, Hw};
@@ -21,7 +23,7 @@ where
     pub(crate) eiac_mask: u32,
     pub(crate) tx_ring: Ring<K>,
     pub(crate) rx_ring: Ring<K>,
-    _base: NonNull<Base<K>>,
+    base: BaseRc<K>,
 }
 
 impl<K> E1000<K>
@@ -30,45 +32,32 @@ where
 {
     /// new one.
     pub fn new(kfun: K, device_id: u32) -> Result<Self> {
-        let board: BoardType = BoardType::from_dev_id(device_id).ok_or_else(|| {
+        let board_type: BoardType = BoardType::from_dev_id(device_id).ok_or_else(|| {
             error!("unknown device id: {:#X}", device_id);
             return Error::Unknown("unknown device id");
         })?;
 
-        let base = unsafe {
-            let layout = Layout::new::<Base<K>>();
-            let ptr = alloc::alloc(layout) as *mut Base<K>;
-            (&mut *ptr).kernal = kfun.clone();
-            NonNull::new_unchecked(ptr)
-        };
+        let board = board::Board::new(device_id)?;
+        let mut base = BaseRc::new(kfun.clone(), board);
+        base.init()?;
+        let mmio = base.as_ref().mmio;
 
-        // let mmio = kfun.bar_n_remap(0);
-        let mmio = unsafe { base.as_ref().kernal.bar_n_remap(0) };
+
         info!(
             "New E1000 rust driver, mmio: {:#X}, device: {:#X} board: {:?}",
-            mmio, device_id, board
+            mmio, device_id, board_type
         );
 
         let mut flash = None;
-        let board_info = board.new_default_info();
-        if board_info.flags.has_flash && board_info.mac < E1000MacType::e1000_pch_spt {
-            let addr = kfun.bar_n_remap(1);
-            if addr > 0 {
-                info!("flash: {:#X}", addr);
-                flash = Some(addr);
-            } else {
-                error!("remap bar1 failed");
-                return Err(Error::Unknown("remap bar1 failed"));
-            }
-        }
+        let board_info = board_type.new_default_info();
 
-        let hw = Hw::new(mmio, board);
+        let hw = Hw::new(mmio, board_type);
         let tx_ring = Ring::new(kfun.clone());
         let rx_ring = Ring::new(kfun.clone());
 
         Ok(Self {
             flash,
-            _base: base,
+            base,
             hw,
             eiac_mask: 0,
             rx_ring,
@@ -77,11 +66,8 @@ where
         })
     }
 
-    fn base(&mut self) -> &mut Base<K> {
-        unsafe { self._base.as_mut() }
-    }
     fn kernel(&self) -> &K {
-        unsafe { &self._base.as_ref().kernal }
+        &self.base.as_ref().kernel
     }
 
     ///  e1000_read_mac_addr_generic - Read device MAC address
@@ -288,17 +274,13 @@ where
     K: KernelFunc,
 {
     fn drop(&mut self) {
-        debug!("unmap mmio {:#X}", self.hw.mmio);
-        self.kernel().iounmap(self.hw.mmio);
-        if let Some(flash) = self.flash {
-            debug!("unmap flash {:#X}", flash);
-            self.kernel().iounmap(flash);
-        }
-        unsafe {
-            let layout = Layout::new::<Base<K>>();
-            let ptr = self._base.as_ptr() as *mut u8;
-            alloc::dealloc(ptr, layout);
-        }
+        // debug!("unmap mmio {:#X}", self.hw.mmio);
+        // self.kernel().iounmap(self.hw.mmio);
+        // if let Some(flash) = self.flash {
+        //     debug!("unmap flash {:#X}", flash);
+        //     self.kernel().iounmap(flash);
+        // }
+        self.base.drop();
     }
 }
 
