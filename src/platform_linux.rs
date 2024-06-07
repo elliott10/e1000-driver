@@ -132,7 +132,7 @@ extern "C" fn e1000r_init(ptr: usize) -> i32 {
 }
 
 #[no_mangle]
-unsafe extern "C" fn e1000r_status<'a>(ptr: usize) -> &'a mut E1000Status {
+unsafe extern "C" fn e1000r_status<'a>(ptr: usize) -> &'static mut E1000Status {
     let dev = dev_mut(ptr);
     dev.dev.status_mut()
 }
@@ -163,7 +163,15 @@ extern "C" fn e1000r_get_info_all(ptr: usize) -> e1000r_info_all {
     e1000r_info_all {
         flags: e1000.flags(),
         flags2: e1000.flags2(),
+        mac: e1000.mac_info(),
     }
+}
+
+#[no_mangle]
+extern "C" fn e1000_print_device_info(ptr: usize) {
+    let dev = dev_mut(ptr);
+    let e1000 = &dev.dev;
+    e1000.print_info();
 }
 
 #[allow(non_camel_case_types)]
@@ -171,4 +179,5 @@ extern "C" fn e1000r_get_info_all(ptr: usize) -> e1000r_info_all {
 pub struct e1000r_info_all {
     pub flags: Flags,
     pub flags2: Flags2,
+    pub mac: MacInfo,
 }

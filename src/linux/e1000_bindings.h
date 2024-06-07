@@ -1,6 +1,30 @@
 #include "linux/types.h"
 
 
+enum MacType {
+  e1000_82571,
+  e1000_82572,
+  e1000_82573,
+  e1000_82574,
+  e1000_82583,
+  e1000_80003es2lan,
+  e1000_ich8lan,
+  e1000_ich9lan,
+  e1000_ich10lan,
+  e1000_pchlan,
+  e1000_pch2lan,
+  e1000_pch_lpt,
+  e1000_pch_spt,
+  e1000_pch_cnp,
+  e1000_pch_tgp,
+  e1000_pch_adp,
+  e1000_pch_mtp,
+  e1000_pch_lnp,
+  e1000_pch_ptp,
+  e1000_pch_nvp,
+};
+typedef uint32_t MacType;
+
 typedef struct Flags {
   bool has_amt;
   bool has_flash;
@@ -53,9 +77,40 @@ typedef struct Flags2 {
   bool enable_s0ix_flows;
 } Flags2;
 
+typedef struct MacInfo {
+  uint8_t addr[6];
+  uint8_t perm_addr[6];
+  MacType kind;
+  uint32_t collision_delta;
+  uint32_t ledctl_default;
+  uint32_t ledctl_mode1;
+  uint32_t ledctl_mode2;
+  uint32_t mc_filter_type;
+  uint32_t tx_packet_delta;
+  uint32_t txcw;
+  uint16_t current_ifs_val;
+  uint16_t ifs_max_val;
+  uint16_t ifs_min_val;
+  uint16_t ifs_ratio;
+  uint16_t ifs_step_size;
+  uint16_t mta_reg_count;
+  uint16_t rar_entry_count;
+  uint8_t forced_speed_duplex;
+  bool adaptive_ifs;
+  bool has_fwsm;
+  bool arc_subsystem_valid;
+  bool autoneg;
+  bool autoneg_failed;
+  bool get_link_status;
+  bool in_ifs_mode;
+  bool serdes_has_link;
+  bool tx_pkt_filtering;
+} MacInfo;
+
 typedef struct e1000r_info_all {
   struct Flags flags;
   struct Flags2 flags2;
+  struct MacInfo mac;
 } e1000r_info_all;
 
 /**
@@ -173,6 +228,8 @@ typedef struct E1000Status {
   uint32_t wol;
   uint32_t pba;
 } E1000Status;
+
+void e1000_print_device_info(size_t ptr);
 
 void e1000r_drop(size_t ptr);
 

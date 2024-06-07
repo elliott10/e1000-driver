@@ -103,7 +103,6 @@ impl DevSpec82571 {
     pub(crate) fn get_bus_info<K: KernelFunc>(&mut self, hw: &mut Hw<K>) -> Result {
         let bus_info = hw.kernel.pcie_info();
         hw.bus.width = unsafe { *(&bus_info.bus_link_width as *const u16 as *const BusWidth) };
-        info!("Bus link width {:?}", hw.bus.width);
         Ok(())
     }
 }

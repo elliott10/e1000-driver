@@ -346,10 +346,8 @@ struct E1000Status *e1000_status(struct net_device *netdev) {
 }
 
 size_t cb_bar_n_remap(const void *data, size_t bar) {
-  pr_info("adapter ptr %p", data);
   struct e1000_adapter *adapter = (struct e1000_adapter *)data;
   struct pci_dev *pdev = adapter->pdev;
-  pr_info("pdev ptr %p", pdev);
   resource_size_t mmio_start = pci_resource_start(pdev, bar);
   resource_size_t mmio_len = pci_resource_len(pdev, bar);
   return (size_t)ioremap(mmio_start, mmio_len);
@@ -357,7 +355,7 @@ size_t cb_bar_n_remap(const void *data, size_t bar) {
 
 struct E1000rPcieInfo cb_pcie_info(const void *data) {
   struct e1000_adapter *adapter = (struct e1000_adapter *)data;
-  
+
   u16 bus_width = 0;
 
   u16 pcie_link_status, cap_offset;
@@ -480,6 +478,7 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent) {
   adapter->msg_enable = netif_msg_init(debug, DEFAULT_MSG_ENABLE);
 
   struct e1000r_info_all info = e1000r_get_info_all(e1000);
+  struct Flags flags = info.flags;
   struct Flags2 flags2 = info.flags2;
 
   /* Set default EEE advertisement */
@@ -496,18 +495,6 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent) {
   netdev->mem_start = mmio_start;
   netdev->mem_end = mmio_start + mmio_len;
   adapter->bd_number = cards_found++;
-
-  /* Set initial default active device features */
-  netdev->features = (NETIF_F_SG | NETIF_F_HW_VLAN_CTAG_RX |
-                      NETIF_F_HW_VLAN_CTAG_TX | NETIF_F_TSO | NETIF_F_TSO6 |
-                      NETIF_F_RXHASH | NETIF_F_RXCSUM | NETIF_F_HW_CSUM);
-
-  /* Set user-changeable features (subset of all device features) */
-  netdev->hw_features = netdev->features;
-  netdev->hw_features |= NETIF_F_RXFCS;
-  netdev->priv_flags |= IFF_SUPP_NOFCS;
-  netdev->hw_features |= NETIF_F_RXALL;
-
   u8 mac_addr[6];
 
   err = e1000r_init(e1000);
@@ -517,6 +504,59 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent) {
   err = e1000_sw_init(adapter);
   if (err)
     goto err_sw_init;
+
+  struct E1000Status *status = e1000r_status(e1000);
+
+  /* Set initial default active device features */
+  netdev->features = (NETIF_F_SG | NETIF_F_HW_VLAN_CTAG_RX |
+                      NETIF_F_HW_VLAN_CTAG_TX | NETIF_F_TSO | NETIF_F_TSO6 |
+                      NETIF_F_RXHASH | NETIF_F_RXCSUM | NETIF_F_HW_CSUM);
+  /* disable TSO for pcie and 10/100 speeds to avoid
+   * some hardware issues and for i219 to fix transfer
+   * speed being capped at 60%
+   */
+  if (!flags.tso_force) {
+    switch (status->link_speed) {
+    case SPEED_10:
+    case SPEED_100:
+      e_info("10/100 speed: disabling TSO\n");
+      netdev->features &= ~NETIF_F_TSO;
+      netdev->features &= ~NETIF_F_TSO6;
+      break;
+    case SPEED_1000:
+      netdev->features |= NETIF_F_TSO;
+      netdev->features |= NETIF_F_TSO6;
+      break;
+    default:
+      /* oops */
+      break;
+    }
+    if (info.mac.kind == e1000_pch_spt) {
+      netdev->features &= ~NETIF_F_TSO;
+      netdev->features &= ~NETIF_F_TSO6;
+    }
+  }
+
+  /* Set user-changeable features (subset of all device features) */
+  netdev->hw_features = netdev->features;
+  netdev->hw_features |= NETIF_F_RXFCS;
+  netdev->priv_flags |= IFF_SUPP_NOFCS;
+  netdev->hw_features |= NETIF_F_RXALL;
+
+  if (flags.has_hw_vlan_filter)
+    netdev->features |= NETIF_F_HW_VLAN_CTAG_FILTER;
+
+  netdev->vlan_features |=
+      (NETIF_F_SG | NETIF_F_TSO | NETIF_F_TSO6 | NETIF_F_HW_CSUM);
+
+  netdev->priv_flags |= IFF_UNICAST_FLT;
+
+  netdev->features |= NETIF_F_HIGHDMA;
+  netdev->vlan_features |= NETIF_F_HIGHDMA;
+
+  /* MTU range: 68 - max_hw_frame_size */
+  netdev->min_mtu = ETH_MIN_MTU;
+  netdev->max_mtu = status->max_hw_frame_size - (VLAN_ETH_HLEN + ETH_FCS_LEN);
 
   e1000r_read_mac_addr(e1000, &mac_addr);
 
@@ -532,7 +572,15 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent) {
   if (err)
     goto err_register;
 
-  pr_info("Intel(R) PRO/1000 Network Connection\n");
+	/* carrier off reporting is important to ethtool even BEFORE open */
+	netif_carrier_off(netdev);
+
+	e1000_print_device_info(e1000);
+
+	dev_pm_set_driver_flags(&pdev->dev, DPM_FLAG_SMART_PREPARE);
+
+	if (pci_dev_run_wake(pdev))
+		pm_runtime_put_noidle(&pdev->dev);
 
   return 0;
 

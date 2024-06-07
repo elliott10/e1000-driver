@@ -2,6 +2,7 @@ use super::defines;
 use super::hw::{self, DevSpec, Hw, HwRc, MacType};
 use super::regs;
 use super::ring::*;
+use crate::defines::PBANUM_LENGTH;
 use crate::err::{Error, Result};
 use crate::*;
 use core::alloc::Layout;
@@ -67,13 +68,16 @@ where
     ///  Reads the device MAC address from the EEPROM and stores the value.
     ///  Since devices with two ports use the same EEPROM, we increment the
     /// last bit in the MAC address for the second port.
-    pub fn read_mac_addr_generic(&self) -> MacAddress {
-        MacAddress(self.get_ra(0))
+    pub fn read_mac_addr_generic(&mut self) -> MacAddress {
+        let mac = self.get_ra(0);
+        self.hw.as_mut().mac.addr.copy_from_slice(&mac);
+        MacAddress(mac)
     }
 
     pub fn init(&mut self) -> Result {
         info!("Init begin ...");
         self.check_opention();
+        self.read_mac_addr_generic();
         self.init_rings();
         self.get_variants()?;
         self.dev_spec.get_bus_info(self.hw.clone().as_mut());
@@ -141,6 +145,11 @@ where
         //     DevSpec::Ich8lan(i) => i.get_variants(hw.as_mut()),
         // }
     }
+    /// get mac info
+    pub fn mac_info(&self) -> MacInfo {
+        self.hw.as_ref().mac.clone()
+    }
+
     fn ew32(&self, offset: usize, value: u32) {
         self.hw.as_ref().ew32(offset, value);
     }
@@ -190,6 +199,28 @@ where
             self.ew32(reg.ral(index), ral);
             self.ew32(reg.rah(index), rah);
         }
+    }
+
+    pub fn print_info(&self) {
+        let pba_str = [0; PBANUM_LENGTH];
+        let hw = self.hw.as_ref();
+
+        info!(
+            "(PCI Express:2.5GT/s:{:?}) {}M",
+            hw.bus.width,
+            MacAddress(hw.mac.addr)
+        );
+
+        info!(
+            "Intel(R) PRO/{} Network Connection",
+            if hw.phy.kind == PhyType::Ife {
+                "10/100"
+            } else {
+                "1000"
+            }
+        );
+
+        info!("MAC: {:?}, PHY: {:?}, PBA No: ?", hw.mac.kind, hw.phy.kind);
     }
 }
 

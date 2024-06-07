@@ -70,6 +70,7 @@ pub enum MacType {
 }
 const MAX_MTA_REG: usize = 128;
 
+#[repr(C)]
 #[derive(Debug, Clone, Default)]
 pub struct MacInfo {
     pub addr: [u8; 6],
@@ -401,6 +402,8 @@ where
             hw.flags = board.flags;
             hw.flags2 = board.flags2;
             hw.variant = board.variant;
+            hw.status.max_hw_frame_size = board.max_hw_frame_size;
+            hw.status.pba = board.pba;
 
             Self(NonNull::new_unchecked(ptr))
         }

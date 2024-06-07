@@ -74,3 +74,6 @@ pub(crate) const NVM_WORD_SIZE_BASE_SHIFT: u16 = 6;
 
 pub(crate) const AUTO_ALL_MODES: u8 = 0;
 pub(crate) const EEPROM_APME: u32 = 0x0400;
+
+/* length of string needed to store PBA number */
+pub(crate) const PBANUM_LENGTH: usize = 11;
