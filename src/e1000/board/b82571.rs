@@ -113,10 +113,7 @@ impl DevSpec82571 {
         offset: u16,
         words: u16,
     ) -> Result<Vec<u16>> {
-        if offset > hw.nvm.word_size
-            || (words > (hw.nvm.word_size - offset ))
-            || words == 0
-        {
+        if offset > hw.nvm.word_size || (words > (hw.nvm.word_size - offset)) || words == 0 {
             return Err(Error::Nvm("nvm parameter(s) out of bounds"));
         }
         let mut data: Vec<u16> = Vec::try_with_capacity(words as usize)?;
@@ -136,5 +133,12 @@ impl DevSpec82571 {
         }
 
         Ok(data)
+    }
+
+    pub(crate) fn reset_hw<K: KernelFunc>(&self, hw: &mut Hw<K>) -> Result {
+
+        
+
+        Ok(())
     }
 }

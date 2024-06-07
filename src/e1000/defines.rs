@@ -114,3 +114,31 @@ pub(crate) const EEPROM_APME: u32 = 0x0400;
 
 /* length of string needed to store PBA number */
 pub(crate) const PBANUM_LENGTH: usize = 11;
+
+
+
+pub(crate) const MANC_SMBUS_EN: u32 = 0x00000001; /* SMBus Enabled - RO */
+pub(crate) const MANC_ASF_EN: u32 = 0x00000002; /* ASF Enabled - RO */
+pub(crate) const MANC_ARP_EN: u32 = 0x00002000; /* Enable ARP Request Filtering */
+pub(crate) const MANC_RCV_TCO_EN: u32 = 0x00020000; /* Receive TCO Packets Enabled */
+pub(crate) const MANC_BLK_PHY_RST_ON_IDE: u32 = 0x00040000; /* Block phy resets */
+pub(crate) const MANC_EN_MAC_ADDR_FILTER: u32 = 0x00100000; /* Enable MAC address filtering */
+pub(crate) const MANC_EN_MNG2HOST: u32 = 0x00200000; /* Enable MNG packets to host memory */
+
+pub(crate) const MANC2H_PORT_623: u32 = 0x00000020; /* Port 0x26f */
+pub(crate) const MANC2H_PORT_664: u32 = 0x00000040; /* Port 0x298 */
+pub(crate) const MDEF_PORT_623: u32 = 0x00000800; /* Port 0x26f */
+pub(crate) const MDEF_PORT_664: u32 = 0x00000400; /* Port 0x298 */
+
+
+pub(crate) const FACTPS_MNGCG: u32 = 0x20000000;
+
+pub(crate) const FWSM_MODE_MASK: u32 = 0xE;
+pub(crate) const FWSM_MODE_SHIFT: u8 = 1;
+
+
+
+pub(crate) const VLAN_ETH_DATA_LEN: usize = 1500; /* Max. octets in payload */
+pub(crate) const VLAN_ETH_FRAME_LEN: usize = 1518; /* Max. octets in frame sans FCS */
+pub(crate) const VLAN_MAX_DEPTH: usize = 8; /* Max. number of nested VLAN tags parsed */
+pub(crate) const ETH_FCS_LEN: usize = 4; /* Octets in the FCS */

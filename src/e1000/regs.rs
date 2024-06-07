@@ -20,12 +20,25 @@ pub(crate) const IMS: usize = 0x000D0; // Interrupt Mask Set - RW
 pub(crate) const IMC: usize = 0x000D8; // Interrupt Mask Clear - WO
 pub(crate) const IAM: usize = 0x000E0; // Interrupt Acknowledge Auto Mask
 pub(crate) const IVAR: usize = 0x000E4; // Interrupt Vector Allocation Register - RW
+pub(crate) const PBA: usize = 0x01000; /* Packet Buffer Allocation - RW */
+pub(crate) const PBS: usize = 0x01008; /* Packet Buffer Size */
+pub(crate) const EEWR: usize = 0x0102C; /* EEPROM Write Register - RW */
 
-
-pub(crate) const EEWR: usize =	0x0102C;	/* EEPROM Write Register - RW */
-
-
-pub(crate) const RA: usize = 0x5400;
+pub(crate) const PCS_LCTL: usize = 0x04208; // PCS Link Control - RW
+pub(crate) const PCS_LSTAT: usize = 0x0420C; // PCS Link Status - RO
+pub(crate) const PCS_ANADV: usize = 0x04218; // AN advertisement - RW
+pub(crate) const PCS_LPAB: usize = 0x0421C; // Link Partner Ability - RW
+pub(crate) const RXCSUM: usize = 0x05000; // Rx Checksum Control - RW
+pub(crate) const RFCTL: usize = 0x05008; // Receive Filter Control
+pub(crate) const MTA: usize = 0x05200; // Multicast Table Array - RW Array
+pub(crate) const RA: usize = 0x05400; // Receive Address - RW Array
+pub(crate) const VFTA: usize = 0x05600; // VLAN Filter Table Array - RW Array
+pub(crate) const WUC: usize = 0x05800; // Wakeup Control - RW
+pub(crate) const WUFC: usize = 0x05808; // Wakeup Filter Control - RW
+pub(crate) const WUS: usize = 0x05810; // Wakeup Status - RO
+pub(crate) const MANC: usize = 0x05820; // Management Control - RW
+pub(crate) const FFLT: usize = 0x05F00; // Flexible Filter Length Table - RW Array
+pub(crate) const HOST_IF: usize = 0x08800; // Host Interface
 pub(crate) const SW_FW_SYNC: usize = 0x05B5C; /* SW-FW Synchronization - RW */
 pub(crate) const GCR: usize = 0x05B00; /* PCI-Ex Control */
 pub(crate) const GCR2: usize = 0x05B64; /* PCI-Ex Control #2 */

@@ -12,6 +12,7 @@ pub use self::e1000::*;
 pub use board::*;
 use core::fmt::{self, Display};
 pub use hw::{E1000HWStats, MacInfo, MacType, MediaType, PhyInfo, PhyType};
+pub use ring::{TxDesc, RxDesc};
 
 const PAGE_SIZE: usize = 4096;
 

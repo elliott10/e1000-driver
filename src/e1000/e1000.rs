@@ -1,12 +1,13 @@
 use super::defines;
+use super::defines::*;
 use super::hw::{self, DevSpec, Hw, HwRc, MacType};
-use super::regs;
+use super::regs::*;
 use super::ring::*;
-use crate::defines::{NVM_PBA_OFFSET_0, NVM_PBA_OFFSET_1, NVM_PBA_PTR_GUARD, PBANUM_LENGTH};
 use crate::err::{Error, Result};
 use crate::*;
 use core::alloc::Layout;
 use core::borrow::Borrow;
+use core::mem::{self, align_of_val};
 use core::ptr::NonNull;
 use e1000::board;
 use ffi::CStr;
@@ -83,8 +84,16 @@ where
         self.get_variants()?;
         self.dev_spec.get_bus_info(self.hw.clone().as_mut());
         self.hw.as_mut().phy.autoneg_wait_to_complete = false;
-
         self.hw.as_mut().phy.copper_options();
+        if self.is_enable_mng_pass_thru() {
+            self.hw.as_mut().flags.mng_pt_enabled = true;
+        }
+
+        let mut binding = self.hw.clone();
+        let hw2 = binding.as_mut();
+        self.dev_spec.reset_hw(hw2);
+
+        self.reset();
 
         info!("Init ok");
         Ok(())
@@ -125,26 +134,18 @@ where
 
         if is_msix_enabled {
             // 当使用MSI-X中断时
-            self.ew32(regs::EIAC_82574, self.eiac_mask & regs::EIAC_MASK_82574);
-            self.ew32(
-                regs::IMS,
-                self.eiac_mask | defines::IMS_OTHER | defines::IMS_OTHER_MASK,
-            );
+            self.ew32(EIAC_82574, self.eiac_mask & EIAC_MASK_82574);
+            self.ew32(IMS, self.eiac_mask | IMS_OTHER | IMS_OTHER_MASK);
         } else if self.hw.as_ref().mac.kind >= MacType::e1000_pch_lpt {
-            self.ew32(regs::IMS, defines::IMS_ENABLE_MASK | defines::IMS_ECCER);
+            self.ew32(IMS, IMS_ENABLE_MASK | IMS_ECCER);
         } else {
-            self.ew32(regs::IMS, defines::IMS_ENABLE_MASK);
+            self.ew32(IMS, IMS_ENABLE_MASK);
         }
         self.e1e_flush();
     }
     fn get_variants(&mut self) -> Result {
         let mut hw = self.hw.clone();
         self.dev_spec.get_variants(hw.as_mut())
-        // match &mut self.dev_spec {
-        //     DevSpec::E82571(i) => i.get_variants(hw.as_mut()),
-        //     DevSpec::E80003es2lan => Ok(()),
-        //     DevSpec::Ich8lan(i) => i.get_variants(hw.as_mut()),
-        // }
     }
     /// get mac info
     pub fn mac_info(&self) -> MacInfo {
@@ -165,10 +166,10 @@ where
     pub fn irq_disable(&mut self, is_msix_enabled: bool) {
         info!("Disable interrupts");
 
-        self.ew32(regs::IMC, !0);
+        self.ew32(IMC, !0);
 
         if is_msix_enabled {
-            self.ew32(regs::EIAC_82574, 0);
+            self.ew32(EIAC_82574, 0);
         }
         self.e1e_flush();
     }
@@ -230,10 +231,7 @@ where
             "unknown"
         };
 
-        info!(
-            "MAC: {:?}, PHY: {:?}, PBA No: {}",
-            mac_kind, phy_kind, p
-        );
+        info!("MAC: {:?}, PHY: {:?}, PBA No: {}", mac_kind, phy_kind, p);
     }
 
     fn read_pba_string_generic(&mut self) -> Result<[u8; PBANUM_LENGTH]> {
@@ -294,6 +292,89 @@ where
         pba_num[(length - 1) as usize * 2] = b'\0';
 
         Ok(pba_num)
+    }
+
+    fn is_enable_mng_pass_thru(&mut self) -> bool {
+        // let manc = self.er32(MANC);
+
+        // if manc & MANC_RCV_TCO_EN == 0 {
+        //     return false;
+        // }
+
+        // if self.mac.has_fwsm {
+        //     let fwsm = self.er32(FWSM);
+        //     let factps = self.er32(FACTPS);
+
+        //     if factps & FACTPS_MNGCG == 0
+        //         && (fwsm & FWSM_MODE_MASK) == (e1000_mng_mode_pt << FWSM_MODE_SHIFT)
+        //     {
+        //         return true;
+        //     }
+        // } else if self.mac.kind == MacType::e1000_82574 || self.mac.kind == MacType::e1000_82573 {
+        //     let mut data: u16 = 0;
+        //     let ret_val = self.read_nvm(NVM_INIT_CONTROL2_REG, 1, &mut data);
+
+        //     if ret_val != 0 {
+        //         return false;
+        //     }
+
+        //     if factps & FACTPS_MNGCG == 0
+        //         && (data & NVM_INIT_CTRL2_MNGM) == (e1000_mng_mode_pt << 13)
+        //     {
+        //         return true;
+        //     }
+        // } else if manc & MANC_SMBUS_EN != 0 && manc & MANC_ASF_EN == 0 {
+        //     return true;
+        // }
+
+        false
+    }
+
+    pub fn reset(&mut self) -> Result {
+        let hw = self.hw.as_mut();
+        let mut pba = hw.status.pba;
+        let mut tx_space = 0;
+        let mut min_tx_space = 0;
+        let mut min_rx_space = 0;
+
+        hw.ew32(PBA, pba);
+
+        if hw.status.max_hw_frame_size > (VLAN_ETH_FRAME_LEN + ETH_FCS_LEN) as u32 {
+            pba = hw.er32(PBA);
+            tx_space = pba >> 16;
+            pba &= 0xffff;
+            /* the Tx fifo also stores 16 bytes of information about the Tx
+             * but don't include ethernet FCS because hardware appends it
+             */
+            min_tx_space = (hw.status.max_frame_size + mem::size_of::<TxDesc>() as u32
+                - ETH_FCS_LEN as u32)
+                * 2;
+            min_tx_space = align_to(min_tx_space, 1024);
+            min_tx_space >>= 10;
+            /* software strips receive CRC, so leave room for it */
+            min_rx_space = hw.status.max_frame_size;
+            min_rx_space = align_to(min_rx_space, 1024);
+            min_rx_space >>= 10;
+
+            /* If current Tx allocation is less than the min Tx FIFO size,
+             * and the min Tx FIFO size is less than the current Rx FIFO
+             * allocation, take space away from current Rx allocation
+             */
+            if ((tx_space < min_tx_space) && ((min_tx_space - tx_space) < pba)) {
+                pba -= min_tx_space - tx_space;
+
+                /* if short on Rx space, Rx wins and must trump Tx
+                 * adjustment
+                 */
+                if (pba < min_rx_space) {
+                    pba = min_rx_space;
+                }
+            }
+
+            hw.ew32(PBA, pba);
+        }
+
+        Ok(())
     }
 }
 
@@ -380,6 +461,9 @@ pub struct E1000Status {
     pub rx_int_delay: u32,
     pub rx_abs_int_delay: u32,
 
+    pub max_frame_size: u32,
+    pub min_frame_size: u32,
+
     pub total_tx_bytes: u32,
     pub total_tx_packets: u32,
     pub total_rx_bytes: u32,
@@ -391,4 +475,12 @@ pub struct E1000Status {
     pub eeprom_wol: u32,
     pub wol: u32,
     pub pba: u32,
+}
+fn align_to(value: u32, alignment: u32) -> u32 {
+    let remainder = value % alignment;
+    if remainder == 0 {
+        value
+    } else {
+        value + (alignment - remainder)
+    }
 }

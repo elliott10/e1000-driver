@@ -392,6 +392,42 @@ where
 
         Err(Error::Nvm("poll fail"))
     }
+
+    fn is_enable_mng_pass_thru(&mut self) -> bool {
+        // let manc = self.er32(MANC);
+
+        // if manc & MANC_RCV_TCO_EN == 0 {
+        //     return false;
+        // }
+
+        // if self.mac.has_fwsm {
+        //     let fwsm = self.er32(FWSM);
+        //     let factps = self.er32(FACTPS);
+
+        //     if factps & FACTPS_MNGCG == 0
+        //         && (fwsm & FWSM_MODE_MASK) == (e1000_mng_mode_pt << FWSM_MODE_SHIFT)
+        //     {
+        //         return true;
+        //     }
+        // } else if self.mac.kind == MacType::e1000_82574 || self.mac.kind == MacType::e1000_82573 {
+        //     let mut data: u16 = 0;
+        //     let ret_val = self.read_nvm(NVM_INIT_CONTROL2_REG, 1, &mut data);
+
+        //     if ret_val != 0 {
+        //         return false;
+        //     }
+
+        //     if factps & FACTPS_MNGCG == 0
+        //         && (data & NVM_INIT_CTRL2_MNGM) == (e1000_mng_mode_pt << 13)
+        //     {
+        //         return true;
+        //     }
+        // } else if manc & MANC_SMBUS_EN != 0 && manc & MANC_ASF_EN == 0 {
+        //     return true;
+        // }
+
+        false
+    }
 }
 
 #[derive(Clone)]
@@ -517,6 +553,14 @@ impl DevSpec {
     ) -> Result<Vec<u16>> {
         match self {
             DevSpec::E82571(i) => i.read_nvm(hw, offset, words),
+            DevSpec::E80003es2lan => todo!(),
+            DevSpec::Ich8lan(i) => todo!(),
+        }
+    }
+
+    pub(crate) fn reset_hw<K: KernelFunc>(&self, hw: &mut Hw<K>) -> Result {
+        match self {
+            DevSpec::E82571(i) => i.reset_hw(hw),
             DevSpec::E80003es2lan => todo!(),
             DevSpec::Ich8lan(i) => todo!(),
         }
