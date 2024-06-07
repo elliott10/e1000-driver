@@ -23,7 +23,6 @@ where
     pub(crate) kernel: K,
     pub(crate) mmio: usize,
     pub(crate) flash: Option<usize>,
-    pub(crate) stats: E1000HWStats,
     pub(crate) phy: PhyInfo,
     pub(crate) mac: MacInfo,
     pub(crate) nvm: NvmInfo,
@@ -31,8 +30,7 @@ where
     pub(crate) flags: Flags,
     pub(crate) flags2: Flags2,
     pub(crate) variant: BoardVariant,
-    pub(crate) link_speed: u16,
-    pub(crate) link_duplex: u16,
+    pub(crate) status: E1000Status,
 }
 
 #[allow(non_camel_case_types)]
@@ -395,7 +393,7 @@ where
             hw.kernel = kfun;
             hw.mmio = mmio;
             hw.flash = None;
-            hw.stats = E1000HWStats::default();
+            hw.status = Default::default();
             hw.phy = Default::default();
             hw.mac = Default::default();
             hw.nvm = Default::default();

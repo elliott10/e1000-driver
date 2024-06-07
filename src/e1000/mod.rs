@@ -39,16 +39,13 @@ pub trait KernelFunc: Send + Sync + Clone {
     fn delay(&self, nanos: u64);
 
     /// PCIe 相关信息
-    fn pcie_info(&self)->E1000rPcieInfo;
+    fn pcie_info(&self) -> E1000rPcieInfo;
 }
 
 #[repr(C)]
-pub struct E1000rPcieInfo{
+pub struct E1000rPcieInfo {
     pub bus_link_width: u16,
-
 }
-
-
 
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]

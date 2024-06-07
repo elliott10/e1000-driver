@@ -158,10 +158,11 @@ extern "C" fn e1000r_irq_disable(ptr: usize, misx_enabled: bool) {
 #[no_mangle]
 extern "C" fn e1000r_get_info_all(ptr: usize) -> e1000r_info_all {
     let dev = dev_mut(ptr);
+    let e1000 = &dev.dev;
 
     e1000r_info_all {
-        flags: dev.dev.flags(),
-        flags2: dev.dev.flags2(),
+        flags: e1000.flags(),
+        flags2: e1000.flags2(),
     }
 }
 

@@ -13,11 +13,10 @@ pub struct E1000<K>
 where
     K: KernelFunc,
 {
-    pub(crate) status: E1000Status,
     pub(crate) eiac_mask: u32,
     pub(crate) tx_ring: Ring<K>,
     pub(crate) rx_ring: Ring<K>,
-    hw: HwRc<K>,
+    pub(crate) hw: HwRc<K>,
     pub(crate) dev_spec: DevSpec,
 }
 
@@ -55,7 +54,6 @@ where
             eiac_mask: 0,
             rx_ring,
             tx_ring,
-            status: E1000Status::default(),
             dev_spec,
         })
     }
@@ -79,6 +77,8 @@ where
         self.init_rings();
         self.get_variants()?;
         self.dev_spec.get_bus_info(self.hw.clone().as_mut());
+        self.hw.as_mut().phy.autoneg_wait_to_complete = false;
+
         self.hw.as_mut().phy.copper_options();
 
         info!("Init ok");
@@ -86,7 +86,7 @@ where
     }
 
     pub fn status_mut(&mut self) -> &mut E1000Status {
-        &mut self.status
+        &mut self.hw.as_mut().status
     }
 
     pub fn flags(&self) -> Flags {
@@ -97,7 +97,9 @@ where
     }
 
     fn check_opention(&mut self) {
-        self.status.check_opention(&self.hw.as_ref().flags2);
+        let flags2 = self.hw.as_ref().flags2.clone();
+
+        self.hw.as_mut().status.check_opention(&flags2);
         self.hw.as_mut().crc_stripping();
         self.hw.as_mut().write_protect_nvm();
     }
@@ -278,4 +280,11 @@ pub struct E1000Status {
     pub total_tx_packets: u32,
     pub total_rx_bytes: u32,
     pub total_rx_packets: u32,
+
+    pub link_speed: u16,
+    pub link_duplex: u16,
+    pub max_hw_frame_size: u32,
+    pub eeprom_wol: u32,
+    pub wol: u32,
+    pub pba: u32,
 }

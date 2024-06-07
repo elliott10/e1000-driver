@@ -166,6 +166,12 @@ typedef struct E1000Status {
   uint32_t total_tx_packets;
   uint32_t total_rx_bytes;
   uint32_t total_rx_packets;
+  uint16_t link_speed;
+  uint16_t link_duplex;
+  uint32_t max_hw_frame_size;
+  uint32_t eeprom_wol;
+  uint32_t wol;
+  uint32_t pba;
 } E1000Status;
 
 void e1000r_drop(size_t ptr);
