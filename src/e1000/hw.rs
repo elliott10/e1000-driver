@@ -190,7 +190,7 @@ impl Default for MsType {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum PhyType {
     Unknown,
     None,
@@ -510,10 +510,10 @@ impl DevSpec {
     }
 
     pub(crate) fn read_nvm<K: KernelFunc>(
-        &mut self,
+        &self,
         hw: &mut Hw<K>,
-        offset: usize,
-        words: usize,
+        offset: u16,
+        words: u16,
     ) -> Result<Vec<u16>> {
         match self {
             DevSpec::E82571(i) => i.read_nvm(hw, offset, words),

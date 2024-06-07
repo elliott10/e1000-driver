@@ -171,7 +171,7 @@ extern "C" fn e1000r_get_info_all(ptr: usize) -> e1000r_info_all {
 #[no_mangle]
 extern "C" fn e1000_print_device_info(ptr: usize) {
     let dev = dev_mut(ptr);
-    let e1000 = &dev.dev;
+    let e1000 = &mut dev.dev;
     e1000.print_info();
 }
 

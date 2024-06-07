@@ -108,18 +108,18 @@ impl DevSpec82571 {
     }
 
     pub(crate) fn read_nvm<K: KernelFunc>(
-        &mut self,
+        &self,
         hw: &mut Hw<K>,
-        offset: usize,
-        words: usize,
+        offset: u16,
+        words: u16,
     ) -> Result<Vec<u16>> {
-        if offset as u16 > hw.nvm.word_size
-            || (words as u16 > (hw.nvm.word_size - offset as u16))
+        if offset > hw.nvm.word_size
+            || (words > (hw.nvm.word_size - offset ))
             || words == 0
         {
             return Err(Error::Nvm("nvm parameter(s) out of bounds"));
         }
-        let mut data: Vec<u16> = Vec::try_with_capacity(words)?;
+        let mut data: Vec<u16> = Vec::try_with_capacity(words as usize)?;
 
         let mut eerd = 0u32;
 

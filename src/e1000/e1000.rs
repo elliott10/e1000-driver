@@ -2,13 +2,14 @@ use super::defines;
 use super::hw::{self, DevSpec, Hw, HwRc, MacType};
 use super::regs;
 use super::ring::*;
-use crate::defines::PBANUM_LENGTH;
+use crate::defines::{NVM_PBA_OFFSET_0, NVM_PBA_OFFSET_1, NVM_PBA_PTR_GUARD, PBANUM_LENGTH};
 use crate::err::{Error, Result};
 use crate::*;
 use core::alloc::Layout;
 use core::borrow::Borrow;
 use core::ptr::NonNull;
 use e1000::board;
+use ffi::CStr;
 
 pub struct E1000<K>
 where
@@ -201,9 +202,11 @@ where
         }
     }
 
-    pub fn print_info(&self) {
+    pub fn print_info(&mut self) {
         let pba_str = [0; PBANUM_LENGTH];
         let hw = self.hw.as_ref();
+        let mac_kind = hw.mac.kind;
+        let phy_kind = hw.phy.kind;
 
         info!(
             "(PCI Express:2.5GT/s:{:?}) {}M",
@@ -219,12 +222,79 @@ where
                 "1000"
             }
         );
+        let pba = self.read_pba_string_generic().unwrap();
+        let p = if pba.len() > 0 {
+            let s = CStr::from_bytes_until_nul(&pba).unwrap();
+            s.to_str().unwrap()
+        } else {
+            "unknown"
+        };
 
-        info!("MAC: {:?}, PHY: {:?}, PBA No: ?", hw.mac.kind, hw.phy.kind);
+        info!(
+            "MAC: {:?}, PHY: {:?}, PBA No: {}",
+            mac_kind, phy_kind, p
+        );
     }
 
+    fn read_pba_string_generic(&mut self) -> Result<[u8; PBANUM_LENGTH]> {
+        let hw = self.hw.as_mut();
+        let mut pba_num = [0; PBANUM_LENGTH];
+        let mut nvm_data = self.dev_spec.read_nvm(hw, NVM_PBA_OFFSET_0, 1)?[0];
+        let mut pba_ptr = self.dev_spec.read_nvm(hw, NVM_PBA_OFFSET_1, 1)?[0];
 
-    // fn read_pba_string_generic(&self)->Result<Vec<u8>>
+        if (nvm_data != NVM_PBA_PTR_GUARD) {
+            info!("NVM PBA number is not stored as string");
+            /* extract hex string from data and pba_ptr */
+            pba_num[0] = ((nvm_data >> 12) & 0xF) as u8;
+            pba_num[1] = ((nvm_data >> 8) & 0xF) as u8;
+            pba_num[2] = ((nvm_data >> 4) & 0xF) as u8;
+            pba_num[3] = (nvm_data & 0xF) as u8;
+            pba_num[4] = ((pba_ptr >> 12) & 0xF) as u8;
+            pba_num[5] = ((pba_ptr >> 8) & 0xF) as u8;
+            pba_num[6] = b'-';
+            pba_num[7] = 0;
+            pba_num[8] = ((pba_ptr >> 4) & 0xf) as u8;
+            pba_num[9] = (pba_ptr & 0xF) as u8;
+
+            /* put a null character on the end of our string */
+            pba_num[10] = b'\0';
+
+            /* switch all the data but the '-' to hex char */
+            for offset in 0..10 {
+                if pba_num[offset] < 0xA {
+                    pba_num[offset] += b'0';
+                } else if pba_num[offset] < 0x10 {
+                    pba_num[offset] += b'A' - 0xA;
+                }
+            }
+            return Ok(pba_num);
+        }
+
+        let mut length: u16 = self.dev_spec.read_nvm(hw, pba_ptr, 1)?[0];
+
+        if length == 0xFFFF || length == 0 {
+            error!("NVM PBA number section invalid length\n");
+            return Err(Error::Nvm("NVM PBA number section invalid length"));
+        }
+        /* check if pba_num buffer is big enough */
+        if (pba_num.len() < ((length as usize * 2) - 1)) {
+            error!("PBA string buffer too small\n");
+            return Err(Error::TryReserveError);
+        }
+
+        /* trim pba length from start of string */
+        pba_ptr += 1;
+        length -= 1;
+
+        for offset in 0..length {
+            nvm_data = self.dev_spec.read_nvm(hw, pba_ptr + offset, 1)?[0];
+            pba_num[offset as usize * 2] = (nvm_data >> 8) as u8;
+            pba_num[(offset as usize * 2) + 1] = (nvm_data & 0xFF) as u8;
+        }
+        pba_num[(length - 1) as usize * 2] = b'\0';
+
+        Ok(pba_num)
+    }
 }
 
 impl E1000Status {

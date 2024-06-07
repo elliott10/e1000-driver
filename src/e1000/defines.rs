@@ -67,8 +67,8 @@ pub(crate) const EECD_FLUPD: u32 = 0x00080000; // Update FLASH
 pub(crate) const EECD_AUPDEN: u32 = 0x00100000; // Enable Autonomous FLASH update
 pub(crate) const EECD_SEC1VAL: u32 = 0x00400000; // Sector One Valid
 
-pub(crate) const NVM_PBA_OFFSET_0: usize = 8;
-pub(crate) const NVM_PBA_OFFSET_1: usize = 9;
+pub(crate) const NVM_PBA_OFFSET_0: u16 = 8;
+pub(crate) const NVM_PBA_OFFSET_1: u16 = 9;
 pub(crate) const NVM_PBA_PTR_GUARD: u16 = 0xFAFA;
 pub(crate) const NVM_WORD_SIZE_BASE_SHIFT: u16 = 6;
 
