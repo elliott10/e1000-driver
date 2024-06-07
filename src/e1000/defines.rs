@@ -59,9 +59,7 @@ pub(crate) const SWSM_SMBI: u32 = 0x00000001; /* Driver Semaphore bit */
 pub(crate) const SWSM_SWESMBI: u32 = 0x00000002; /* FW Semaphore bit */
 pub(crate) const SWSM_DRV_LOAD: u32 = 0x00000008; /* Driver Loaded Bit */
 
-
-
-pub(crate) const EECD_ADDR_BITS : u32 = 0x00000400;
+pub(crate) const EECD_ADDR_BITS: u32 = 0x00000400;
 pub(crate) const EECD_AUTO_RD: u32 = 0x00000200; // NVM Auto Read done
 pub(crate) const EECD_SIZE_EX_MASK: u32 = 0x00007800; // NVM Size
 pub(crate) const EECD_SIZE_EX_SHIFT: u32 = 11;
@@ -69,9 +67,10 @@ pub(crate) const EECD_FLUPD: u32 = 0x00080000; // Update FLASH
 pub(crate) const EECD_AUPDEN: u32 = 0x00100000; // Enable Autonomous FLASH update
 pub(crate) const EECD_SEC1VAL: u32 = 0x00400000; // Sector One Valid
 
-
-
 pub(crate) const NVM_PBA_OFFSET_0: usize = 8;
 pub(crate) const NVM_PBA_OFFSET_1: usize = 9;
 pub(crate) const NVM_PBA_PTR_GUARD: u16 = 0xFAFA;
 pub(crate) const NVM_WORD_SIZE_BASE_SHIFT: u16 = 6;
+
+pub(crate) const AUTO_ALL_MODES: u8 = 0;
+pub(crate) const EEPROM_APME: u32 = 0x0400;

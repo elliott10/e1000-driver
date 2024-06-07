@@ -1,4 +1,5 @@
 use b82571::DevSpec82571;
+use defines::AUTO_ALL_MODES;
 
 use super::ich8lan::DevSpecIch8lan;
 use super::regs::*;
@@ -7,12 +8,32 @@ use crate::*;
 use core::alloc::Layout;
 use core::ptr::NonNull;
 use core::ptr::{slice_from_raw_parts, slice_from_raw_parts_mut};
+use core::str;
 
 pub(crate) const E1000_ICH_FWSM_RSPCIPHY: u32 = 0x00000040; // Reset PHY on PCI Reset
 pub(crate) const E1000_ICH_FWSM_FW_VALID: u32 = 0x00008000; // FW established a valid mode
 pub(crate) const E1000_ICH_FWSM_PCIM2PCI: u32 = 0x01000000; // ME PCIm-to-PCI active
 pub(crate) const E1000_ICH_FWSM_PCIM2PCI_COUNT: u32 = 2000;
 pub(crate) const E1000_ICH_MNG_IAMT_MODE: u32 = 0x2;
+
+pub(crate) struct Hw<K>
+where
+    K: KernelFunc,
+{
+    pub(crate) kernel: K,
+    pub(crate) mmio: usize,
+    pub(crate) flash: Option<usize>,
+    pub(crate) stats: E1000HWStats,
+    pub(crate) phy: PhyInfo,
+    pub(crate) mac: MacInfo,
+    pub(crate) nvm: NvmInfo,
+    pub(crate) bus: BusInfo,
+    pub(crate) flags: Flags,
+    pub(crate) flags2: Flags2,
+    pub(crate) variant: BoardVariant,
+    pub(crate) link_speed: u16,
+    pub(crate) link_duplex: u16,
+}
 
 #[allow(non_camel_case_types)]
 #[repr(C)]
@@ -157,6 +178,19 @@ pub struct E1000HWStats {
     pub icrxdmtc: u64,
     pub icrxoc: u64,
 }
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum MsType {
+    HwDefault = 0,
+    ForceMaster,
+    ForceSlave,
+    Auto,
+}
+impl Default for MsType {
+    fn default() -> Self {
+        Self::Auto
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum PhyType {
     Unknown,
@@ -209,9 +243,38 @@ pub struct PhyInfo {
     pub polarity_correction: bool,
     pub speed_downgraded: bool,
     pub autoneg_wait_to_complete: bool,
+
+    pub(crate) ms_type: MsType,
+    pub(crate) original_ms_type: MsType,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+impl PhyInfo {
+    pub(crate) fn copper_options(&mut self) {
+        if self.media_type == MediaType::media_type_copper {
+            self.mdix = AUTO_ALL_MODES;
+            self.disable_polarity_correction = false;
+            self.ms_type = MsType::HwDefault;
+        }
+    }
+}
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum BusWidth {
+    Unknown = 0,
+    PcieX1,
+    PcieX2,
+    PcieX4 = 4,
+    PcieX8 = 8,
+    ThirtyTwo,
+    SixtyFour,
+    Reserved,
+}
+impl Default for BusWidth {
+    fn default() -> Self {
+        Self::Unknown
+    }
+}
+
+#[derive(Debug, PartialEq)]
 pub(crate) enum NvmType {
     Unknown = 0,
     None,
@@ -224,6 +287,7 @@ impl Default for NvmType {
         Self::Unknown
     }
 }
+
 #[derive(Default)]
 pub(crate) struct NvmInfo {
     pub(crate) kind: NvmType,
@@ -250,20 +314,10 @@ impl Default for NvmOverride {
     }
 }
 
-pub(crate) struct Hw<K>
-where
-    K: KernelFunc,
-{
-    pub(crate) kernel: K,
-    pub(crate) mmio: usize,
-    pub(crate) flash: Option<usize>,
-    pub(crate) stats: E1000HWStats,
-    pub(crate) phy: PhyInfo,
-    pub(crate) mac: MacInfo,
-    pub(crate) nvm: NvmInfo,
-    pub(crate) flags: Flags,
-    pub(crate) flags2: Flags2,
-    pub(crate) variant: BoardVariant,
+#[derive(Default)]
+pub(crate) struct BusInfo {
+    pub(crate) width: BusWidth,
+    pub(crate) fun: u16,
 }
 
 impl<K> Hw<K>
@@ -326,7 +380,6 @@ where
     K: KernelFunc;
 
 unsafe impl<K: KernelFunc> Send for HwRc<K> {}
-
 
 impl<K> HwRc<K>
 where

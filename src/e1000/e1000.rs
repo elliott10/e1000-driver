@@ -19,6 +19,8 @@ where
     pub(crate) rx_ring: Ring<K>,
     hw: HwRc<K>,
     pub(crate) dev_spec: DevSpec,
+
+    
 }
 
 impl<K> E1000<K>
@@ -78,6 +80,8 @@ where
         self.check_opention();
         self.init_rings();
         self.get_variants()?;
+        self.hw.as_mut().phy.copper_options();
+        
 
         info!("Init ok");
         Ok(())
@@ -99,6 +103,8 @@ where
         self.hw.as_mut().crc_stripping();
         self.hw.as_mut().write_protect_nvm();
     }
+
+
 
     fn init_rings(&self) {}
 
