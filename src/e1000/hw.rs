@@ -16,6 +16,12 @@ pub(crate) const E1000_ICH_FWSM_PCIM2PCI: u32 = 0x01000000; // ME PCIm-to-PCI ac
 pub(crate) const E1000_ICH_FWSM_PCIM2PCI_COUNT: u32 = 2000;
 pub(crate) const E1000_ICH_MNG_IAMT_MODE: u32 = 0x2;
 
+#[repr(C)]
+#[derive(Clone, Default)]
+pub(crate) struct MsixEntry {
+    pub vector: u32, /* Kernel uses to write allocated vector */
+    pub entry: u32,  /* Driver uses to specify entry, OS writes */
+}
 pub(crate) struct Hw<K>
 where
     K: KernelFunc,
@@ -32,6 +38,8 @@ where
     pub(crate) flags2: Flags2,
     pub(crate) variant: BoardVariant,
     pub(crate) status: E1000Status,
+    // pub(crate) num_vectors: u32,
+    // pub(crate) msix_entryies: Vec<MsixEntry>,
 }
 
 #[allow(non_camel_case_types)]

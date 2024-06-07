@@ -45,6 +45,8 @@ pub trait KernelFunc: Send + Sync + Clone {
 
     /// mtu 大于 ETH_DATA_LEN
     fn is_mtu_bg_eth(&self)->bool;
+
+    // fn num_msix_vectors(&self)->usize;
 }
 
 #[repr(C)]

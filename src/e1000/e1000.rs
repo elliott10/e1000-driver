@@ -332,7 +332,8 @@ where
     }
 
     pub fn reset(&mut self) -> Result {
-        let hw = self.hw.as_mut();
+        let mut _hw = self.hw.clone();
+        let hw = _hw.as_mut();
         let mut pba = hw.status.pba;
         let mut tx_space = 0;
         let mut min_tx_space = 0;
@@ -449,11 +450,55 @@ where
                 hw.fc.high_water = hwm & FCRTH_RTH; /* 8-byte granularity */
                 hw.fc.low_water = hw.fc.high_water - 8;
             }
+        }
 
 
+        hw.status.tx_fifo_limit = min((hw.er32(PBA) << 10) - 96, 24 << 10);
+
+        info!("fifo limit: {}", hw.status.tx_fifo_limit);
+        /* Disable Adaptive Interrupt Moderation if 2 full packets cannot
+         * fit in receive buffer.
+         */
+        if hw.status.itr_setting & 0x3 > 0 {
+            let max_frame_size = hw.status.max_frame_size * 2;
+            let pba_value = pba << 10;
+
+            if max_frame_size > pba_value {
+                if !(hw.flags2.disable_aim) {
+                    info!("Interrupt Throttle Rate off");
+                    hw.flags2.disable_aim = true;
+                    self.e1000e_write_itr(0);
+                }
+            } else if hw.flags2.disable_aim {
+                info!("Interrupt Throttle Rate on");
+                hw.flags2.disable_aim = false;
+                hw.status.itr = 20000;
+                self.e1000e_write_itr(hw.status.itr);
+            }
         }
 
         Ok(())
+    }
+
+    /**
+     * e1000e_write_itr - write the ITR value to the appropriate registers
+     * @adapter: address of board private structure
+     * @itr: new ITR value to program
+     *
+     * e1000e_write_itr determines if the adapter is in MSI-X mode
+     * and, if so, writes the EITR registers with the ITR value.
+     * Otherwise, it writes the ITR value into the ITR register.
+     **/
+    fn e1000e_write_itr(&mut self, itr: u32) {
+        let hw = self.hw.as_mut();
+        let new_itr = if itr > 0 { 1000000000 / (itr * 256) } else { 0 };
+        // if hw.msix_entryies.is_empty() {
+        hw.ew32(ITR, new_itr);
+        // }else{
+        // for i in 0..hw.msix_entryies.len() {
+        //     hw.ew32(EITR(i), new_itr);
+        // }
+        // }
     }
 }
 
@@ -547,6 +592,8 @@ pub struct E1000Status {
     pub total_tx_packets: u32,
     pub total_rx_bytes: u32,
     pub total_rx_packets: u32,
+
+    pub tx_fifo_limit: u32,
 
     pub link_speed: u16,
     pub link_duplex: u16,

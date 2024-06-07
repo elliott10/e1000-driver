@@ -142,3 +142,6 @@ pub(crate) const FC_PAUSE_TIME: u16 = 0x0680; //  858微秒
 pub(crate) const FCRTH_RTH: u32 = 0x0000FFF8; // Mask Bits[15:3] for RTH
 pub(crate) const FCRTL_RTL: u32 = 0x0000FFF8; // Mask Bits[15:3] for RTL
 pub(crate) const FCRTL_XONE: u32 = 0x80000000; // Enable XON frame transmission
+
+
+
