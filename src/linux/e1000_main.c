@@ -301,18 +301,17 @@ void e1000e_set_interrupt_capability(struct e1000_adapter *adapter) {
  * e1000_irq_disable - Mask off interrupt generation on the NIC
  * @adapter: board private structure
  **/
-static void e1000_irq_disable(struct e1000_adapter *adapter)
-{
-	e1000r_irq_disable(e1000e_get_e1000(adapter->netdev), adapter->msix_entries);
+static void e1000_irq_disable(struct e1000_adapter *adapter) {
+  e1000r_irq_disable(e1000e_get_e1000(adapter->netdev), adapter->msix_entries);
 
-	if (adapter->msix_entries) {
-		int i;
+  if (adapter->msix_entries) {
+    int i;
 
-		for (i = 0; i < adapter->num_vectors; i++)
-			synchronize_irq(adapter->msix_entries[i].vector);
-	} else {
-		synchronize_irq(adapter->pdev->irq);
-	}
+    for (i = 0; i < adapter->num_vectors; i++)
+      synchronize_irq(adapter->msix_entries[i].vector);
+  } else {
+    synchronize_irq(adapter->pdev->irq);
+  }
 }
 static const struct net_device_ops e1000e_netdev_ops = {
     .ndo_open = e1000e_open,
@@ -346,19 +345,46 @@ struct E1000Status *e1000_status(struct net_device *netdev) {
   return e1000r_status(e1000_get_e1000r(netdev));
 }
 
-size_t cb_bar_n_remap(const void *pdev_v, size_t bar) {
-  struct pci_dev *pdev = (struct pci_dev *)pdev_v;
+size_t cb_bar_n_remap(const void *data, size_t bar) {
+  pr_info("adapter ptr %p", data);
+  struct e1000_adapter *adapter = (struct e1000_adapter *)data;
+  struct pci_dev *pdev = adapter->pdev;
+  pr_info("pdev ptr %p", pdev);
   resource_size_t mmio_start = pci_resource_start(pdev, bar);
   resource_size_t mmio_len = pci_resource_len(pdev, bar);
   return (size_t)ioremap(mmio_start, mmio_len);
 }
+
+struct E1000rPcieInfo cb_pcie_info(const void *data) {
+  struct e1000_adapter *adapter = (struct e1000_adapter *)data;
+  
+  u16 bus_width = 0;
+
+  u16 pcie_link_status, cap_offset;
+  cap_offset = adapter->pdev->pcie_cap;
+
+  if (!cap_offset) {
+    bus_width = 0;
+  } else {
+    pci_read_config_word(adapter->pdev, cap_offset + PCIE_LINK_STATUS,
+                         &pcie_link_status);
+    bus_width =
+        ((pcie_link_status & PCIE_LINK_WIDTH_MASK) >> PCIE_LINK_WIDTH_SHIFT);
+  }
+
+  struct E1000rPcieInfo info = {
+      .bus_link_width = bus_width,
+  };
+
+  return info;
+}
+
 void cb_io_unmap(size_t addr) { iounmap((void *)addr); }
 
-size_t e1000e_get_e1000(struct net_device *netdev){
+size_t e1000e_get_e1000(struct net_device *netdev) {
   struct e1000_adapter *adapter = netdev_priv(netdev);
   return adapter->ptr;
 }
-
 
 /**
  * e1000_sw_init - Initialize general software structures (struct e1000_adapter)
@@ -434,21 +460,23 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent) {
   mmio_start = pci_resource_start(pdev, 0);
   mmio_len = pci_resource_len(pdev, 0);
 
+  adapter = netdev_priv(netdev);
+  adapter->bars = bars;
+  adapter->pdev = pdev;
+  adapter->netdev = netdev;
+
   E1000Config config;
-  config.pdev = pdev;
+  config.adapter = adapter;
   config.device_id = ent->device;
   config.cb_iounmap = cb_io_unmap;
   config.cb_bar_n_remap = cb_bar_n_remap;
+  config.cb_pcie_info = cb_pcie_info;
 
   size_t e1000 = e1000r_new(config);
   if (!e1000)
     goto err_e1000r;
 
-  adapter = netdev_priv(netdev);
   adapter->ptr = e1000;
-  adapter->bars = bars;
-  adapter->pdev = pdev;
-  adapter->netdev = netdev;
   adapter->msg_enable = netif_msg_init(debug, DEFAULT_MSG_ENABLE);
 
   struct e1000r_info_all info = e1000r_get_info_all(e1000);

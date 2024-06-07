@@ -19,7 +19,8 @@ struct KFun {
     cb_bar_n_remap: E1000CbBarNremap,
     cb_iounmap: E1000CbIounmap,
     cb_udelay: E1000CbUdelay,
-    pdev: *const c_void,
+    cb_pcie_info: E1000CbPcieInfo,
+    adapter: *const c_void,
 }
 
 unsafe impl Sync for KFun {}
@@ -33,7 +34,7 @@ impl KernelFunc for KFun {
     fn dma_free_coherent(&self, vaddr: usize, pages: usize) {}
 
     fn bar_n_remap(&self, bar: usize) -> usize {
-        unsafe { (self.cb_bar_n_remap)(self.pdev, bar) }
+        unsafe { (self.cb_bar_n_remap)(self.adapter, bar) }
     }
     fn iounmap(&self, addr: usize) {
         unsafe { (self.cb_iounmap)(addr) }
@@ -43,6 +44,10 @@ impl KernelFunc for KFun {
         unsafe {
             ((self.cb_udelay)((nanos / 1000) as u32));
         }
+    }
+
+    fn pcie_info(&self) -> E1000rPcieInfo {
+        unsafe { (self.cb_pcie_info)(self.adapter) }
     }
 }
 
@@ -59,13 +64,16 @@ pub type E1000CbIounmap = unsafe extern "C" fn(addr: usize);
 
 pub type E1000CbUdelay = unsafe extern "C" fn(usecs: u32);
 
+pub type E1000CbPcieInfo = unsafe extern "C" fn(pdev: *const c_void) -> E1000rPcieInfo;
+
 #[repr(C)]
 pub struct E1000Config {
     device_id: u32,
     cb_bar_n_remap: E1000CbBarNremap,
     cb_iounmap: E1000CbIounmap,
     cb_udelay: E1000CbUdelay,
-    pdev: *const c_void,
+    cb_pcie_info: E1000CbPcieInfo,
+    adapter: *const c_void,
 }
 
 fn rfn<F>(f: F) -> i32
@@ -84,8 +92,10 @@ extern "C" fn e1000r_new(config: E1000Config) -> usize {
         cb_bar_n_remap: config.cb_bar_n_remap,
         cb_iounmap: config.cb_iounmap,
         cb_udelay: config.cb_udelay,
-        pdev: config.pdev,
+        cb_pcie_info: config.cb_pcie_info,
+        adapter: config.adapter,
     };
+
     let e1000 = match E1000::new(kfun, config.device_id) {
         Ok(o) => o,
         Err(_) => return 0,

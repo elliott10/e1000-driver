@@ -19,8 +19,6 @@ where
     pub(crate) rx_ring: Ring<K>,
     hw: HwRc<K>,
     pub(crate) dev_spec: DevSpec,
-
-    
 }
 
 impl<K> E1000<K>
@@ -80,8 +78,8 @@ where
         self.check_opention();
         self.init_rings();
         self.get_variants()?;
+        self.dev_spec.get_bus_info(self.hw.clone().as_mut());
         self.hw.as_mut().phy.copper_options();
-        
 
         info!("Init ok");
         Ok(())
@@ -103,8 +101,6 @@ where
         self.hw.as_mut().crc_stripping();
         self.hw.as_mut().write_protect_nvm();
     }
-
-
 
     fn init_rings(&self) {}
 
@@ -136,11 +132,12 @@ where
     }
     fn get_variants(&mut self) -> Result {
         let mut hw = self.hw.clone();
-        match &mut self.dev_spec {
-            DevSpec::E82571(i) => i.get_variants(hw.as_mut()),
-            DevSpec::E80003es2lan => Ok(()),
-            DevSpec::Ich8lan(i) => i.get_variants(hw.as_mut()),
-        }
+        self.dev_spec.get_variants(hw.as_mut())
+        // match &mut self.dev_spec {
+        //     DevSpec::E82571(i) => i.get_variants(hw.as_mut()),
+        //     DevSpec::E80003es2lan => Ok(()),
+        //     DevSpec::Ich8lan(i) => i.get_variants(hw.as_mut()),
+        // }
     }
     fn ew32(&self, offset: usize, value: u32) {
         self.hw.as_ref().ew32(offset, value);

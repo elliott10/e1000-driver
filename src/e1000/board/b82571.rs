@@ -1,5 +1,5 @@
-use super::Hw;
 use super::{super::defines::*, NvmOverride};
+use super::{BusWidth, Hw};
 use crate::e1000::board::NvmType;
 use crate::MacType;
 use crate::{e1000::regs::*, err::*, KernelFunc, MediaType};
@@ -94,10 +94,16 @@ impl DevSpec82571 {
             if size > 14 {
                 size = 14;
             }
-           hw. nvm.word_size = 1 << size;
+            hw.nvm.word_size = 1 << size;
         }
 
         Ok(())
     }
- 
+
+    pub(crate) fn get_bus_info<K: KernelFunc>(&mut self, hw: &mut Hw<K>) -> Result {
+        let bus_info = hw.kernel.pcie_info();
+        hw.bus.width = unsafe { *(&bus_info.bus_link_width as *const u16 as *const BusWidth) };
+        info!("bus link width {:?}", hw.bus.width);
+        Ok(())
+    }
 }

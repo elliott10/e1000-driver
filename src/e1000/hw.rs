@@ -258,6 +258,7 @@ impl PhyInfo {
     }
 }
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[repr(u16)]
 pub(crate) enum BusWidth {
     Unknown = 0,
     PcieX1,
@@ -468,4 +469,22 @@ pub(crate) struct DevSpecParam<'a> {
     pub(crate) mmio: usize,
     pub(crate) flash: &'a mut Option<usize>,
     pub(crate) strap: u32,
+}
+
+impl DevSpec {
+    pub(crate) fn get_variants<K: KernelFunc>(&mut self, hw: &mut Hw<K>) -> Result {
+        match self {
+            DevSpec::E82571(i) => i.get_variants(hw),
+            DevSpec::E80003es2lan => Ok(()),
+            DevSpec::Ich8lan(i) => i.get_variants(hw),
+        }
+    }
+
+    pub(crate) fn get_bus_info<K: KernelFunc>(&mut self, hw: &mut Hw<K>) -> Result {
+        match self {
+            DevSpec::E82571(i) => i.get_bus_info(hw),
+            DevSpec::E80003es2lan => Ok(()),
+            DevSpec::Ich8lan(i) => Ok(()),
+        }
+    }
 }

@@ -145,6 +145,17 @@ struct e1000_adapter {
 
 #define E1000_MNG_VLAN_NONE (-1)
 
+/* PCI/PCI-X/PCI-EX Config space */
+#define PCI_HEADER_TYPE_REGISTER     0x0E
+#define PCIE_LINK_STATUS             0x12
+
+#define PCI_HEADER_TYPE_MULTIFUNC    0x80
+#define PCIE_LINK_WIDTH_MASK         0x3F0
+#define PCIE_LINK_WIDTH_SHIFT        4
+
+
+
+
 void e1000e_set_ethtool_ops(struct net_device *netdev);
 size_t e1000e_get_e1000(struct net_device *netdev);
 struct E1000Status *e1000_status(struct net_device *netdev);
