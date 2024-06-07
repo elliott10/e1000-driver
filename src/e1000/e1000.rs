@@ -7,6 +7,7 @@ use crate::err::{Error, Result};
 use crate::*;
 use core::alloc::Layout;
 use core::borrow::Borrow;
+use core::cmp::min;
 use core::mem::{self, align_of_val};
 use core::ptr::NonNull;
 use e1000::board;
@@ -382,11 +383,75 @@ where
          * - 90% of the Rx FIFO size, and
          * - the full Rx FIFO size minus one full frame
          */
-        if hw.flags.disable_fc_pause_time{
-            
+        if hw.flags.disable_fc_pause_time {
+            hw.fc.pause_time = 0xFFFF;
+        } else {
+            hw.fc.pause_time = FC_PAUSE_TIME;
         }
+        hw.fc.send_xon = true;
+        hw.fc.current_mode = hw.fc.requested_mode;
+
+        let is_mtu_bg_than_data = hw.kernel.is_mtu_bg_eth();
+
+        match hw.mac.kind {
+            MacType::e1000_ich9lan | MacType::e1000_ich10lan => {
+                // if adapter.netdev.mtu > ETH_DATA_LEN {
+                //     let pba = 14;
+                //     ew32!("PBA", pba);
+                //     fc.high_water = 0x2800;
+                //     fc.low_water = fc.high_water - 8;
+                // } else {
+                //     // fallthrough to default case
+                // }
+            }
+
+            MacType::e1000_pchlan => {
+                /* Workaround PCH LOM adapter hangs with certain network
+                 * loads.  If hangs persist, try disabling Tx flow control.
+                 */
+                if is_mtu_bg_than_data {
+                    hw.fc.high_water = 0x3500;
+                    hw.fc.low_water = 0x1500;
+                } else {
+                    hw.fc.high_water = 0x5000;
+                    hw.fc.low_water = 0x3000;
+                }
+                hw.fc.refresh_time = 0x1000;
+            }
+            MacType::e1000_pch2lan
+            | MacType::e1000_pch_lpt
+            | MacType::e1000_pch_spt
+            | MacType::e1000_pch_cnp
+            | MacType::e1000_pch_tgp
+            | MacType::e1000_pch_adp
+            | MacType::e1000_pch_mtp
+            | MacType::e1000_pch_lnp
+            | MacType::e1000_pch_ptp
+            | MacType::e1000_pch_nvp => {
+                hw.fc.refresh_time = 0xFFFF;
+                hw.fc.pause_time = 0xFFFF;
+
+                if !is_mtu_bg_than_data {
+                    hw.fc.high_water = 0x05C20;
+                    hw.fc.low_water = 0x05048;
+                } else {
+                    let pba = 14;
+                    hw.ew32(PBA, pba);
+                    hw.fc.high_water = ((pba << 10) * 9 / 10) & FCRTH_RTH;
+                    hw.fc.low_water = ((pba << 10) * 8 / 10) & FCRTL_RTL;
+                }
+            }
+            _ => {
+                let hwm = min(
+                    ((pba << 10) * 9 / 10),
+                    ((pba << 10) - hw.status.max_frame_size),
+                );
+                hw.fc.high_water = hwm & FCRTH_RTH; /* 8-byte granularity */
+                hw.fc.low_water = hw.fc.high_water - 8;
+            }
 
 
+        }
 
         Ok(())
     }

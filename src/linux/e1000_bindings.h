@@ -132,12 +132,15 @@ typedef struct E1000rPcieInfo {
 
 typedef struct E1000rPcieInfo (*E1000CbPcieInfo)(const void *pdev);
 
+typedef bool (*E1000CbMtuBgEth)(const void *pdev);
+
 typedef struct E1000Config {
   uint32_t device_id;
   E1000CbBarNremap cb_bar_n_remap;
   E1000CbIounmap cb_iounmap;
   E1000CbUdelay cb_udelay;
   E1000CbPcieInfo cb_pcie_info;
+  E1000CbMtuBgEth cb_mtu_bg_eth;
   const void *adapter;
 } E1000Config;
 
@@ -217,6 +220,8 @@ typedef struct E1000Status {
   uint32_t tx_abs_int_delay;
   uint32_t rx_int_delay;
   uint32_t rx_abs_int_delay;
+  uint32_t max_frame_size;
+  uint32_t min_frame_size;
   uint32_t total_tx_bytes;
   uint32_t total_tx_packets;
   uint32_t total_rx_bytes;

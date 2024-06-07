@@ -5,8 +5,8 @@
 mod linux;
 use core::ffi::{self, c_void};
 
-pub(crate) use alloc::alloc;
 use ::alloc::collections;
+pub(crate) use alloc::alloc;
 pub(crate) use kernel::prelude::*;
 pub(crate) use linux::print::*;
 pub mod e1000;
@@ -21,6 +21,7 @@ struct KFun {
     cb_iounmap: E1000CbIounmap,
     cb_udelay: E1000CbUdelay,
     cb_pcie_info: E1000CbPcieInfo,
+    cb_mtu_bg_eth: E1000CbMtuBgEth,
     adapter: *const c_void,
 }
 
@@ -50,6 +51,10 @@ impl KernelFunc for KFun {
     fn pcie_info(&self) -> E1000rPcieInfo {
         unsafe { (self.cb_pcie_info)(self.adapter) }
     }
+
+    fn is_mtu_bg_eth(&self) -> bool {
+        unsafe { ((self.cb_mtu_bg_eth)(self.adapter)) }
+    }
 }
 
 type DevicePtr = *mut Device;
@@ -67,6 +72,8 @@ pub type E1000CbUdelay = unsafe extern "C" fn(usecs: u32);
 
 pub type E1000CbPcieInfo = unsafe extern "C" fn(pdev: *const c_void) -> E1000rPcieInfo;
 
+pub type E1000CbMtuBgEth = unsafe extern "C" fn(pdev: *const c_void) -> bool;
+
 #[repr(C)]
 pub struct E1000Config {
     device_id: u32,
@@ -74,6 +81,7 @@ pub struct E1000Config {
     cb_iounmap: E1000CbIounmap,
     cb_udelay: E1000CbUdelay,
     cb_pcie_info: E1000CbPcieInfo,
+    cb_mtu_bg_eth: E1000CbMtuBgEth,
     adapter: *const c_void,
 }
 
@@ -95,6 +103,7 @@ extern "C" fn e1000r_new(config: E1000Config) -> usize {
         cb_udelay: config.cb_udelay,
         cb_pcie_info: config.cb_pcie_info,
         adapter: config.adapter,
+        cb_mtu_bg_eth: config.cb_mtu_bg_eth,
     };
 
     let e1000 = match E1000::new(kfun, config.device_id) {

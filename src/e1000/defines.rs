@@ -72,7 +72,6 @@ pub(crate) const NVM_PBA_OFFSET_1: u16 = 9;
 pub(crate) const NVM_PBA_PTR_GUARD: u16 = 0xFAFA;
 pub(crate) const NVM_WORD_SIZE_BASE_SHIFT: u16 = 6;
 
-
 pub(crate) const NVM_RW_REG_DATA: u32 = 16; // Offset to data in NVM r/w regs
 pub(crate) const NVM_RW_REG_DONE: u32 = 2; // Offset to READ/WRITE done bit
 pub(crate) const NVM_RW_REG_START: u32 = 1; // Start operation
@@ -115,8 +114,6 @@ pub(crate) const EEPROM_APME: u32 = 0x0400;
 /* length of string needed to store PBA number */
 pub(crate) const PBANUM_LENGTH: usize = 11;
 
-
-
 pub(crate) const MANC_SMBUS_EN: u32 = 0x00000001; /* SMBus Enabled - RO */
 pub(crate) const MANC_ASF_EN: u32 = 0x00000002; /* ASF Enabled - RO */
 pub(crate) const MANC_ARP_EN: u32 = 0x00002000; /* Enable ARP Request Filtering */
@@ -130,15 +127,18 @@ pub(crate) const MANC2H_PORT_664: u32 = 0x00000040; /* Port 0x298 */
 pub(crate) const MDEF_PORT_623: u32 = 0x00000800; /* Port 0x26f */
 pub(crate) const MDEF_PORT_664: u32 = 0x00000400; /* Port 0x298 */
 
-
 pub(crate) const FACTPS_MNGCG: u32 = 0x20000000;
 
 pub(crate) const FWSM_MODE_MASK: u32 = 0xE;
 pub(crate) const FWSM_MODE_SHIFT: u8 = 1;
 
-
-
 pub(crate) const VLAN_ETH_DATA_LEN: usize = 1500; /* Max. octets in payload */
 pub(crate) const VLAN_ETH_FRAME_LEN: usize = 1518; /* Max. octets in frame sans FCS */
 pub(crate) const VLAN_MAX_DEPTH: usize = 8; /* Max. number of nested VLAN tags parsed */
 pub(crate) const ETH_FCS_LEN: usize = 4; /* Octets in the FCS */
+
+pub(crate) const FC_PAUSE_TIME: u16 = 0x0680; //  858微秒
+
+pub(crate) const FCRTH_RTH: u32 = 0x0000FFF8; // Mask Bits[15:3] for RTH
+pub(crate) const FCRTL_RTL: u32 = 0x0000FFF8; // Mask Bits[15:3] for RTL
+pub(crate) const FCRTL_XONE: u32 = 0x80000000; // Enable XON frame transmission

@@ -298,7 +298,7 @@ pub(crate) enum FcMode {
 }
 impl Default for FcMode {
     fn default() -> Self {
-        Self::Default
+        Self::None
     }
 }
 

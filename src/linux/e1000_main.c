@@ -379,6 +379,13 @@ struct E1000rPcieInfo cb_pcie_info(const void *data) {
 
 void cb_io_unmap(size_t addr) { iounmap((void *)addr); }
 
+bool cb_mtu_bg_eth(const void *data) {
+
+  struct e1000_adapter *adapter = (struct e1000_adapter *)data;
+
+  return adapter->netdev->mtu > ETH_DATA_LEN;
+}
+
 size_t e1000e_get_e1000(struct net_device *netdev) {
   struct e1000_adapter *adapter = netdev_priv(netdev);
   return adapter->ptr;
@@ -469,6 +476,7 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent) {
   config.cb_iounmap = cb_io_unmap;
   config.cb_bar_n_remap = cb_bar_n_remap;
   config.cb_pcie_info = cb_pcie_info;
+  config.cb_mtu_bg_eth = cb_mtu_bg_eth;
 
   size_t e1000 = e1000r_new(config);
   if (!e1000)
@@ -572,15 +580,15 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent) {
   if (err)
     goto err_register;
 
-	/* carrier off reporting is important to ethtool even BEFORE open */
-	netif_carrier_off(netdev);
+  /* carrier off reporting is important to ethtool even BEFORE open */
+  netif_carrier_off(netdev);
 
-	e1000_print_device_info(e1000);
+  e1000_print_device_info(e1000);
 
-	dev_pm_set_driver_flags(&pdev->dev, DPM_FLAG_SMART_PREPARE);
+  dev_pm_set_driver_flags(&pdev->dev, DPM_FLAG_SMART_PREPARE);
 
-	if (pci_dev_run_wake(pdev))
-		pm_runtime_put_noidle(&pdev->dev);
+  if (pci_dev_run_wake(pdev))
+    pm_runtime_put_noidle(&pdev->dev);
 
   return 0;
 

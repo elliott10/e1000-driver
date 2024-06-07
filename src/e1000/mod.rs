@@ -41,6 +41,10 @@ pub trait KernelFunc: Send + Sync + Clone {
 
     /// PCIe 相关信息
     fn pcie_info(&self) -> E1000rPcieInfo;
+
+
+    /// mtu 大于 ETH_DATA_LEN
+    fn is_mtu_bg_eth(&self)->bool;
 }
 
 #[repr(C)]
