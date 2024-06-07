@@ -24,6 +24,7 @@ where
     pub(crate) mmio: usize,
     pub(crate) flash: Option<usize>,
     pub(crate) phy: PhyInfo,
+    pub(crate) fc: FcInfo,
     pub(crate) mac: MacInfo,
     pub(crate) nvm: NvmInfo,
     pub(crate) bus: BusInfo,
@@ -274,6 +275,33 @@ impl Default for BusWidth {
     }
 }
 
+#[derive(Debug, Default, Clone)]
+pub(crate) struct FcInfo {
+    pub high_water: u32,        // Flow control high-water mark
+    pub low_water: u32,         // Flow control low-water mark
+    pub pause_time: u16,        // Flow control pause timer
+    pub refresh_time: u16,      // Flow control refresh timer
+    pub send_xon: bool,         // Flow control send XON
+    pub strict_ieee: bool,      // Strict IEEE mode
+    pub current_mode: FcMode,   // FC mode in effect
+    pub requested_mode: FcMode, // FC mode requested by caller
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[repr(C)]
+pub(crate) enum FcMode {
+    None = 0,
+    RxPause,
+    TxPause,
+    Full,
+    Default = 0xFF,
+}
+impl Default for FcMode {
+    fn default() -> Self {
+        Self::Default
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub(crate) enum NvmType {
     Unknown = 0,
@@ -454,6 +482,7 @@ where
             hw.phy = Default::default();
             hw.mac = Default::default();
             hw.nvm = Default::default();
+            hw.fc = Default::default();
             hw.mac.kind = board.mac;
             hw.flags = board.flags;
             hw.flags2 = board.flags2;

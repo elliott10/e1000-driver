@@ -374,6 +374,20 @@ where
             hw.ew32(PBA, pba);
         }
 
+        /* flow control settings
+         *
+         * The high water mark must be low enough to fit one full frame
+         * (or the size used for early receive) above it in the Rx FIFO.
+         * Set it to the lower of:
+         * - 90% of the Rx FIFO size, and
+         * - the full Rx FIFO size minus one full frame
+         */
+        if hw.flags.disable_fc_pause_time{
+            
+        }
+
+
+
         Ok(())
     }
 }

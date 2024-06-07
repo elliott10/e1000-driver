@@ -1,4 +1,4 @@
-#![allow(unused, missing_docs)]
+#![allow(unused, missing_docs, unreachable_pub)]
 #![no_std]
 
 #[macro_use]
