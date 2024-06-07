@@ -222,6 +222,9 @@ where
 
         info!("MAC: {:?}, PHY: {:?}, PBA No: ?", hw.mac.kind, hw.phy.kind);
     }
+
+
+    // fn read_pba_string_generic(&self)->Result<Vec<u8>>
 }
 
 impl E1000Status {

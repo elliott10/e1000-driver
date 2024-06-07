@@ -3,6 +3,7 @@ use super::{BusWidth, Hw};
 use crate::e1000::board::NvmType;
 use crate::MacType;
 use crate::{e1000::regs::*, err::*, KernelFunc, MediaType};
+use alloc::vec::Vec;
 
 #[derive(Default)]
 pub(crate) struct DevSpec82571 {
@@ -104,5 +105,36 @@ impl DevSpec82571 {
         let bus_info = hw.kernel.pcie_info();
         hw.bus.width = unsafe { *(&bus_info.bus_link_width as *const u16 as *const BusWidth) };
         Ok(())
+    }
+
+    pub(crate) fn read_nvm<K: KernelFunc>(
+        &mut self,
+        hw: &mut Hw<K>,
+        offset: usize,
+        words: usize,
+    ) -> Result<Vec<u16>> {
+        if offset as u16 > hw.nvm.word_size
+            || (words as u16 > (hw.nvm.word_size - offset as u16))
+            || words == 0
+        {
+            return Err(Error::Nvm("nvm parameter(s) out of bounds"));
+        }
+        let mut data: Vec<u16> = Vec::try_with_capacity(words)?;
+
+        let mut eerd = 0u32;
+
+        for i in 0..words {
+            eerd = (((offset + i) as u32) << NVM_RW_ADDR_SHIFT) + NVM_RW_REG_START;
+
+            hw.ew32(EERD, eerd);
+
+            hw.poll_eerd_eewr_done(NVM_POLL_READ);
+
+            let d = hw.er32(EERD) >> NVM_RW_REG_DATA;
+
+            data.try_push(d as u16)?;
+        }
+
+        Ok(data)
     }
 }

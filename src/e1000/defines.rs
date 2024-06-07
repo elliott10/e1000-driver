@@ -72,6 +72,43 @@ pub(crate) const NVM_PBA_OFFSET_1: usize = 9;
 pub(crate) const NVM_PBA_PTR_GUARD: u16 = 0xFAFA;
 pub(crate) const NVM_WORD_SIZE_BASE_SHIFT: u16 = 6;
 
+
+pub(crate) const NVM_RW_REG_DATA: u32 = 16; // Offset to data in NVM r/w regs
+pub(crate) const NVM_RW_REG_DONE: u32 = 2; // Offset to READ/WRITE done bit
+pub(crate) const NVM_RW_REG_START: u32 = 1; // Start operation
+pub(crate) const NVM_RW_ADDR_SHIFT: u32 = 2; // Shift to the address bits
+pub(crate) const NVM_POLL_WRITE: u8 = 1; // Flag for polling write complete
+pub(crate) const NVM_POLL_READ: u8 = 0; // Flag for polling read complete
+pub(crate) const FLASH_UPDATES: usize = 2000; // Number of iterations for polling
+
+pub(crate) const NVM_COMPAT: u16 = 0x0003;
+pub(crate) const NVM_ID_LED_SETTINGS: u16 = 0x0004;
+pub(crate) const NVM_FUTURE_INIT_WORD1: u16 = 0x0019;
+pub(crate) const NVM_COMPAT_VALID_CSUM: u16 = 0x0001;
+pub(crate) const NVM_FUTURE_INIT_WORD1_VALID_CSUM: u16 = 0x0040;
+
+pub(crate) const NVM_INIT_CONTROL2_REG: u16 = 0x000F;
+pub(crate) const NVM_INIT_CONTROL3_PORT_B: u16 = 0x0014;
+pub(crate) const NVM_INIT_3GIO_3: u16 = 0x001A;
+pub(crate) const NVM_INIT_CONTROL3_PORT_A: u16 = 0x0024;
+pub(crate) const NVM_CFG: u16 = 0x0012;
+pub(crate) const NVM_ALT_MAC_ADDR_PTR: u16 = 0x0037;
+pub(crate) const NVM_CHECKSUM_REG: u16 = 0x003F;
+
+pub(crate) const NVM_CFG_DONE_PORT_0: u32 = 0x40000; // MNG config cycle done
+pub(crate) const NVM_CFG_DONE_PORT_1: u32 = 0x80000; // ...for second port
+
+// Mask bits for fields in Word 0x0f of the NVM
+pub(crate) const NVM_WORD0F_PAUSE_MASK: u16 = 0x3000;
+pub(crate) const NVM_WORD0F_PAUSE: u16 = 0x1000;
+pub(crate) const NVM_WORD0F_ASM_DIR: u16 = 0x2000;
+
+// Mask bits for fields in Word 0x1a of the NVM
+pub(crate) const NVM_WORD1A_ASPM_MASK: u16 = 0x000C;
+
+// Mask bits for fields in Word 0x03 of the EEPROM
+pub(crate) const NVM_COMPAT_LOM: u16 = 0x0800;
+
 pub(crate) const AUTO_ALL_MODES: u8 = 0;
 pub(crate) const EEPROM_APME: u32 = 0x0400;
 

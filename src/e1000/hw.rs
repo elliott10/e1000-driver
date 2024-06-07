@@ -1,5 +1,5 @@
 use b82571::DevSpec82571;
-use defines::AUTO_ALL_MODES;
+use defines::*;
 
 use super::ich8lan::DevSpecIch8lan;
 use super::regs::*;
@@ -372,6 +372,26 @@ where
     pub(crate) fn rah(&self, index: usize) -> usize {
         RA + index * 8 + 4
     }
+
+    pub(crate) fn poll_eerd_eewr_done(&self, ee_reg: u8) -> Result {
+        let mut reg;
+
+        for _ in 0..100000 {
+            if (ee_reg == NVM_POLL_READ) {
+                reg = self.er32(EERD);
+            } else {
+                reg = self.er32(EEWR);
+            }
+
+            if (reg & NVM_RW_REG_DONE > 0) {
+                return Ok(());
+            }
+
+            self.kernel.delay(5000);
+        }
+
+        Err(Error::Nvm("poll fail"))
+    }
 }
 
 #[derive(Clone)]
@@ -486,6 +506,19 @@ impl DevSpec {
             DevSpec::E82571(i) => i.get_bus_info(hw),
             DevSpec::E80003es2lan => Ok(()),
             DevSpec::Ich8lan(i) => Ok(()),
+        }
+    }
+
+    pub(crate) fn read_nvm<K: KernelFunc>(
+        &mut self,
+        hw: &mut Hw<K>,
+        offset: usize,
+        words: usize,
+    ) -> Result<Vec<u16>> {
+        match self {
+            DevSpec::E82571(i) => i.read_nvm(hw, offset, words),
+            DevSpec::E80003es2lan => todo!(),
+            DevSpec::Ich8lan(i) => todo!(),
         }
     }
 }

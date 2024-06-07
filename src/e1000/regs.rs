@@ -21,6 +21,10 @@ pub(crate) const IMC: usize = 0x000D8; // Interrupt Mask Clear - WO
 pub(crate) const IAM: usize = 0x000E0; // Interrupt Acknowledge Auto Mask
 pub(crate) const IVAR: usize = 0x000E4; // Interrupt Vector Allocation Register - RW
 
+
+pub(crate) const EEWR: usize =	0x0102C;	/* EEPROM Write Register - RW */
+
+
 pub(crate) const RA: usize = 0x5400;
 pub(crate) const SW_FW_SYNC: usize = 0x05B5C; /* SW-FW Synchronization - RW */
 pub(crate) const GCR: usize = 0x05B00; /* PCI-Ex Control */
