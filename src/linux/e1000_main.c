@@ -96,7 +96,32 @@ static void e1000_shutdown(struct pci_dev *pdev) {}
  * handler is registered with the OS, the watchdog timer is started,
  * and the stack is notified that the interface is ready.
  **/
-int e1000e_open(struct net_device *netdev) { return -1; }
+int e1000e_open(struct net_device *netdev) {
+
+  struct e1000_adapter *adapter = netdev_priv(netdev);
+  size_t e1000 = adapter->ptr;
+  struct pci_dev *pdev = adapter->pdev;
+
+  pm_runtime_get_sync(&pdev->dev);
+
+  netif_carrier_off(netdev);
+  netif_stop_queue(netdev);
+
+  pr_info("e1000e open");
+  size_t err = e1000r_open(e1000);
+  if (err != 0) {
+    goto err_req_irq;
+  }
+
+  napi_enable(&adapter->napi);
+  // e1000_irq_enable(adapter);
+
+  return 0;
+err_req_irq:
+
+  pm_runtime_put_sync(&pdev->dev);
+  return err;
+}
 /**
  * e1000e_close - Disables a network interface
  * @netdev: network interface device structure

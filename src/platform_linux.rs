@@ -178,6 +178,14 @@ extern "C" fn e1000r_get_info_all(ptr: usize) -> e1000r_info_all {
 }
 
 #[no_mangle]
+extern "C" fn e1000r_open(ptr: usize) -> i32 {
+    info!("open");
+
+    let dev = dev_mut(ptr);
+    rfn(|| dev.dev.open())
+}
+
+#[no_mangle]
 extern "C" fn e1000_print_device_info(ptr: usize) {
     let dev = dev_mut(ptr);
     let e1000 = &mut dev.dev;

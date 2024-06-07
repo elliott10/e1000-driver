@@ -452,7 +452,6 @@ where
             }
         }
 
-
         hw.status.tx_fifo_limit = min((hw.er32(PBA) << 10) - 96, 24 << 10);
 
         info!("fifo limit: {}", hw.status.tx_fifo_limit);
@@ -499,6 +498,13 @@ where
         //     hw.ew32(EITR(i), new_itr);
         // }
         // }
+    }
+    /// open 
+    pub fn open(&mut self) -> Result {
+
+
+
+        Ok(())
     }
 }
 
