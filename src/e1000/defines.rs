@@ -396,7 +396,7 @@ pub(crate) const VFTA_ENTRY_BIT_SHIFT_MASK: u16 = 0x1F;
 
 /* 802.1q VLAN Packet Size */
 pub(crate) const VLAN_FILTER_TBL_SIZE: usize = 128; // VLAN Filter Table (4096 bits)
-
+pub(crate) const RAH_AV: u32 = 0x80000000;
 
 use core::arch::asm;
 
@@ -426,4 +426,19 @@ pub(crate) fn fence_r() {
 
     #[cfg(not(target_arch = "riscv64"))]
     core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+}
+
+
+pub(crate) const FWSM_WLOCK_MAC_MASK: u32 = 0x0380;
+pub(crate) const FWSM_WLOCK_MAC_SHIFT: u32 = 7;
+pub(crate) const FWSM_ULP_CFG_DONE: u32 = 0x00000400;
+pub(crate) const EXFWSM_DPG_EXIT_DONE: u32 = 0x00000001;
+
+/* Shared Receive Address Registers */
+pub(crate) const fn SHRAL_PCH_LPT(i: usize) -> usize {
+    0x05408 + (i * 8)
+}
+
+pub(crate) fn SHRAH_PCH_LPT(i: usize) -> usize {
+    0x0540C + (i * 8)
 }

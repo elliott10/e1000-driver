@@ -521,6 +521,133 @@ where
 
         Err(Error::Nvm("Auto read by HW from NVM has not completed."))
     }
+
+    /**
+     *  e1000e_init_rx_addrs - Initialize receive address's
+     *  @hw: pointer to the HW structure
+     *  @rar_count: receive address registers
+     *
+     *  Setup the receive address registers by setting the base receive address
+     *  register to the devices MAC address and clearing all the other receive
+     *  address registers to 0.
+     **/
+    pub(crate) fn init_rx_addrs(&self, rar_count: u16) {
+        let mut mac = MacAddress(self.mac.addr);
+
+        /* Setup the receive address */
+        info!("Programming MAC Address into RAR[0]: {}", mac);
+
+        self.rar_set(mac, 0);
+
+        /* Zero out the other (rar_entry_count - 1) receive addresses */
+        info!("Clearing RAR[1-{}]\n", rar_count - 1);
+
+        mac = MacAddress([0; 6]);
+        for i in 1..rar_count {
+            self.rar_set(mac, i as usize);
+        }
+    }
+
+    pub(crate) fn rar_set(&self, mac: MacAddress, index: usize) {
+        if self.mac.kind >= MacType::e1000_pch_lpt {
+            self.rar_set_pch_lpt(mac, index);
+        } else {
+            self.rar_set_generic(mac, index);
+        }
+    }
+
+    /**
+     *  e1000e_rar_set_generic - Set receive address register
+     *  @hw: pointer to the HW structure
+     *  @addr: pointer to the receive address
+     *  @index: receive address array register
+     *
+     *  Sets the receive address array register at index to the address passed
+     *  in by addr.
+     **/
+    fn rar_set_generic(&self, addr: MacAddress, index: usize) {
+        let rar_low = u32::from_le_bytes([addr.0[0], addr.0[1], addr.0[2], addr.0[3]]);
+        let mut rar_high = u16::from_le_bytes([addr.0[4], addr.0[5]]) as u32;
+        /* HW expects these in little endian so we reverse the byte order
+         * from network order (big endian) to little endian
+         */
+
+        /* If MAC address zero, no need to set the AV bit */
+        if rar_low > 0 || rar_high > 0 {
+            rar_high |= RAH_AV;
+        }
+
+        /* Some bridges will combine consecutive 32-bit writes into
+         * a single burst write, which will malfunction on some parts.
+         * The flushes avoid this.
+         */
+        self.ew32(self.ral(index), rar_low);
+        self.e1e_flush();
+        self.ew32(self.rah(index), rar_high);
+        self.e1e_flush();
+    }
+
+    /**
+     *  e1000e_rar_set_generic - Set receive address register
+     *  @hw: pointer to the HW structure
+     *  @addr: pointer to the receive address
+     *  @index: receive address array register
+     *
+     *  Sets the receive address array register at index to the address passed
+     *  in by addr.
+     **/
+    fn rar_set_pch_lpt(&self, addr: MacAddress, index: usize) {
+        let rar_low = u32::from_le_bytes([addr.0[0], addr.0[1], addr.0[2], addr.0[3]]);
+        let mut rar_high = u16::from_le_bytes([addr.0[4], addr.0[5]]) as u32;
+        /* HW expects these in little endian so we reverse the byte order
+         * from network order (big endian) to little endian
+         */
+
+        /* If MAC address zero, no need to set the AV bit */
+
+        if rar_low > 0 || rar_high > 0 {
+            rar_high |= RAH_AV;
+        }
+
+        if index == 0 {
+            self.ew32(self.ral(index), rar_low);
+            self.e1e_flush();
+            self.ew32(self.rah(index), rar_high);
+            self.e1e_flush();
+            return;
+        }
+        if index < self.mac.rar_entry_count as usize {
+            let mut wlock_mac = self.er32(FWSM) & FWSM_WLOCK_MAC_MASK;
+            wlock_mac >>= FWSM_WLOCK_MAC_SHIFT;
+
+            // Check if all SHRAR registers are locked
+            if wlock_mac == 1 {
+                return; // Replace 'goto out' with a direct return or continue logic as per your function design
+            }
+
+            if wlock_mac == 0 || index <= wlock_mac as usize {
+                // let ret_val = e1000_acquire_swflag_ich8lan(hw);
+
+                // if ret_val != 0 {
+                //     return; // Same as above, replace 'goto out' with a return or continue logic
+                // }
+
+                self.ew32(SHRAL_PCH_LPT(index - 1), rar_low);
+                self.e1e_flush();
+                self.ew32(SHRAH_PCH_LPT(index - 1), rar_high);
+                self.e1e_flush();
+
+                // e1000_release_swflag_ich8lan(hw);
+
+                // Verify the register updates
+                if self.er32(SHRAL_PCH_LPT(index - 1)) == rar_low
+                    && self.er32(SHRAH_PCH_LPT(index - 1)) == rar_high
+                {
+                    return; // Success
+                }
+            }
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -656,6 +783,14 @@ impl DevSpec {
     pub(crate) fn reset_hw<K: KernelFunc>(&self, hw: &mut Hw<K>) -> Result {
         match self {
             DevSpec::E82571(i) => i.reset_hw(hw),
+            DevSpec::E80003es2lan => todo!(),
+            DevSpec::Ich8lan(i) => todo!(),
+        }
+    }
+
+    pub (crate)fn init_hw<K: KernelFunc>(&self, hw: &mut Hw<K>) -> Result {
+        match self {
+            DevSpec::E82571(i) => i.init_hw(hw),
             DevSpec::E80003es2lan => todo!(),
             DevSpec::Ich8lan(i) => todo!(),
         }

@@ -190,20 +190,7 @@ where
     }
 
     fn set_ra(&self, index: usize, mac: [u8; 6]) {
-        unsafe {
-            let mut ral = 0;
-            let mut rah = 0;
-
-            ral = (mac[0] as u32)
-                | ((mac[1] as u32) << 8)
-                | ((mac[2] as u32) << 16)
-                | ((mac[3] as u32) << 24);
-            rah = (mac[4] as u32) | ((mac[5] as u32) << 8);
-
-            let reg = self.hw.as_ref();
-            self.ew32(reg.ral(index), ral);
-            self.ew32(reg.rah(index), rah);
-        }
+        self.hw.as_ref().rar_set(MacAddress(mac), index);
     }
 
     pub fn print_info(&mut self) {
@@ -488,9 +475,10 @@ where
         }
 
         self.ew32(WUC, 0);
-        
 
+        self.dev_spec.init_hw(hw)?;
 
+    
         Ok(())
     }
     /**

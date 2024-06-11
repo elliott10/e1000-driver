@@ -231,6 +231,22 @@ impl DevSpec82571 {
         /* Disabling VLAN filtering */
         debug!("Initializing the IEEE VLAN");
         self.clear_vfta(hw);
+        let mut rar_count = hw.mac.rar_entry_count;
+
+        if self.get_laa_state(hw) {
+            rar_count -= 1;
+        }
+
+        hw.init_rx_addrs(rar_count);
+
+        /* Zero out the Multicast HASH table */
+        info!("Zeroing the MTA\n");
+        for i in 0..hw.mac.mta_reg_count {
+            hw.write_reg_array(MTA, i as usize, 0);
+        }
+
+        
+
 
         Ok(())
     }
@@ -360,5 +376,19 @@ impl DevSpec82571 {
             hw.write_reg_array(VFTA, offset, vfta_value);
             hw.e1e_flush();
         }
+    }
+
+    /**
+     *  e1000e_get_laa_state_82571 - Get locally administered address state
+     *  @hw: pointer to the HW structure
+     *
+     *  Retrieve and return the current locally administered address state.
+     **/
+    fn get_laa_state<K: KernelFunc>(&self, hw: &mut Hw<K>) -> bool {
+        if hw.mac.kind != MacType::e1000_82571 {
+            return false;
+        }
+
+        return self.laa_is_present;
     }
 }
