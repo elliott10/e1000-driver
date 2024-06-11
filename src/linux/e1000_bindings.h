@@ -134,6 +134,10 @@ typedef struct E1000rPcieInfo (*E1000CbPcieInfo)(const void *pdev);
 
 typedef bool (*E1000CbMtuBgEth)(const void *pdev);
 
+typedef size_t (*E1000CbDmaAllocCoherent)(const void *pdev, size_t pages, uint64_t *dma);
+
+typedef void (*E1000CbDmaFreeCoherent)(const void *pdev, size_t vaddr, uint64_t dma, size_t pages);
+
 typedef struct E1000Config {
   uint32_t device_id;
   E1000CbBarNremap cb_bar_n_remap;
@@ -141,6 +145,8 @@ typedef struct E1000Config {
   E1000CbUdelay cb_udelay;
   E1000CbPcieInfo cb_pcie_info;
   E1000CbMtuBgEth cb_mtu_bg_eth;
+  E1000CbDmaAllocCoherent cb_dma_alloc_coherent;
+  E1000CbDmaFreeCoherent cb_dma_free_coherent;
   const void *adapter;
 } E1000Config;
 

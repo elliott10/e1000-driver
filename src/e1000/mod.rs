@@ -25,10 +25,10 @@ pub trait KernelFunc: Send + Sync + Clone {
     /// Allocate 'contiguous physical memory' for DMA;
     /// Return (cpu virtual address, dma physical address) which is page aligned.
     //fn dma_alloc_coherent(pages: usize) -> usize;
-    fn dma_alloc_coherent(&self, pages: usize) -> (usize, usize);
+    fn dma_alloc_coherent(&self, pages: usize) -> (usize, u64);
 
     /// Deallocate DMA memory by virtual address
-    fn dma_free_coherent(&self, vaddr: usize, pages: usize);
+    fn dma_free_coherent(&self, vaddr: usize, dma: u64, pages: usize);
 
     /// BAR remap address
     fn bar_n_remap(&self, bar: usize) -> usize;

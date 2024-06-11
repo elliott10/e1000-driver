@@ -1,31 +1,101 @@
+use core::{
+    marker,
+    mem::size_of,
+    ptr::{self, null},
+    slice::from_raw_parts_mut,
+};
+
+use alloc::vec::Vec;
+
 use super::KernelFunc;
 
-pub(crate) struct Ring<K>
+const MBUF_SIZE: usize = 2048;
+pub(crate) const TXD_STAT_DD: u32 = 0x00000001; /* Descriptor Done */
+
+pub(crate) struct Ring<T, K>
 where
+    T: TransDesc,
     K: KernelFunc,
 {
     kernel: K,
+    size: usize,
+    dma: u64,
+    ring: *mut T,
+    mbufs: Vec<usize>,
+    _marker: marker::PhantomData<T>,
 }
 
-impl<K> Ring<K>
+impl<T, K> Ring<T, K>
 where
+    T: TransDesc,
     K: KernelFunc,
 {
-    pub(crate) fn new(kernel: K) -> Self {
-        Self { kernel }
+    pub(crate) fn new(kernel: K, size: usize) -> Self {
+        Self {
+            kernel,
+            size,
+            dma: 0,
+            ring: ptr::null_mut(),
+            mbufs: Vec::new(),
+            _marker: Default::default(),
+        }
+    }
+
+    fn ring_pages(&self) -> usize {
+        ((self.size * size_of::<T>()) + (K::PAGE_SIZE - 1)) / K::PAGE_SIZE
+    }
+
+    pub(crate) fn init(&mut self) {
+        let alloc_ring_pages = self.ring_pages();
+
+        let (vaddr, dma) = self.kernel.dma_alloc_coherent(alloc_ring_pages);
+
+        self.dma = dma;
+        let ring = unsafe { from_raw_parts_mut(vaddr as *mut T, self.size) };
+        ring.fill(T::default());
+        let mut mbufs = Vec::try_with_capacity(ring.len()).unwrap();
+        // 一起申请所有内存
+        let alloc_buffer_pages = ((self.size * MBUF_SIZE) + (K::PAGE_SIZE - 1)) / K::PAGE_SIZE;
+        let (mut mbufs_vaddr, mut mbufs_dma) = self.kernel.dma_alloc_coherent(alloc_buffer_pages);
+
+        for i in 0..self.size {
+            ring[i].set_status(TXD_STAT_DD as u8);
+            ring[i].set_addr(mbufs_dma);
+            mbufs.try_push(mbufs_vaddr).unwrap();
+            mbufs_dma += MBUF_SIZE as u64;
+            mbufs_vaddr += MBUF_SIZE;
+        }
+        self.mbufs = mbufs;
+        self.ring = unsafe { ring.as_mut_ptr() };
     }
 }
 
-impl<K> Drop for Ring<K>
+impl<T, K> Drop for Ring<T, K>
 where
+    T: TransDesc,
     K: KernelFunc,
 {
-    fn drop(&mut self) {}
+    fn drop(&mut self) {
+        if self.mbufs.is_empty() {
+            return;
+        }
+
+        if self.dma == 0 {
+            return;
+        }
+        self.kernel
+            .dma_free_coherent(self.ring as usize, self.dma, self.ring_pages());
+    }
+}
+
+pub trait TransDesc: Default + Clone {
+    fn set_status(&mut self, status: u8);
+    fn set_addr(&mut self, addr: u64);
 }
 
 /// [E1000 3.3.3]
 /// The dma descriptor for transmitting
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 #[repr(C, align(16))]
 pub struct TxDesc {
     pub addr: u64,
@@ -38,10 +108,19 @@ pub struct TxDesc {
     pub css: u8,
     pub special: u16,
 }
+impl TransDesc for TxDesc {
+    fn set_status(&mut self, status: u8) {
+        self.status = status;
+    }
+
+    fn set_addr(&mut self, addr: u64) {
+        self.addr = addr;
+    }
+}
 
 /// [E1000 3.2.3]
 /// The dma descriptor for receiving
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 #[repr(C, align(16))]
 pub struct RxDesc {
     pub addr: u64,   /* Address of the descriptor's data buffer */
@@ -50,4 +129,13 @@ pub struct RxDesc {
     pub status: u8,  /* Descriptor status */
     pub errors: u8,  /* Descriptor Errors */
     pub special: u16,
+}
+impl TransDesc for RxDesc {
+    fn set_status(&mut self, status: u8) {
+        self.status = status;
+    }
+
+    fn set_addr(&mut self, addr: u64) {
+        self.addr = addr;
+    }
 }

@@ -22,6 +22,8 @@ struct KFun {
     cb_udelay: E1000CbUdelay,
     cb_pcie_info: E1000CbPcieInfo,
     cb_mtu_bg_eth: E1000CbMtuBgEth,
+    cb_dma_alloc: E1000CbDmaAllocCoherent,
+    cb_dma_free: E1000CbDmaFreeCoherent,
     adapter: *const c_void,
 }
 
@@ -29,11 +31,15 @@ unsafe impl Sync for KFun {}
 unsafe impl Send for KFun {}
 
 impl KernelFunc for KFun {
-    fn dma_alloc_coherent(&self, pages: usize) -> (usize, usize) {
-        (0, 0)
+    fn dma_alloc_coherent(&self, pages: usize) -> (usize, u64) {
+        let mut dma = 0;
+        let addr = unsafe { (self.cb_dma_alloc)(self.adapter, pages, &mut dma) };
+        (addr, dma)
     }
 
-    fn dma_free_coherent(&self, vaddr: usize, pages: usize) {}
+    fn dma_free_coherent(&self, vaddr: usize, dma: u64, pages: usize) {
+        unsafe { (self.cb_dma_free)(self.adapter, vaddr, dma, pages) }
+    }
 
     fn bar_n_remap(&self, bar: usize) -> usize {
         unsafe { (self.cb_bar_n_remap)(self.adapter, bar) }
@@ -74,6 +80,12 @@ pub type E1000CbPcieInfo = unsafe extern "C" fn(pdev: *const c_void) -> E1000rPc
 
 pub type E1000CbMtuBgEth = unsafe extern "C" fn(pdev: *const c_void) -> bool;
 
+pub type E1000CbDmaAllocCoherent =
+    unsafe extern "C" fn(pdev: *const c_void, pages: usize, dma: &mut u64) -> usize;
+
+pub type E1000CbDmaFreeCoherent =
+    unsafe extern "C" fn(pdev: *const c_void, vaddr: usize, dma: u64, pages: usize);
+
 #[repr(C)]
 pub struct E1000Config {
     device_id: u32,
@@ -82,6 +94,8 @@ pub struct E1000Config {
     cb_udelay: E1000CbUdelay,
     cb_pcie_info: E1000CbPcieInfo,
     cb_mtu_bg_eth: E1000CbMtuBgEth,
+    cb_dma_alloc_coherent: E1000CbDmaAllocCoherent,
+    cb_dma_free_coherent: E1000CbDmaFreeCoherent,
     adapter: *const c_void,
 }
 
@@ -104,6 +118,8 @@ extern "C" fn e1000r_new(config: E1000Config) -> usize {
         cb_pcie_info: config.cb_pcie_info,
         adapter: config.adapter,
         cb_mtu_bg_eth: config.cb_mtu_bg_eth,
+        cb_dma_alloc: config.cb_dma_alloc_coherent,
+        cb_dma_free: config.cb_dma_free_coherent,
     };
 
     let e1000 = match E1000::new(kfun, config.device_id) {

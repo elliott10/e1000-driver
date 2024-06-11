@@ -1,6 +1,7 @@
 #include "e1000.h"
 #include "linux/cleanup.h"
 #include "linux/etherdevice.h"
+#include "linux/gfp_types.h"
 #include "linux/mroute.h"
 #include "linux/printk.h"
 #include "linux/refcount.h"
@@ -110,8 +111,11 @@ int e1000e_open(struct net_device *netdev) {
   pr_info("e1000e open");
   size_t err = e1000r_open(e1000);
   if (err != 0) {
+    pr_info("e1000e open fail: %d", err);
     goto err_req_irq;
   }
+
+  pr_info("e1000e open ok");
 
   napi_enable(&adapter->napi);
   // e1000_irq_enable(adapter);
@@ -411,6 +415,21 @@ bool cb_mtu_bg_eth(const void *data) {
   return adapter->netdev->mtu > ETH_DATA_LEN;
 }
 
+size_t cb_dma_alloc(const void *data, size_t pages, u64 *dma) {
+  struct e1000_adapter *adapter = (struct e1000_adapter *)data;
+  struct pci_dev *pdev = adapter->pdev;
+
+  return (size_t)dma_alloc_coherent(&pdev->dev, pages * 4096, dma, GFP_KERNEL);
+}
+
+void cb_dma_free(const void *data, size_t cpu_addr, u64 dma, size_t pages) {
+  struct e1000_adapter *adapter = (struct e1000_adapter *)data;
+  struct pci_dev *pdev = adapter->pdev;
+
+  dma_free_coherent(&pdev->dev, pages * 4096, (void *)cpu_addr, dma);
+  return;
+}
+
 size_t e1000e_get_e1000(struct net_device *netdev) {
   struct e1000_adapter *adapter = netdev_priv(netdev);
   return adapter->ptr;
@@ -502,6 +521,8 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent) {
   config.cb_bar_n_remap = cb_bar_n_remap;
   config.cb_pcie_info = cb_pcie_info;
   config.cb_mtu_bg_eth = cb_mtu_bg_eth;
+  config.cb_dma_alloc_coherent = cb_dma_alloc;
+  config.cb_dma_free_coherent = cb_dma_free;
 
   size_t e1000 = e1000r_new(config);
   if (!e1000)

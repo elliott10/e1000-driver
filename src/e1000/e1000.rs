@@ -13,13 +13,16 @@ use core::ptr::NonNull;
 use e1000::board;
 use ffi::CStr;
 
+const TX_RING_SIZE: usize = 256;
+const RX_RING_SIZE: usize = 256;
+
 pub struct E1000<K>
 where
     K: KernelFunc,
 {
     pub(crate) eiac_mask: u32,
-    pub(crate) tx_ring: Ring<K>,
-    pub(crate) rx_ring: Ring<K>,
+    pub(crate) tx_ring: Ring<TxDesc, K>,
+    pub(crate) rx_ring: Ring<RxDesc, K>,
     pub(crate) hw: HwRc<K>,
     pub(crate) dev_spec: DevSpec,
 }
@@ -45,8 +48,8 @@ where
             mmio, device_id, board_type, board_info.variant
         );
 
-        let tx_ring = Ring::new(kfun.clone());
-        let rx_ring = Ring::new(kfun.clone());
+        let tx_ring = Ring::new(kfun.clone(), TX_RING_SIZE);
+        let rx_ring = Ring::new(kfun.clone(), RX_RING_SIZE);
 
         let dev_spec = match board_info.variant {
             BoardVariant::B82571 => DevSpec::E82571(Default::default()),
@@ -491,17 +494,14 @@ where
     fn e1000e_write_itr(&mut self, itr: u32) {
         let hw = self.hw.as_mut();
         let new_itr = if itr > 0 { 1000000000 / (itr * 256) } else { 0 };
-        // if hw.msix_entryies.is_empty() {
         hw.ew32(ITR, new_itr);
-        // }else{
-        // for i in 0..hw.msix_entryies.len() {
-        //     hw.ew32(EITR(i), new_itr);
-        // }
-        // }
     }
-    /// open 
+    /// open
     pub fn open(&mut self) -> Result {
-
+        info!("e1000 begin open");
+        self.tx_ring.init();
+        self.rx_ring.init();
+        info!("ring ok");
 
 
         Ok(())
