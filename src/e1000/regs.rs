@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 pub(crate) const CTRL: usize = 0x00000; // Device Control - RW
 pub(crate) const STATUS: usize = 0x00008; // Device Status - RO
 pub(crate) const EECD: usize = 0x00010; // EEPROM/Flash Control - RW
@@ -66,3 +68,9 @@ pub(crate) const FEXTNVM8: u32 = 0x5BB0;     // Future Extended NVM 8 - RW
 pub(crate) const FEXTNVM9: u32 = 0x5BB4;     // Future Extended NVM 9 - RW
 pub(crate) const FEXTNVM11: usize = 0x5BBC;    // Future Extended NVM 11 - RW
 pub(crate) const FEXTNVM12: usize = 0x5BC0;    // Future Extended NVM 12 - RW
+
+pub(crate) const PBA_ECC: usize = 0x01100;
+
+pub(crate) fn TARC(n: usize) -> usize {
+    0x03840 + (n * 0x100)
+}

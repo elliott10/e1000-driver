@@ -38,10 +38,21 @@ where
     pub(crate) flags2: Flags2,
     pub(crate) variant: BoardVariant,
     pub(crate) status: E1000Status,
-    // pub(crate) num_vectors: u32,
-    // pub(crate) msix_entryies: Vec<MsixEntry>,
+    pub(crate) mng_cookie: HostMngDhcpCookie,
 }
 
+#[derive(Default, Clone)]
+#[repr(C)]
+pub(crate) struct HostMngDhcpCookie {
+    pub(crate) signature: u32,
+    pub(crate) status: u8,
+    pub(crate) reserved0: u8,
+    pub(crate) vlan_id: u16,
+    pub(crate) reserved1: u32,
+    pub(crate) reserved2: u16,
+    pub(crate) reserved3: u8,
+    pub(crate) checksum: u8,
+}
 #[allow(non_camel_case_types)]
 #[repr(C)]
 #[derive(Debug, Clone, PartialOrd, PartialEq)]
@@ -409,6 +420,11 @@ where
         RA + index * 8 + 4
     }
 
+    pub(crate) fn write_reg_array(&self, reg: usize, offset: usize, value: u32) {
+        let address = reg + (offset << 2);
+        self.ew32(address, value);
+    }
+
     pub(crate) fn poll_eerd_eewr_done(&self, ee_reg: u8) -> Result {
         let mut reg;
 
@@ -532,6 +548,7 @@ where
             hw.mac = Default::default();
             hw.nvm = Default::default();
             hw.fc = Default::default();
+            hw.mng_cookie = Default::default();
             hw.mac.kind = board.mac;
             hw.flags = board.flags;
             hw.flags2 = board.flags2;

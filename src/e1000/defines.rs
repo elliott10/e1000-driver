@@ -145,7 +145,6 @@ pub(crate) const FCRTH_RTH: u32 = 0x0000FFF8; // Mask Bits[15:3] for RTH
 pub(crate) const FCRTL_RTL: u32 = 0x0000FFF8; // Mask Bits[15:3] for RTL
 pub(crate) const FCRTL_XONE: u32 = 0x80000000; // Enable XON frame transmission
 
-
 pub(crate) const FEXTNVM7_DISABLE_PB_READ: u32 = 0x00040000; // Bit for disabling packet buffer read
 pub(crate) const FEXTNVM7_SIDE_CLK_UNGATE: u32 = 0x00000004;
 pub(crate) const FEXTNVM7_DISABLE_SMB_PERST: u32 = 0x00000020;
@@ -153,7 +152,6 @@ pub(crate) const FEXTNVM9_IOSFSB_CLKGATE_DIS: u32 = 0x00000800;
 pub(crate) const FEXTNVM9_IOSFSB_CLKREQ_DIS: u32 = 0x00001000;
 pub(crate) const FEXTNVM11_DISABLE_PB_READ: u32 = 0x00000200; // Disable packet buffer read
 pub(crate) const FEXTNVM11_DISABLE_MULR_FIX: u32 = 0x00002000;
-
 
 pub(crate) const RXDCTL_THRESH_UNIT_DESC: u32 = 0x01000000;
 
@@ -180,6 +178,15 @@ pub(crate) fn TDT(n: usize) -> usize {
         0x0E018 + (n * 0x40)
     }
 }
+
+pub(crate) fn TXDCTL(n: usize) -> usize {
+    if n < 4 {
+        0x03828 + (n * 0x100)
+    } else {
+        0x0E028 + (n * 0x40)
+    }
+}
+
 /* Receive Descriptor Base Address Low, High, Length, Head, Tail, and Control */
 pub fn RDBAL(n: usize) -> usize {
     if n < 4 {
@@ -229,112 +236,114 @@ pub fn RXDCTL(n: usize) -> usize {
     }
 }
 
+pub fn BIT(n: usize) -> u32 {
+    (1 << n) as u32
+}
+
 pub(crate) const PCICFG_DESC_RING_STATUS: i32 = 0xE4;
 pub(crate) const FLUSH_DESC_REQUIRED: u16 = 0x100;
 
-
 pub(crate) const TXD_DTYP_D: u32 = 0x00100000; /* Data Descriptor */
-pub(crate) const TXD_POPTS_IXSM: u32 = 0x01;      /* Insert IP checksum */
-pub(crate) const TXD_POPTS_TXSM: u32 = 0x02;      /* Insert TCP/UDP checksum */
-pub(crate) const TXD_CMD_EOP: u32 = 0x01000000;  /* End of Packet */
-pub(crate) const TXD_CMD_IFCS: u32 = 0x02000000;  /* Insert FCS (Ethernet CRC) */
-pub(crate) const TXD_CMD_IC: u32 = 0x04000000;    /* Insert Checksum */
-pub(crate) const TXD_CMD_RS: u32 = 0x08000000;    /* Report Status */
-pub(crate) const TXD_CMD_RPS: u32 = 0x10000000;  /* Report Packet Sent */
+pub(crate) const TXD_POPTS_IXSM: u32 = 0x01; /* Insert IP checksum */
+pub(crate) const TXD_POPTS_TXSM: u32 = 0x02; /* Insert TCP/UDP checksum */
+pub(crate) const TXD_CMD_EOP: u32 = 0x01000000; /* End of Packet */
+pub(crate) const TXD_CMD_IFCS: u32 = 0x02000000; /* Insert FCS (Ethernet CRC) */
+pub(crate) const TXD_CMD_IC: u32 = 0x04000000; /* Insert Checksum */
+pub(crate) const TXD_CMD_RS: u32 = 0x08000000; /* Report Status */
+pub(crate) const TXD_CMD_RPS: u32 = 0x10000000; /* Report Packet Sent */
 pub(crate) const TXD_CMD_DEXT: u32 = 0x20000000; /* Descriptor extension */
-pub(crate) const TXD_CMD_VLE: u32 = 0x40000000;  /* Add VLAN tag */
-pub(crate) const TXD_CMD_IDE: u32 = 0x80000000;  /* Enable Tidv register */
-pub(crate) const TXD_STAT_DD: u32 = 0x00000001;  /* Descriptor Done */
-pub(crate) const TXD_STAT_EC: u32 = 0x00000002;  /* Excess Collisions */
-pub(crate) const TXD_STAT_LC: u32 = 0x00000004;  /* Late Collisions */
-pub(crate) const TXD_STAT_TU: u32 = 0x00000008;  /* Transmit underrun */
+pub(crate) const TXD_CMD_VLE: u32 = 0x40000000; /* Add VLAN tag */
+pub(crate) const TXD_CMD_IDE: u32 = 0x80000000; /* Enable Tidv register */
+pub(crate) const TXD_STAT_DD: u32 = 0x00000001; /* Descriptor Done */
+pub(crate) const TXD_STAT_EC: u32 = 0x00000002; /* Excess Collisions */
+pub(crate) const TXD_STAT_LC: u32 = 0x00000004; /* Late Collisions */
+pub(crate) const TXD_STAT_TU: u32 = 0x00000008; /* Transmit underrun */
 // 注意重复的定义，根据实际用途可能需要调整或去除重复项
 // TXD_CMD_TCP, TXD_CMD_IP, TXD_CMD_TSE 与之前的 E1000_TXD_CMD_EOP, E1000_TXD_CMD_IFCS, E1000_TXD_CMD_IC 重复
 // TXD_STAT_TC 与 TXD_STAT_LC 重复定义
 pub(crate) const TXD_EXTCMD_TSTAMP: u32 = 0x00000010; /* IEEE1588 Timestamp packet */
 
+pub(crate) const TCTL_RST: u32 = 0x00000001; // Software reset
+pub(crate) const TCTL_EN: u32 = 0x00000002; // Enable TX
+pub(crate) const TCTL_BCE: u32 = 0x00000004; // Busy check enable
+pub(crate) const TCTL_PSP: u32 = 0x00000008; // Pad short packets
+pub(crate) const TCTL_CT_SHIFT: u32 = 4; // Collision threshold shift
+pub(crate) const TCTL_COLD_SHIFT: u32 = 12; // Collision distance shift
+pub(crate) const TCTL_SWXOFF: u32 = 0x00400000; // SW Xoff transmission
+pub(crate) const TCTL_PBE: u32 = 0x00800000; // Packet Burst Enable
+pub(crate) const TCTL_RTLC: u32 = 0x01000000; // Re-transmit on late collision
+pub(crate) const TCTL_NRTU: u32 = 0x02000000; // No re-transmit on underrun
+pub(crate) const TCTL_MULR: u32 = 0x10000000; // Multiple request support
 
-pub(crate) const TCTL_RST: u32 = 0x00000001;    // Software reset
-pub(crate) const TCTL_EN: u32 = 0x00000002;      // Enable TX
-pub(crate) const TCTL_BCE: u32 = 0x00000004;     // Busy check enable
-pub(crate) const TCTL_PSP: u32 = 0x00000008;     // Pad short packets
-pub(crate) const TCTL_CT_SHIFT: u32 = 4;         // Collision threshold shift
-pub(crate) const TCTL_COLD_SHIFT: u32 = 12;      // Collision distance shift
-pub(crate) const TCTL_SWXOFF: u32 = 0x00400000;  // SW Xoff transmission
-pub(crate) const TCTL_PBE: u32 = 0x00800000;     // Packet Burst Enable
-pub(crate) const TCTL_RTLC: u32 = 0x01000000;    // Re-transmit on late collision
-pub(crate) const TCTL_NRTU: u32 = 0x02000000;    // No re-transmit on underrun
-pub(crate) const TCTL_MULR: u32 = 0x10000000;    // Multiple request support
-
-pub(crate) const RCTL: usize = 0x00100;         // RX Control - RW
-pub(crate) const RDTR1: usize = 0x02820;        // RX Delay Timer (1) - RW
-pub(crate) const RDBAL1: usize = 0x02900;       // RX Descriptor Base Address Low (1) - RW
-pub(crate) const RDBAH1: usize = 0x02904;       // RX Descriptor Base Address High (1) - RW
-pub(crate) const RDLEN1: usize = 0x02908;       // RX Descriptor Length (1) - RW
-pub(crate) const RDH1: usize = 0x02910;         // RX Descriptor Head (1) - RW
-pub(crate) const RDT1: usize = 0x02918;         // RX Descriptor Tail (1) - RW
-pub(crate) const FCTTV: usize = 0x00170;         // Flow Control Transmit Timer Value - RW
-pub(crate) const TXCW: usize = 0x00178;          // TX Configuration Word - RW
-pub(crate) const RXCW: usize = 0x00180;          // RX Configuration Word - RO
-pub(crate) const TCTL: usize = 0x00400;          // TX Control - RW
-pub(crate) const TCTL_EXT: usize = 0x00404;      // Extended TX Control - RW
-pub(crate) const TIPG: usize = 0x00410;          // TX Inter-packet gap - RW
-pub(crate) const TBT: usize = 0x00448;           // TX Burst Timer - RW
-pub(crate) const AIT: usize = 0x00458;           // Adaptive Interframe Spacing Throttle - RW
+pub(crate) const RCTL: usize = 0x00100; // RX Control - RW
+pub(crate) const RDTR1: usize = 0x02820; // RX Delay Timer (1) - RW
+pub(crate) const RDBAL1: usize = 0x02900; // RX Descriptor Base Address Low (1) - RW
+pub(crate) const RDBAH1: usize = 0x02904; // RX Descriptor Base Address High (1) - RW
+pub(crate) const RDLEN1: usize = 0x02908; // RX Descriptor Length (1) - RW
+pub(crate) const RDH1: usize = 0x02910; // RX Descriptor Head (1) - RW
+pub(crate) const RDT1: usize = 0x02918; // RX Descriptor Tail (1) - RW
+pub(crate) const FCTTV: usize = 0x00170; // Flow Control Transmit Timer Value - RW
+pub(crate) const TXCW: usize = 0x00178; // TX Configuration Word - RW
+pub(crate) const RXCW: usize = 0x00180; // RX Configuration Word - RO
+pub(crate) const TCTL: usize = 0x00400; // TX Control - RW
+pub(crate) const TCTL_EXT: usize = 0x00404; // Extended TX Control - RW
+pub(crate) const TIPG: usize = 0x00410; // TX Inter-packet gap - RW
+pub(crate) const TBT: usize = 0x00448; // TX Burst Timer - RW
+pub(crate) const AIT: usize = 0x00458; // Adaptive Interframe Spacing Throttle - RW
 
 /* Receive Control Flags */
-pub(crate) const RCTL_EN: u32 = 0x00000002;    // enable
-pub(crate) const RCTL_SBP: u32 = 0x00000004;    // store bad packet
-pub(crate) const RCTL_UPE: u32 = 0x00000008;    // unicast promiscuous enable
-pub(crate) const RCTL_MPE: u32 = 0x00000010;    // multicast promiscuous enable
-pub(crate) const RCTL_LPE: u32 = 0x00000020;    // long packet enable
+pub(crate) const RCTL_EN: u32 = 0x00000002; // enable
+pub(crate) const RCTL_SBP: u32 = 0x00000004; // store bad packet
+pub(crate) const RCTL_UPE: u32 = 0x00000008; // unicast promiscuous enable
+pub(crate) const RCTL_MPE: u32 = 0x00000010; // multicast promiscuous enable
+pub(crate) const RCTL_LPE: u32 = 0x00000020; // long packet enable
 pub(crate) const RCTL_LBM_NO: u32 = 0x00000000; // no loopback mode
 pub(crate) const RCTL_LBM_MAC: u32 = 0x00000040; // MAC loopback mode
 pub(crate) const RCTL_LBM_TCVR: u32 = 0x000000C0; // tcvr loopback mode
 pub(crate) const RCTL_DTYP_PS: u32 = 0x00000400; // Packet Split descriptor
 pub(crate) const RCTL_RDMTS_HALF: u32 = 0x00000000; // Rx desc min threshold size
 pub(crate) const RCTL_RDMTS_HEX: u32 = 0x00010000;
-pub(crate) const RCTL_MO_SHIFT: u32 = 12;            // multicast offset shift
-pub(crate) const RCTL_MO_3: u32 = 0x00003000;    // multicast offset 15:4
-pub(crate) const RCTL_BAM: u32 = 0x00008000;    // broadcast enable
+pub(crate) const RCTL_MO_SHIFT: u32 = 12; // multicast offset shift
+pub(crate) const RCTL_MO_3: u32 = 0x00003000; // multicast offset 15:4
+pub(crate) const RCTL_BAM: u32 = 0x00008000; // broadcast enable
 
 pub(crate) const MASTER_DISABLE_TIMEOUT: usize = 800; // Number of 100 microseconds we wait for PCI Express master disable
-pub(crate) const PHY_CFG_TIMEOUT: usize = 100;      // Number of milliseconds we wait for PHY configuration done after MAC reset
+pub(crate) const PHY_CFG_TIMEOUT: usize = 100; // Number of milliseconds we wait for PHY configuration done after MAC reset
 
 /* Device Control Flags */
-pub(crate) const CTRL_FD: u32 = 0x00000001;       // Full duplex. 0=half; 1=full
+pub(crate) const CTRL_FD: u32 = 0x00000001; // Full duplex. 0=half; 1=full
 pub(crate) const CTRL_GIO_MASTER_DISABLE: u32 = 0x00000004; // Blocks new Master requests
-pub(crate) const CTRL_LRST: u32 = 0x00000008;      // Link reset. 0=normal,1=reset
-pub(crate) const CTRL_ASDE: u32 = 0x00000020;       // Auto-speed detect enable
-pub(crate) const CTRL_SLU: u32 = 0x00000040;       // Set link up (Force Link)
-pub(crate) const CTRL_ILOS: u32 = 0x00000080;       // Invert Loss-Of Signal
-pub(crate) const CTRL_SPD_SEL: u32 = 0x00000300;    // Speed Select Mask
-pub(crate) const CTRL_SPD_10: u32 = 0x00000000;    // Force 10Mb
-pub(crate) const CTRL_SPD_100: u32 = 0x00000100;    // Force 100Mb
-pub(crate) const CTRL_SPD_1000: u32 = 0x00000200;   // Force 1Gb
-pub(crate) const CTRL_FRCSPD: u32 = 0x00000800;     // Force Speed
-pub(crate) const CTRL_FRCDPX: u32 = 0x00001000;    // Force Duplex
+pub(crate) const CTRL_LRST: u32 = 0x00000008; // Link reset. 0=normal,1=reset
+pub(crate) const CTRL_ASDE: u32 = 0x00000020; // Auto-speed detect enable
+pub(crate) const CTRL_SLU: u32 = 0x00000040; // Set link up (Force Link)
+pub(crate) const CTRL_ILOS: u32 = 0x00000080; // Invert Loss-Of Signal
+pub(crate) const CTRL_SPD_SEL: u32 = 0x00000300; // Speed Select Mask
+pub(crate) const CTRL_SPD_10: u32 = 0x00000000; // Force 10Mb
+pub(crate) const CTRL_SPD_100: u32 = 0x00000100; // Force 100Mb
+pub(crate) const CTRL_SPD_1000: u32 = 0x00000200; // Force 1Gb
+pub(crate) const CTRL_FRCSPD: u32 = 0x00000800; // Force Speed
+pub(crate) const CTRL_FRCDPX: u32 = 0x00001000; // Force Duplex
 pub(crate) const CTRL_LANPHYPC_OVERRIDE: u32 = 0x00010000; // SW control of LANPHYPC
 pub(crate) const CTRL_LANPHYPC_VALUE: u32 = 0x00020000; // SW value of LANPHYPC
-pub(crate) const CTRL_MEHE: u32 = 0x00080000;       // Memory Error Handling Enable
-pub(crate) const CTRL_SWDPIN0: u32 = 0x00040000;   // SWDPIN 0 value
-pub(crate) const CTRL_SWDPIN1: u32 = 0x00080000;   // SWDPIN 1 value
-pub(crate) const CTRL_ADVD3WUC: u32 = 0x00100000;  // D3 WUC
+pub(crate) const CTRL_MEHE: u32 = 0x00080000; // Memory Error Handling Enable
+pub(crate) const CTRL_SWDPIN0: u32 = 0x00040000; // SWDPIN 0 value
+pub(crate) const CTRL_SWDPIN1: u32 = 0x00080000; // SWDPIN 1 value
+pub(crate) const CTRL_ADVD3WUC: u32 = 0x00100000; // D3 WUC
 pub(crate) const CTRL_EN_PHY_PWR_MGMT: u32 = 0x00200000; // PHY PM enable
-pub(crate) const CTRL_SWDPIO0: u32 = 0x00400000;   // SWDPIN 0 Input or output
-pub(crate) const CTRL_RST: u32 = 0x04000000;       // Global reset
-pub(crate) const CTRL_RFCE: u32 = 0x08000000;      // Receive Flow Control enable
-pub(crate) const CTRL_TFCE: u32 = 0x10000000;      // Transmit flow control enable
-pub(crate) const CTRL_VME: u32 = 0x40000000;       // IEEE VLAN mode enable
-pub(crate) const CTRL_PHY_RST: u32 = 0x80000000;   // PHY Reset
+pub(crate) const CTRL_SWDPIO0: u32 = 0x00400000; // SWDPIN 0 Input or output
+pub(crate) const CTRL_RST: u32 = 0x04000000; // Global reset
+pub(crate) const CTRL_RFCE: u32 = 0x08000000; // Receive Flow Control enable
+pub(crate) const CTRL_TFCE: u32 = 0x10000000; // Transmit flow control enable
+pub(crate) const CTRL_VME: u32 = 0x40000000; // IEEE VLAN mode enable
+pub(crate) const CTRL_PHY_RST: u32 = 0x80000000; // PHY Reset
 
 /* Extended Device Control Flags */
-pub(crate) const CTRL_EXT_LPCD: u32 = 0x00000004;     // LCD Power Cycle Done
+pub(crate) const CTRL_EXT_LPCD: u32 = 0x00000004; // LCD Power Cycle Done
 pub(crate) const CTRL_EXT_SDP3_DATA: u32 = 0x00000080; // Value of SW Definable Pin 3
 pub(crate) const CTRL_EXT_FORCE_SMBUS: u32 = 0x00000800; // Force SMBus mode
-pub(crate) const CTRL_EXT_EE_RST: u32 = 0x00002000;    // Reinitialize from EEPROM
-pub(crate) const CTRL_EXT_SPD_BYPS: u32 = 0x00008000;  // Speed Select Bypass
-pub(crate) const CTRL_EXT_RO_DIS: u32 = 0x00020000;    // Relaxed Ordering disable
+pub(crate) const CTRL_EXT_EE_RST: u32 = 0x00002000; // Reinitialize from EEPROM
+pub(crate) const CTRL_EXT_SPD_BYPS: u32 = 0x00008000; // Speed Select Bypass
+pub(crate) const CTRL_EXT_RO_DIS: u32 = 0x00020000; // Relaxed Ordering disable
 pub(crate) const CTRL_EXT_DMA_DYN_CLK_EN: u32 = 0x00080000; // DMA Dynamic Clock Gating
 pub(crate) const CTRL_EXT_LINK_MODE_MASK: u32 = 0x00C00000;
 pub(crate) const CTRL_EXT_LINK_MODE_PCIE_SERDES: u32 = 0x00C00000;
@@ -344,8 +353,7 @@ pub(crate) const CTRL_EXT_IAME: u32 = 0x08000000; // Int ACK Auto-mask
 pub(crate) const CTRL_EXT_PBA_CLR: u32 = 0x80000000; // PBA Clear
 pub(crate) const CTRL_EXT_LSECCK: u32 = 0x00001000;
 pub(crate) const CTRL_EXT_PHYPDEN: u32 = 0x00100000;
-pub(crate)  const AUTO_READ_DONE_TIMEOUT: usize = 10; // Timeout value in milliseconds, now set to 10
-
+pub(crate) const AUTO_READ_DONE_TIMEOUT: usize = 10; // Timeout value in milliseconds, now set to 10
 
 /* NVM Control Flags */
 pub(crate) const EECD_SK: u32 = 0x00000001; /* NVM Clock */
@@ -356,6 +364,39 @@ pub(crate) const EECD_REQ: u32 = 0x00000040; /* NVM Access Request */
 pub(crate) const EECD_GNT: u32 = 0x00000080; /* NVM Access Grant */
 pub(crate) const EECD_PRES: u32 = 0x00000100; /* NVM Present */
 pub(crate) const EECD_SIZE: u32 = 0x00000200; /* NVM Size (0=64 word 1=256 word) */
+
+
+
+pub(crate) const PBA_ECC_COUNTER_MASK: u32 = 0xFFF00000;
+pub(crate) const PBA_ECC_COUNTER_SHIFT: u32 = 20;
+pub(crate) const PBA_ECC_CORR_EN: u32 = 0x00000001;
+pub(crate) const PBA_ECC_STAT_CLR: u32 = 0x00000002;
+pub(crate) const PBA_ECC_INT_EN: u32 = 0x00000004;
+
+
+/* Header split receive */
+pub(crate) const RFCTL_NFSW_DIS: u32 = 0x00000040;
+pub(crate) const RFCTL_NFSR_DIS: u32 = 0x00000080;
+pub(crate) const RFCTL_ACK_DIS: u32 = 0x00001000;
+pub(crate) const RFCTL_EXTEN: u32 = 0x00008000;
+pub(crate) const RFCTL_IPV6_EX_DIS: u32 = 0x00010000;
+pub(crate) const RFCTL_NEW_IPV6_EXT_DIS: u32 = 0x00020000;
+
+pub(crate) const MNG_IAMT_MODE: u32 = 0x3;
+pub(crate) const MNG_DHCP_COOKIE_LENGTH: usize = 0x10;
+pub(crate) const MNG_DHCP_COOKIE_OFFSET: usize = 0x6F0;
+pub(crate) const MNG_DHCP_COMMAND_TIMEOUT: u32 = 10;
+pub(crate) const MNG_DHCP_TX_PAYLOAD_CMD: usize = 64;
+pub(crate) const MNG_DHCP_COOKIE_STATUS_PARSING: u8 = 0x1;
+pub(crate) const MNG_DHCP_COOKIE_STATUS_VLAN: u8 = 0x2;
+
+pub(crate) const VFTA_ENTRY_SHIFT: u16 = 5;
+pub(crate) const VFTA_ENTRY_MASK: u16 = 0x7F;
+pub(crate) const VFTA_ENTRY_BIT_SHIFT_MASK: u16 = 0x1F;
+
+/* 802.1q VLAN Packet Size */
+pub(crate) const VLAN_FILTER_TBL_SIZE: usize = 128; // VLAN Filter Table (4096 bits)
+
 
 use core::arch::asm;
 

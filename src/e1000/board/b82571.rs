@@ -149,7 +149,7 @@ impl DevSpec82571 {
         let mut tctl = hw.er32(TCTL);
 
         tctl &= !TCTL_EN;
-        
+
         hw.ew32(TCTL, tctl);
 
         hw.e1e_flush();
@@ -186,7 +186,7 @@ impl DevSpec82571 {
 
         hw.get_auto_rd_done()?;
 
-        // Assuming ew32 and er32 are functions defined elsewhere to write and read from the given register addresses respectively.
+        // Assuming ew32 andhw.er32 are functions defined elsewhere to write and read from the given register addresses respectively.
 
         match hw.mac.kind {
             MacType::e1000_82571 | MacType::e1000_82572 => {
@@ -223,4 +223,142 @@ impl DevSpec82571 {
 
     fn put_hw_semaphore_82573<K: KernelFunc>(&self, hw: &mut Hw<K>) {}
     fn put_hw_semaphore_82574<K: KernelFunc>(&self, hw: &mut Hw<K>) {}
+
+    pub(crate) fn init_hw<K: KernelFunc>(&self, hw: &mut Hw<K>) -> Result {
+        self.init_hw_bits(hw);
+        //TODO init led
+
+        /* Disabling VLAN filtering */
+        debug!("Initializing the IEEE VLAN");
+        self.clear_vfta(hw);
+
+        Ok(())
+    }
+
+    fn init_hw_bits<K: KernelFunc>(&self, hw: &mut Hw<K>) {
+        let mut reg = hw.er32(TXDCTL(0));
+        reg |= (1 << 22);
+
+        hw.ew32(TXDCTL(0), reg);
+
+        /* Transmit Descriptor Control 1 */
+        reg = hw.er32(TXDCTL(1));
+        reg |= (1 << 22);
+        hw.ew32(TXDCTL(1), reg);
+
+        /* Transmit Arbitration Control 0 */
+        reg = hw.er32(TARC(0));
+        reg &= !(0xF << 27); /* 30:27 */
+
+        match hw.mac.kind {
+            MacType::e1000_82571 | MacType::e1000_82572 => {
+                reg |= BIT(23) | BIT(24) | BIT(25) | BIT(26);
+            }
+            MacType::e1000_82574 | MacType::e1000_82583 => {
+                reg |= BIT(26);
+            }
+            _ => (),
+        }
+
+        hw.ew32(TARC(0), reg);
+        /* Transmit Arbitration Control 1 */
+        reg = hw.er32(TARC(1));
+        match hw.mac.kind {
+            MacType::e1000_82571 | MacType::e1000_82572 => {
+                reg &= !(BIT(29) | BIT(30));
+                reg |= BIT(22) | BIT(24) | BIT(25) | BIT(26);
+                if (hw.er32(TCTL) & TCTL_MULR) > 0 {
+                    reg &= !BIT(28);
+                } else {
+                    reg |= BIT(28);
+                }
+                hw.ew32(TARC(1), reg);
+            }
+            _ => (),
+        }
+        /* Device Control */
+        match hw.mac.kind {
+            MacType::e1000_82573 | MacType::e1000_82574 | MacType::e1000_82583 => {
+                reg = hw.er32(CTRL);
+                reg &= !BIT(29);
+                hw.ew32(CTRL, reg);
+            }
+            _ => (),
+        }
+
+        /* Extended Device Control */
+        match hw.mac.kind {
+            MacType::e1000_82573 | MacType::e1000_82574 | MacType::e1000_82583 => {
+                let mut reg = hw.er32(CTRL_EXT);
+                reg &= !BIT(23);
+                reg |= BIT(22);
+                hw.ew32(CTRL_EXT, reg);
+            }
+            _ => {}
+        }
+
+        if hw.mac.kind == MacType::e1000_82571 {
+            let mut reg = hw.er32(PBA_ECC);
+            reg |= PBA_ECC_CORR_EN;
+            hw.ew32(PBA_ECC, reg);
+        }
+
+        // Workaround for hardware errata on 82571 and 82572
+        if [MacType::e1000_82571, MacType::e1000_82572].contains(&hw.mac.kind) {
+            let mut reg = hw.er32(CTRL_EXT);
+            reg &= !CTRL_EXT_DMA_DYN_CLK_EN;
+            hw.ew32(CTRL_EXT, reg);
+        }
+
+        // Disable IPv6 extension header parsing
+        if hw.mac.kind <= MacType::e1000_82573 {
+            let mut reg = hw.er32(RFCTL);
+            reg |= RFCTL_IPV6_EX_DIS | RFCTL_NEW_IPV6_EXT_DIS;
+            hw.ew32(RFCTL, reg);
+        }
+
+        // PCI-Ex Control Registers for specific types
+        match hw.mac.kind {
+            MacType::e1000_82574 | MacType::e1000_82583 => {
+                let mut reg = hw.er32(GCR);
+                reg |= BIT(22);
+                hw.ew32(GCR, reg);
+
+                let mut reg = hw.er32(GCR2);
+                reg |= 1;
+                hw.ew32(GCR2, reg);
+            }
+            _ => (),
+        }
+    }
+
+    fn clear_vfta<K: KernelFunc>(&self, hw: &mut Hw<K>) {
+        let mut vfta_value = 0;
+        let mut vfta_offset = 0;
+        let mut vfta_bit_in_reg = 0;
+        match hw.mac.kind {
+            MacType::e1000_82573 | MacType::e1000_82574 | MacType::e1000_82583 => {
+                if hw.mng_cookie.vlan_id != 0 {
+                    // The VFTA is a 4096b bit-field, each identifying a single VLAN ID.
+                    // Determine which 32b entry (offset) into the array to set the VLAN ID (bit) of the manageability unit.
+                    vfta_offset = (hw.mng_cookie.vlan_id >> VFTA_ENTRY_SHIFT) & VFTA_ENTRY_MASK;
+                    vfta_bit_in_reg =
+                        BIT((hw.mng_cookie.vlan_id & VFTA_ENTRY_BIT_SHIFT_MASK) as usize);
+                }
+            }
+            _ => {}
+        }
+
+        for offset in 0..VLAN_FILTER_TBL_SIZE {
+            // If the offset we want to clear is the same offset of the manageability VLAN ID,
+            // then clear all bits except that of the manageability unit.
+            let vfta_value = if offset as u16 == vfta_offset {
+                vfta_bit_in_reg
+            } else {
+                0
+            };
+            hw.write_reg_array(VFTA, offset, vfta_value);
+            hw.e1e_flush();
+        }
+    }
 }
