@@ -144,4 +144,77 @@ pub(crate) const FCRTL_RTL: u32 = 0x0000FFF8; // Mask Bits[15:3] for RTL
 pub(crate) const FCRTL_XONE: u32 = 0x80000000; // Enable XON frame transmission
 
 
+pub(crate) const FEXTNVM7_DISABLE_PB_READ: u32 = 0x00040000; // Bit for disabling packet buffer read
+pub(crate) const FEXTNVM7_SIDE_CLK_UNGATE: u32 = 0x00000004;
+pub(crate) const FEXTNVM7_DISABLE_SMB_PERST: u32 = 0x00000020;
+pub(crate) const FEXTNVM9_IOSFSB_CLKGATE_DIS: u32 = 0x00000800;
+pub(crate) const FEXTNVM9_IOSFSB_CLKREQ_DIS: u32 = 0x00001000;
+pub(crate) const FEXTNVM11_DISABLE_PB_READ: u32 = 0x00000200; // Disable packet buffer read
+pub(crate) const FEXTNVM11_DISABLE_MULR_FIX: u32 = 0x00002000;
+
+
+pub(crate) fn tdlen(n: usize) -> usize {
+    if n < 4 {
+        0x03808 + (n * 0x100)
+    } else {
+        0x0E008 + (n * 0x40)
+    }
+}
+
+pub(crate) fn tdh(n: usize) -> usize {
+    if n < 4 {
+        0x03810 + (n * 0x100)
+    } else {
+        0x0E010 + (n * 0x40)
+    }
+}
+
+pub(crate) fn tdt(n: usize) -> usize {
+    if n < 4 {
+        0x03818 + (n * 0x100)
+    } else {
+        0x0E018 + (n * 0x40)
+    }
+}
+
+
+pub(crate) const PCICFG_DESC_RING_STATUS: u8 = 0xE4;
+pub(crate) const FLUSH_DESC_REQUIRED: u16 = 0x100;
+
+
+pub(crate) const TXD_DTYP_D: u32 = 0x00100000; /* Data Descriptor */
+pub(crate) const TXD_POPTS_IXSM: u32 = 0x01;      /* Insert IP checksum */
+pub(crate) const TXD_POPTS_TXSM: u32 = 0x02;      /* Insert TCP/UDP checksum */
+pub(crate) const TXD_CMD_EOP: u32 = 0x01000000;  /* End of Packet */
+pub(crate) const TXD_CMD_IFCS: u32 = 0x02000000;  /* Insert FCS (Ethernet CRC) */
+pub(crate) const TXD_CMD_IC: u32 = 0x04000000;    /* Insert Checksum */
+pub(crate) const TXD_CMD_RS: u32 = 0x08000000;    /* Report Status */
+pub(crate) const TXD_CMD_RPS: u32 = 0x10000000;  /* Report Packet Sent */
+pub(crate) const TXD_CMD_DEXT: u32 = 0x20000000; /* Descriptor extension */
+pub(crate) const TXD_CMD_VLE: u32 = 0x40000000;  /* Add VLAN tag */
+pub(crate) const TXD_CMD_IDE: u32 = 0x80000000;  /* Enable Tidv register */
+pub(crate) const TXD_STAT_DD: u32 = 0x00000001;  /* Descriptor Done */
+pub(crate) const TXD_STAT_EC: u32 = 0x00000002;  /* Excess Collisions */
+pub(crate) const TXD_STAT_LC: u32 = 0x00000004;  /* Late Collisions */
+pub(crate) const TXD_STAT_TU: u32 = 0x00000008;  /* Transmit underrun */
+// 注意重复的定义，根据实际用途可能需要调整或去除重复项
+// TXD_CMD_TCP, TXD_CMD_IP, TXD_CMD_TSE 与之前的 E1000_TXD_CMD_EOP, E1000_TXD_CMD_IFCS, E1000_TXD_CMD_IC 重复
+// TXD_STAT_TC 与 TXD_STAT_LC 重复定义
+pub(crate) const TXD_EXTCMD_TSTAMP: u32 = 0x00000010; /* IEEE1588 Timestamp packet */
+
+pub(crate) const TCTL: u32 = 0x00400;  /* TX Control - Read-Write */
+
+
+
+pub(crate) const TCTL_RST: u32 = 0x00000001;    // Software reset
+pub(crate) const TCTL_EN: u32 = 0x00000002;      // Enable TX
+pub(crate) const TCTL_BCE: u32 = 0x00000004;     // Busy check enable
+pub(crate) const TCTL_PSP: u32 = 0x00000008;     // Pad short packets
+pub(crate) const TCTL_CT_SHIFT: u32 = 4;         // Collision threshold shift
+pub(crate) const TCTL_COLD_SHIFT: u32 = 12;      // Collision distance shift
+pub(crate) const TCTL_SWXOFF: u32 = 0x00400000;  // SW Xoff transmission
+pub(crate) const TCTL_PBE: u32 = 0x00800000;     // Packet Burst Enable
+pub(crate) const TCTL_RTLC: u32 = 0x01000000;    // Re-transmit on late collision
+pub(crate) const TCTL_NRTU: u32 = 0x02000000;    // No re-transmit on underrun
+pub(crate) const TCTL_MULR: u32 = 0x10000000;    // Multiple request support
 

@@ -24,6 +24,7 @@ struct KFun {
     cb_mtu_bg_eth: E1000CbMtuBgEth,
     cb_dma_alloc: E1000CbDmaAllocCoherent,
     cb_dma_free: E1000CbDmaFreeCoherent,
+    cb_pci_read_config_word: E1000CbPciReadConfigWord,
     adapter: *const c_void,
 }
 
@@ -61,6 +62,10 @@ impl KernelFunc for KFun {
     fn is_mtu_bg_eth(&self) -> bool {
         unsafe { ((self.cb_mtu_bg_eth)(self.adapter)) }
     }
+
+    fn pci_read_config_word(&self, where_: i32) -> u16 {
+        unsafe { (self.cb_pci_read_config_word)(self.adapter, where_) }
+    }
 }
 
 type DevicePtr = *mut Device;
@@ -86,6 +91,8 @@ pub type E1000CbDmaAllocCoherent =
 pub type E1000CbDmaFreeCoherent =
     unsafe extern "C" fn(pdev: *const c_void, vaddr: usize, dma: u64, pages: usize);
 
+pub type E1000CbPciReadConfigWord = unsafe extern "C" fn(pdev: *const c_void, where_: i32) -> u16;
+
 #[repr(C)]
 pub struct E1000Config {
     device_id: u32,
@@ -96,6 +103,7 @@ pub struct E1000Config {
     cb_mtu_bg_eth: E1000CbMtuBgEth,
     cb_dma_alloc_coherent: E1000CbDmaAllocCoherent,
     cb_dma_free_coherent: E1000CbDmaFreeCoherent,
+    cb_pci_read_config_word: E1000CbPciReadConfigWord,
     adapter: *const c_void,
 }
 
@@ -120,6 +128,7 @@ extern "C" fn e1000r_new(config: E1000Config) -> usize {
         cb_mtu_bg_eth: config.cb_mtu_bg_eth,
         cb_dma_alloc: config.cb_dma_alloc_coherent,
         cb_dma_free: config.cb_dma_free_coherent,
+        cb_pci_read_config_word: config.cb_pci_read_config_word,
     };
 
     let e1000 = match E1000::new(kfun, config.device_id) {

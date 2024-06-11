@@ -22,6 +22,7 @@ where
     dma: u64,
     ring: *mut T,
     mbufs: Vec<usize>,
+    next_to_use: usize,
     _marker: marker::PhantomData<T>,
 }
 
@@ -35,10 +36,16 @@ where
             kernel,
             size,
             dma: 0,
+            next_to_use: 0,
             ring: ptr::null_mut(),
             mbufs: Vec::new(),
             _marker: Default::default(),
         }
+    }
+    pub(crate) fn next_to_use(&mut self) -> &mut T {
+        let ring = unsafe { from_raw_parts_mut(self.ring, self.size) };
+        let ring = &mut ring[self.next_to_use];
+        ring
     }
 
     fn ring_pages(&self) -> usize {
@@ -97,20 +104,35 @@ pub trait TransDesc: Default + Clone {
 /// The dma descriptor for transmitting
 #[derive(Debug, Default, Clone)]
 #[repr(C, align(16))]
-pub struct TxDesc {
-    pub addr: u64,
-    pub data_l: u32,
+pub struct TxLower {
+    pub data: u32,
     pub length: u16,
     pub cso: u8,
     pub cmd: u8,
-    pub data_u: u8,
+}
+/// [E1000 3.3.3]
+/// The dma descriptor for transmitting
+#[derive(Debug, Default, Clone)]
+#[repr(C, align(16))]
+pub struct TxUpper {
+    pub data: u8,
     pub status: u8,
     pub css: u8,
     pub special: u16,
 }
+
+/// [E1000 3.3.3]
+/// The dma descriptor for transmitting
+#[derive(Debug, Default, Clone)]
+#[repr(C, align(16))]
+pub struct TxDesc {
+    pub addr: u64,
+    pub lower: TxLower,
+    pub upper: TxUpper,
+}
 impl TransDesc for TxDesc {
     fn set_status(&mut self, status: u8) {
-        self.status = status;
+        self.upper.status = status;
     }
 
     fn set_addr(&mut self, addr: u64) {

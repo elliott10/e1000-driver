@@ -138,6 +138,8 @@ typedef size_t (*E1000CbDmaAllocCoherent)(const void *pdev, size_t pages, uint64
 
 typedef void (*E1000CbDmaFreeCoherent)(const void *pdev, size_t vaddr, uint64_t dma, size_t pages);
 
+typedef uint16_t (*E1000CbPciReadConfigWord)(const void *pdev, int32_t where_);
+
 typedef struct E1000Config {
   uint32_t device_id;
   E1000CbBarNremap cb_bar_n_remap;
@@ -147,6 +149,7 @@ typedef struct E1000Config {
   E1000CbMtuBgEth cb_mtu_bg_eth;
   E1000CbDmaAllocCoherent cb_dma_alloc_coherent;
   E1000CbDmaFreeCoherent cb_dma_free_coherent;
+  E1000CbPciReadConfigWord cb_pci_read_config_word;
   const void *adapter;
 } E1000Config;
 

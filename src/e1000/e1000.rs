@@ -461,23 +461,23 @@ where
         /* Disable Adaptive Interrupt Moderation if 2 full packets cannot
          * fit in receive buffer.
          */
-        if hw.status.itr_setting & 0x3 > 0 {
-            let max_frame_size = hw.status.max_frame_size * 2;
-            let pba_value = pba << 10;
+        // if hw.status.itr_setting & 0x3 > 0 {
+        //     let max_frame_size = hw.status.max_frame_size * 2;
+        //     let pba_value = pba << 10;
 
-            if max_frame_size > pba_value {
-                if !(hw.flags2.disable_aim) {
-                    info!("Interrupt Throttle Rate off");
-                    hw.flags2.disable_aim = true;
-                    self.e1000e_write_itr(0);
-                }
-            } else if hw.flags2.disable_aim {
-                info!("Interrupt Throttle Rate on");
-                hw.flags2.disable_aim = false;
-                hw.status.itr = 20000;
-                self.e1000e_write_itr(hw.status.itr);
-            }
-        }
+        //     if max_frame_size > pba_value {
+        //         if !(hw.flags2.disable_aim) {
+        //             info!("Interrupt Throttle Rate off");
+        //             hw.flags2.disable_aim = true;
+        //             self.e1000e_write_itr(0);
+        //         }
+        //     } else if hw.flags2.disable_aim {
+        //         info!("Interrupt Throttle Rate on");
+        //         hw.flags2.disable_aim = false;
+        //         hw.status.itr = 20000;
+        //         self.e1000e_write_itr(hw.status.itr);
+        //     }
+        // }
 
         Ok(())
     }
@@ -496,13 +496,77 @@ where
         let new_itr = if itr > 0 { 1000000000 / (itr * 256) } else { 0 };
         hw.ew32(ITR, new_itr);
     }
+
+    /**
+     * flush_desc_rings - remove all descriptors from the descriptor rings
+     * @adapter: board private structure
+     *
+     * In i219, the descriptor rings must be emptied before resetting the HW
+     * or before changing the device state to D3 during runtime (runtime PM).
+     *
+     * Failure to do this will cause the HW to enter a unit hang state which can
+     * only be released by PCI reset on the device
+     *
+     */
+
+    fn flush_desc_rings(&mut self) {
+        /* First, disable MULR fix in FEXTNVM11 */
+        let mut fext_nvm11 = self.er32(FEXTNVM11);
+        fext_nvm11 |= FEXTNVM11_DISABLE_MULR_FIX;
+        self.ew32(FEXTNVM11, fext_nvm11);
+        /* do nothing if we're not in faulty state, or if the queue is empty */
+        let tdlen = self.er32(tdlen(0));
+        let hand_state = self
+            .kernel()
+            .pci_read_config_word(PCICFG_DESC_RING_STATUS as _);
+        if ((hang_state & FLUSH_DESC_REQUIRED) == 0 || tdlen == 0) {
+            return;
+        }
+
+        // e1000_flush_tx_ring(adapter);
+        // /* recheck, maybe the fault is caused by the rx ring */
+        // pci_read_config_word(adapter->pdev, PCICFG_DESC_RING_STATUS,
+        // 		     &hang_state);
+        // if (hang_state & FLUSH_DESC_REQUIRED)
+        // 	e1000_flush_rx_ring(adapter);
+    }
+/**
+ * flush_tx_ring - remove all descriptors from the tx_ring
+ * @adapter: board private structure
+ *
+ * We want to clear all pending descriptors from the TX ring.
+ * zeroing happens when the HW reads the regs. We  assign the ring itself as
+ * the data of the next descriptor. We don't care about the data we are about
+ * to reset the HW.
+ */
+fn flush_tx_ring(&mut self){
+    let txd_lower = TXD_CMD_IFCS;
+	let size = 512;
+
+	let tctl =self.er32(TCTL);
+	self.ew32(TCTL, tctl | TCTL_EN);
+	let tdt = self.er32(tdt(0));
+
+	// BUG_ON(tdt != tx_ring->next_to_use);
+	let tx_desc = self.tx_ring.next_to_use();
+	tx_desc.addr = tx_ring.dma;
+
+	tx_desc->lower.data = cpu_to_le32(txd_lower | size);
+	tx_desc->upper.data = 0;
+	/* flush descriptors to memory before notifying the HW */
+	wmb();
+	tx_ring->next_to_use++;
+	if (tx_ring->next_to_use == tx_ring->count)
+		tx_ring->next_to_use = 0;
+	ew32(TDT(0), tx_ring->next_to_use);
+	usleep_range(200, 250);
+}
     /// open
     pub fn open(&mut self) -> Result {
         info!("e1000 begin open");
         self.tx_ring.init();
         self.rx_ring.init();
         info!("ring ok");
-
 
         Ok(())
     }

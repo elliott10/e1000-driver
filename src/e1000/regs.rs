@@ -8,7 +8,7 @@ pub(crate) const MDIC: usize = 0x00020; // MDI Control - RW
 pub(crate) const SCTL: usize = 0x00024; // SerDes Control - RW
 pub(crate) const FCAL: usize = 0x00028; // Flow Control Address Low - RW
 pub(crate) const FCAH: usize = 0x0002C; // Flow Control Address High - RW
-                                        // 注意：E1000_FEXT 和 E1000_FCAH 有相同的值，需要确认是否是故意的
+                                        // 注意：FEXT 和 E1000_FCAH 有相同的值，需要确认是否是故意的
 pub(crate) const FEXT: usize = 0x0002C; // Future Extended - RW
 
 pub(crate) const FCT: usize = 0x00030; // Flow Control Type - RW
@@ -55,3 +55,14 @@ pub(crate) const STRAP_SMBUS_ADDRESS_MASK: usize = 0x00FE0000;
 pub(crate) const STRAP_SMBUS_ADDRESS_SHIFT: usize = 17;
 pub(crate) const STRAP_SMT_FREQ_MASK: usize = 0x00003000;
 pub(crate) const STRAP_SMT_FREQ_SHIFT: usize = 12;
+
+pub(crate) const FEXTNVM: u16 = 0x00028;     // Future Extended NVM - RW
+pub(crate) const FEXTNVM3: u16 = 0x0003C;    // Future Extended NVM 3 - RW
+pub(crate) const FEXTNVM4: u16 = 0x00024;    // Future Extended NVM 4 - RW
+pub(crate) const FEXTNVM5: u16 = 0x00014;    // Future Extended NVM 5 - RW
+pub(crate) const FEXTNVM6: u16 = 0x00010;    // Future Extended NVM 6 - RW
+pub(crate) const FEXTNVM7: u16 = 0x000E4;    // Future Extended NVM 7 - RW
+pub(crate) const FEXTNVM8: u32 = 0x5BB0;     // Future Extended NVM 8 - RW
+pub(crate) const FEXTNVM9: u32 = 0x5BB4;     // Future Extended NVM 9 - RW
+pub(crate) const FEXTNVM11: u32 = 0x5BBC;    // Future Extended NVM 11 - RW
+pub(crate) const FEXTNVM12: u32 = 0x5BC0;    // Future Extended NVM 12 - RW

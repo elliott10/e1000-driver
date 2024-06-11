@@ -10,7 +10,7 @@ mod regs;
 pub(crate) mod ring;
 pub use self::e1000::*;
 pub use board::*;
-use core::fmt::{self, Display};
+use core::{fmt::{self, Display}, u16};
 pub use hw::{E1000HWStats, MacInfo, MacType, MediaType, PhyInfo, PhyType};
 pub use ring::{TxDesc, RxDesc};
 
@@ -42,6 +42,8 @@ pub trait KernelFunc: Send + Sync + Clone {
     /// PCIe 相关信息
     fn pcie_info(&self) -> E1000rPcieInfo;
 
+    /// Pcie 读取
+    fn pci_read_config_word(&self, where_: i32)->u16;
 
     /// mtu 大于 ETH_DATA_LEN
     fn is_mtu_bg_eth(&self)->bool;
