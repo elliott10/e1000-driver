@@ -444,6 +444,10 @@ u16 cb_pci_read_config_word(const void *data, int32_t where){
   return val;
 }
 
+void cb_udelay(uint32_t usecs){
+  udelay(usecs);
+}
+
 /**
  * e1000_sw_init - Initialize general software structures (struct e1000_adapter)
  * @adapter: board private structure to initialize
@@ -533,6 +537,7 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent) {
   config.cb_dma_alloc_coherent = cb_dma_alloc;
   config.cb_dma_free_coherent = cb_dma_free;
   config.cb_pci_read_config_word = cb_pci_read_config_word;
+  config.cb_udelay = cb_udelay;
 
   size_t e1000 = e1000r_new(config);
   if (!e1000)

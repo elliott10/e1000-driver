@@ -477,6 +477,13 @@ where
         //         self.e1000e_write_itr(hw.status.itr);
         //     }
         // }
+        if self.hw.as_ref().mac.kind >= MacType::e1000_pch_spt {
+            self.flush_desc_rings();
+        }
+
+        
+
+
 
         Ok(())
     }

@@ -136,9 +136,91 @@ impl DevSpec82571 {
     }
 
     pub(crate) fn reset_hw<K: KernelFunc>(&self, hw: &mut Hw<K>) -> Result {
+        let mut res = hw.disable_pcie_master();
+        if res.is_err() {
+            error!("PCI-E Master disable polling has failed.");
+        }
+        debug!("Masking off all interrupts");
 
+        hw.ew32(IMC, 0xffffffff);
+
+        hw.ew32(RCTL, 0);
+
+        let mut tctl = hw.er32(TCTL);
+
+        tctl &= !TCTL_EN;
         
+        hw.ew32(TCTL, tctl);
+
+        hw.e1e_flush();
+
+        hw.kernel.delay(10000_000);
+
+        res = match hw.mac.kind {
+            MacType::e1000_82573 => self.get_hw_semaphore_82573(hw),
+            MacType::e1000_82574 | MacType::e1000_82583 => self.get_hw_semaphore_82574(hw),
+            _ => Ok(()), // Default case - no action needed or handle error
+        };
+
+        let ctrl = hw.er32(CTRL);
+
+        debug!("Issuing a global reset to MAC");
+
+        hw.ew32(CTRL, ctrl | CTRL_RST);
+
+        if res.is_ok() {
+            match hw.mac.kind {
+                MacType::e1000_82573 => self.put_hw_semaphore_82573(hw),
+                MacType::e1000_82574 | MacType::e1000_82583 => self.put_hw_semaphore_82574(hw),
+                _ => {} // Default case - no action needed or handle error
+            }
+        }
+
+        if hw.nvm.kind == NvmType::FlashHw {
+            hw.kernel.delay(10_000);
+            let mut ctrl_ext = hw.er32(CTRL_EXT);
+            ctrl_ext |= CTRL_EXT_EE_RST;
+            hw.ew32(CTRL_EXT, ctrl_ext);
+            hw.e1e_flush();
+        }
+
+        hw.get_auto_rd_done()?;
+
+        // Assuming ew32 and er32 are functions defined elsewhere to write and read from the given register addresses respectively.
+
+        match hw.mac.kind {
+            MacType::e1000_82571 | MacType::e1000_82572 => {
+                // REQ and GNT bits need to be cleared when using AUTO_RD to access the EEPROM.
+                let mut eecd = hw.er32(EECD);
+                eecd &= !(EECD_REQ | EECD_GNT);
+                hw.ew32(EECD, eecd);
+            }
+            MacType::e1000_82573 | MacType::e1000_82574 | MacType::e1000_82583 => {
+                // Delay for 25 milliseconds to allow Phy configuration to complete.
+                hw.kernel.delay(25_000_000);
+            }
+            _ => {} // Handle other cases or do nothing
+        }
+
+        /* Clear any pending interrupt events. */
+        hw.ew32(IMC, 0xffffffff);
+        hw.er32(ICR);
+
+        /* Reinitialize the 82571 serdes link state machine */
+        // if (hw.phy.media_type == MediaType::media_type_internal_serdes) {
+        // hw.mac.l = e1000_serdes_link_down;
+        // }
 
         Ok(())
     }
+
+    fn get_hw_semaphore_82573<K: KernelFunc>(&self, hw: &mut Hw<K>) -> Result {
+        Ok(())
+    }
+    fn get_hw_semaphore_82574<K: KernelFunc>(&self, hw: &mut Hw<K>) -> Result {
+        Ok(())
+    }
+
+    fn put_hw_semaphore_82573<K: KernelFunc>(&self, hw: &mut Hw<K>) {}
+    fn put_hw_semaphore_82574<K: KernelFunc>(&self, hw: &mut Hw<K>) {}
 }

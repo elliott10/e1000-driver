@@ -298,6 +298,64 @@ pub(crate) const RCTL_MO_SHIFT: u32 = 12;            // multicast offset shift
 pub(crate) const RCTL_MO_3: u32 = 0x00003000;    // multicast offset 15:4
 pub(crate) const RCTL_BAM: u32 = 0x00008000;    // broadcast enable
 
+pub(crate) const MASTER_DISABLE_TIMEOUT: usize = 800; // Number of 100 microseconds we wait for PCI Express master disable
+pub(crate) const PHY_CFG_TIMEOUT: usize = 100;      // Number of milliseconds we wait for PHY configuration done after MAC reset
+
+/* Device Control Flags */
+pub(crate) const CTRL_FD: u32 = 0x00000001;       // Full duplex. 0=half; 1=full
+pub(crate) const CTRL_GIO_MASTER_DISABLE: u32 = 0x00000004; // Blocks new Master requests
+pub(crate) const CTRL_LRST: u32 = 0x00000008;      // Link reset. 0=normal,1=reset
+pub(crate) const CTRL_ASDE: u32 = 0x00000020;       // Auto-speed detect enable
+pub(crate) const CTRL_SLU: u32 = 0x00000040;       // Set link up (Force Link)
+pub(crate) const CTRL_ILOS: u32 = 0x00000080;       // Invert Loss-Of Signal
+pub(crate) const CTRL_SPD_SEL: u32 = 0x00000300;    // Speed Select Mask
+pub(crate) const CTRL_SPD_10: u32 = 0x00000000;    // Force 10Mb
+pub(crate) const CTRL_SPD_100: u32 = 0x00000100;    // Force 100Mb
+pub(crate) const CTRL_SPD_1000: u32 = 0x00000200;   // Force 1Gb
+pub(crate) const CTRL_FRCSPD: u32 = 0x00000800;     // Force Speed
+pub(crate) const CTRL_FRCDPX: u32 = 0x00001000;    // Force Duplex
+pub(crate) const CTRL_LANPHYPC_OVERRIDE: u32 = 0x00010000; // SW control of LANPHYPC
+pub(crate) const CTRL_LANPHYPC_VALUE: u32 = 0x00020000; // SW value of LANPHYPC
+pub(crate) const CTRL_MEHE: u32 = 0x00080000;       // Memory Error Handling Enable
+pub(crate) const CTRL_SWDPIN0: u32 = 0x00040000;   // SWDPIN 0 value
+pub(crate) const CTRL_SWDPIN1: u32 = 0x00080000;   // SWDPIN 1 value
+pub(crate) const CTRL_ADVD3WUC: u32 = 0x00100000;  // D3 WUC
+pub(crate) const CTRL_EN_PHY_PWR_MGMT: u32 = 0x00200000; // PHY PM enable
+pub(crate) const CTRL_SWDPIO0: u32 = 0x00400000;   // SWDPIN 0 Input or output
+pub(crate) const CTRL_RST: u32 = 0x04000000;       // Global reset
+pub(crate) const CTRL_RFCE: u32 = 0x08000000;      // Receive Flow Control enable
+pub(crate) const CTRL_TFCE: u32 = 0x10000000;      // Transmit flow control enable
+pub(crate) const CTRL_VME: u32 = 0x40000000;       // IEEE VLAN mode enable
+pub(crate) const CTRL_PHY_RST: u32 = 0x80000000;   // PHY Reset
+
+/* Extended Device Control Flags */
+pub(crate) const CTRL_EXT_LPCD: u32 = 0x00000004;     // LCD Power Cycle Done
+pub(crate) const CTRL_EXT_SDP3_DATA: u32 = 0x00000080; // Value of SW Definable Pin 3
+pub(crate) const CTRL_EXT_FORCE_SMBUS: u32 = 0x00000800; // Force SMBus mode
+pub(crate) const CTRL_EXT_EE_RST: u32 = 0x00002000;    // Reinitialize from EEPROM
+pub(crate) const CTRL_EXT_SPD_BYPS: u32 = 0x00008000;  // Speed Select Bypass
+pub(crate) const CTRL_EXT_RO_DIS: u32 = 0x00020000;    // Relaxed Ordering disable
+pub(crate) const CTRL_EXT_DMA_DYN_CLK_EN: u32 = 0x00080000; // DMA Dynamic Clock Gating
+pub(crate) const CTRL_EXT_LINK_MODE_MASK: u32 = 0x00C00000;
+pub(crate) const CTRL_EXT_LINK_MODE_PCIE_SERDES: u32 = 0x00C00000;
+pub(crate) const CTRL_EXT_EIAME: u32 = 0x01000000;
+pub(crate) const CTRL_EXT_DRV_LOAD: u32 = 0x10000000; // Driver loaded bit for FW
+pub(crate) const CTRL_EXT_IAME: u32 = 0x08000000; // Int ACK Auto-mask
+pub(crate) const CTRL_EXT_PBA_CLR: u32 = 0x80000000; // PBA Clear
+pub(crate) const CTRL_EXT_LSECCK: u32 = 0x00001000;
+pub(crate) const CTRL_EXT_PHYPDEN: u32 = 0x00100000;
+pub(crate)  const AUTO_READ_DONE_TIMEOUT: usize = 10; // Timeout value in milliseconds, now set to 10
+
+
+/* NVM Control Flags */
+pub(crate) const EECD_SK: u32 = 0x00000001; /* NVM Clock */
+pub(crate) const EECD_CS: u32 = 0x00000002; /* NVM Chip Select */
+pub(crate) const EECD_DI: u32 = 0x00000004; /* NVM Data In */
+pub(crate) const EECD_DO: u32 = 0x00000008; /* NVM Data Out */
+pub(crate) const EECD_REQ: u32 = 0x00000040; /* NVM Access Request */
+pub(crate) const EECD_GNT: u32 = 0x00000080; /* NVM Access Grant */
+pub(crate) const EECD_PRES: u32 = 0x00000100; /* NVM Present */
+pub(crate) const EECD_SIZE: u32 = 0x00000200; /* NVM Size (0=64 word 1=256 word) */
 
 use core::arch::asm;
 

@@ -464,6 +464,47 @@ where
 
         false
     }
+
+    pub(crate) fn disable_pcie_master(&mut self) -> Result {
+        let mut ctrl = self.er32(CTRL);
+        ctrl |= CTRL_GIO_MASTER_DISABLE;
+        let mut timeout = MASTER_DISABLE_TIMEOUT;
+
+        self.ew32(CTRL, ctrl);
+
+        while timeout > 0 {
+            if self.er32(STATUS) & STATUS_GIO_MASTER_ENABLE == 0 {
+                break;
+            }
+            self.kernel.delay(100_000);
+            timeout -= 1;
+        }
+
+        if timeout > 0 {
+            return Ok(());
+        }
+
+        return Err(Error::Unknown("Master requests are pending."));
+    }
+
+    /**
+     *  e1000e_get_auto_rd_done - Check for auto read completion
+     *  @hw: pointer to the HW structure
+     *
+     *  Check EEPROM for Auto Read done bit.
+     **/
+    pub(crate) fn get_auto_rd_done(&mut self) -> Result {
+        for _ in 0..AUTO_READ_DONE_TIMEOUT {
+            if (self.er32(EECD) & EECD_AUTO_RD) > 0 {
+                return Ok(());
+            }
+            self.kernel.delay(1000_000);
+        }
+
+        error!("Auto read by HW from NVM has not completed.\n");
+
+        Err(Error::Nvm("Auto read by HW from NVM has not completed."))
+    }
 }
 
 #[derive(Clone)]
