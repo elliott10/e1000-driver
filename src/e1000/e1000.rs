@@ -481,13 +481,55 @@ where
             self.flush_desc_rings();
         }
 
-        
+        self.dev_spec.reset_hw(hw)?;
 
+        if hw.flags.has_amt {
+            self.get_hw_control();
+        }
+
+        self.ew32(WUC, 0);
+        
 
 
         Ok(())
     }
-
+    /**
+     * e1000e_get_hw_control - get control of the h/w from f/w
+     * @adapter: address of board private structure
+     *
+     * e1000e_get_hw_control sets {CTRL_EXT|SWSM}:DRV_LOAD bit.
+     * For ASF and Pass Through versions of f/w this means that
+     * the driver is loaded. For AMT version (only with 82573)
+     * of the f/w this means that the network i/f is open.
+     **/
+    fn get_hw_control(&mut self) {
+        if self.hw.as_mut().flags.has_swsm_on_load {
+            let swsm = self.er32(SWSM);
+            self.ew32(SWSM, swsm | SWSM_DRV_LOAD);
+        } else if self.hw.as_mut().flags.has_ctrlext_on_load {
+            let ctrl_ext = self.er32(CTRL_EXT);
+            self.ew32(CTRL_EXT, ctrl_ext | CTRL_EXT_DRV_LOAD);
+        }
+    }
+    /**
+     * e1000e_release_hw_control - release control of the h/w to f/w
+     * @adapter: address of board private structure
+     *
+     * e1000e_release_hw_control resets {CTRL_EXT|SWSM}:DRV_LOAD bit.
+     * For ASF and Pass Through versions of f/w this means that the
+     * driver is no longer loaded. For AMT version (only with 82573) i
+     * of the f/w this means that the network i/f is closed.
+     *
+     **/
+    fn release_hw_control(&mut self) {
+        if self.hw.as_mut().flags.has_swsm_on_load {
+            let swsm = self.er32(SWSM);
+            self.ew32(SWSM, swsm & !SWSM_DRV_LOAD);
+        } else if self.hw.as_mut().flags.has_ctrlext_on_load {
+            let ctrl_ext = self.er32(CTRL_EXT);
+            self.ew32(CTRL_EXT, ctrl_ext & !CTRL_EXT_DRV_LOAD);
+        }
+    }
     /**
      * e1000e_write_itr - write the ITR value to the appropriate registers
      * @adapter: address of board private structure
