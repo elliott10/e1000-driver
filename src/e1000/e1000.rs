@@ -1,4 +1,3 @@
-use super::defines;
 use super::defines::*;
 use super::hw::{self, DevSpec, Hw, HwRc, MacType};
 use super::regs::*;
@@ -515,52 +514,90 @@ where
         fext_nvm11 |= FEXTNVM11_DISABLE_MULR_FIX;
         self.ew32(FEXTNVM11, fext_nvm11);
         /* do nothing if we're not in faulty state, or if the queue is empty */
-        let tdlen = self.er32(tdlen(0));
-        let hand_state = self
-            .kernel()
-            .pci_read_config_word(PCICFG_DESC_RING_STATUS as _);
+        let tdlen = self.er32(TDLEN(0));
+        let mut hang_state = self.kernel().pci_read_config_word(PCICFG_DESC_RING_STATUS);
         if ((hang_state & FLUSH_DESC_REQUIRED) == 0 || tdlen == 0) {
             return;
         }
+        self.flush_tx_ring();
 
-        // e1000_flush_tx_ring(adapter);
-        // /* recheck, maybe the fault is caused by the rx ring */
-        // pci_read_config_word(adapter->pdev, PCICFG_DESC_RING_STATUS,
-        // 		     &hang_state);
-        // if (hang_state & FLUSH_DESC_REQUIRED)
-        // 	e1000_flush_rx_ring(adapter);
+        /* recheck, maybe the fault is caused by the rx ring */
+        hang_state = self.kernel().pci_read_config_word(PCICFG_DESC_RING_STATUS);
+
+        if (hang_state & FLUSH_DESC_REQUIRED) > 0 {
+            self.flush_rx_ring();
+        }
     }
-/**
- * flush_tx_ring - remove all descriptors from the tx_ring
- * @adapter: board private structure
- *
- * We want to clear all pending descriptors from the TX ring.
- * zeroing happens when the HW reads the regs. We  assign the ring itself as
- * the data of the next descriptor. We don't care about the data we are about
- * to reset the HW.
- */
-fn flush_tx_ring(&mut self){
-    let txd_lower = TXD_CMD_IFCS;
-	let size = 512;
+    /**
+     * flush_tx_ring - remove all descriptors from the tx_ring
+     * @adapter: board private structure
+     *
+     * We want to clear all pending descriptors from the TX ring.
+     * zeroing happens when the HW reads the regs. We  assign the ring itself as
+     * the data of the next descriptor. We don't care about the data we are about
+     * to reset the HW.
+     */
+    fn flush_tx_ring(&mut self) {
+        let txd_lower = TXD_CMD_IFCS;
+        let size = 512;
 
-	let tctl =self.er32(TCTL);
-	self.ew32(TCTL, tctl | TCTL_EN);
-	let tdt = self.er32(tdt(0));
+        let tctl = self.er32(TCTL);
+        self.ew32(TCTL, tctl | TCTL_EN);
+        let tdt = self.er32(TDT(0));
+        let dma = self.tx_ring.dma.to_le();
+        {
+            // BUG_ON(tdt != tx_ring->next_to_use);
+            let tx_desc = self.tx_ring.next_to_use();
+            tx_desc.addr = dma;
 
-	// BUG_ON(tdt != tx_ring->next_to_use);
-	let tx_desc = self.tx_ring.next_to_use();
-	tx_desc.addr = tx_ring.dma;
+            tx_desc.lower.data = (txd_lower | size).to_le();
+            tx_desc.upper.data = 0;
+        }
+        /* flush descriptors to memory before notifying the HW */
+        fence();
+        self.tx_ring.next_to_use += 1;
+        if (self.tx_ring.next_to_use == self.tx_ring.size) {
+            self.tx_ring.next_to_use = 0;
+        }
+        self.ew32(TDT(0), self.tx_ring.next_to_use as u32);
+        self.kernel().delay(200_000);
+    }
+    /**
+     * flush_tx_ring - remove all descriptors from the tx_ring
+     * @adapter: board private structure
+     *
+     * We want to clear all pending descriptors from the TX ring.
+     * zeroing happens when the HW reads the regs. We  assign the ring itself as
+     * the data of the next descriptor. We don't care about the data we are about
+     * to reset the HW.
+     */
+    fn flush_rx_ring(&mut self) {
+        let rctl = self.er32(RCTL);
 
-	tx_desc->lower.data = cpu_to_le32(txd_lower | size);
-	tx_desc->upper.data = 0;
-	/* flush descriptors to memory before notifying the HW */
-	wmb();
-	tx_ring->next_to_use++;
-	if (tx_ring->next_to_use == tx_ring->count)
-		tx_ring->next_to_use = 0;
-	ew32(TDT(0), tx_ring->next_to_use);
-	usleep_range(200, 250);
-}
+        self.ew32(RCTL, rctl & !RCTL_EN);
+
+        self.e1e_flush();
+
+        self.kernel().delay(100_000);
+
+        let mut rxdctl = self.er32(RXDCTL(0));
+        /* zero the lower 14 bits (prefetch and host thresholds) */
+        rxdctl &= 0xffffc000;
+
+        /* update thresholds: prefetch threshold to 31, host threshold to 1
+         * and make sure the granularity is "descriptors" and not "cache lines"
+         */
+        rxdctl |= (0x1F | (1 << 8) | RXDCTL_THRESH_UNIT_DESC);
+
+        self.ew32(RXDCTL(0), rxdctl);
+
+        /* momentarily enable the RX ring for the changes to take effect */
+        self.ew32(RCTL, rctl | RCTL_EN);
+        self.e1e_flush();
+        self.kernel().delay(100_000);
+        self.ew32(RCTL, rctl & (!RCTL_EN));
+    }
+
     /// open
     pub fn open(&mut self) -> Result {
         info!("e1000 begin open");

@@ -18,11 +18,11 @@ where
     K: KernelFunc,
 {
     kernel: K,
-    size: usize,
-    dma: u64,
+    pub(crate) size: usize,
+    pub(crate) dma: u64,
     ring: *mut T,
     mbufs: Vec<usize>,
-    next_to_use: usize,
+    pub(crate) next_to_use: usize,
     _marker: marker::PhantomData<T>,
 }
 

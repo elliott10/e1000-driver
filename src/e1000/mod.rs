@@ -13,7 +13,6 @@ pub use board::*;
 use core::{fmt::{self, Display}, u16};
 pub use hw::{E1000HWStats, MacInfo, MacType, MediaType, PhyInfo, PhyType};
 pub use ring::{TxDesc, RxDesc};
-
 const PAGE_SIZE: usize = 4096;
 
 pub trait KernelFunc: Send + Sync + Clone {
@@ -69,3 +68,7 @@ impl Display for MacAddress {
         )
     }
 }
+
+
+
+

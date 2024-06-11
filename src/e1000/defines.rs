@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 pub(crate) const ICR_TXDW: u32 = 0x00000001; // Transmit desc written back
 pub(crate) const ICR_LSC: u32 = 0x00000004; // Link Status Change
 pub(crate) const ICR_RXSEQ: u32 = 0x00000008; // Rx sequence error
@@ -153,7 +155,9 @@ pub(crate) const FEXTNVM11_DISABLE_PB_READ: u32 = 0x00000200; // Disable packet 
 pub(crate) const FEXTNVM11_DISABLE_MULR_FIX: u32 = 0x00002000;
 
 
-pub(crate) fn tdlen(n: usize) -> usize {
+pub(crate) const RXDCTL_THRESH_UNIT_DESC: u32 = 0x01000000;
+
+pub(crate) fn TDLEN(n: usize) -> usize {
     if n < 4 {
         0x03808 + (n * 0x100)
     } else {
@@ -161,7 +165,7 @@ pub(crate) fn tdlen(n: usize) -> usize {
     }
 }
 
-pub(crate) fn tdh(n: usize) -> usize {
+pub(crate) fn TDH(n: usize) -> usize {
     if n < 4 {
         0x03810 + (n * 0x100)
     } else {
@@ -169,16 +173,63 @@ pub(crate) fn tdh(n: usize) -> usize {
     }
 }
 
-pub(crate) fn tdt(n: usize) -> usize {
+pub(crate) fn TDT(n: usize) -> usize {
     if n < 4 {
         0x03818 + (n * 0x100)
     } else {
         0x0E018 + (n * 0x40)
     }
 }
+/* Receive Descriptor Base Address Low, High, Length, Head, Tail, and Control */
+pub fn RDBAL(n: usize) -> usize {
+    if n < 4 {
+        0x02800 + (n * 0x100)
+    } else {
+        0x0C000 + (n * 0x40)
+    }
+}
 
+pub fn RDBAH(n: usize) -> usize {
+    if n < 4 {
+        0x02804 + (n * 0x100)
+    } else {
+        0x0C004 + (n * 0x40)
+    }
+}
 
-pub(crate) const PCICFG_DESC_RING_STATUS: u8 = 0xE4;
+pub fn RDLEN(n: usize) -> usize {
+    if n < 4 {
+        0x02808 + (n * 0x100)
+    } else {
+        0x0C008 + (n * 0x40)
+    }
+}
+
+pub fn RDH(n: usize) -> usize {
+    if n < 4 {
+        0x02810 + (n * 0x100)
+    } else {
+        0x0C010 + (n * 0x40)
+    }
+}
+
+pub fn RDT(n: usize) -> usize {
+    if n < 4 {
+        0x02818 + (n * 0x100)
+    } else {
+        0x0C018 + (n * 0x40)
+    }
+}
+
+pub fn RXDCTL(n: usize) -> usize {
+    if n < 4 {
+        0x02828 + (n * 0x100)
+    } else {
+        0x0C028 + (n * 0x40)
+    }
+}
+
+pub(crate) const PCICFG_DESC_RING_STATUS: i32 = 0xE4;
 pub(crate) const FLUSH_DESC_REQUIRED: u16 = 0x100;
 
 
@@ -202,9 +253,6 @@ pub(crate) const TXD_STAT_TU: u32 = 0x00000008;  /* Transmit underrun */
 // TXD_STAT_TC 与 TXD_STAT_LC 重复定义
 pub(crate) const TXD_EXTCMD_TSTAMP: u32 = 0x00000010; /* IEEE1588 Timestamp packet */
 
-pub(crate) const TCTL: u32 = 0x00400;  /* TX Control - Read-Write */
-
-
 
 pub(crate) const TCTL_RST: u32 = 0x00000001;    // Software reset
 pub(crate) const TCTL_EN: u32 = 0x00000002;      // Enable TX
@@ -218,3 +266,65 @@ pub(crate) const TCTL_RTLC: u32 = 0x01000000;    // Re-transmit on late collisio
 pub(crate) const TCTL_NRTU: u32 = 0x02000000;    // No re-transmit on underrun
 pub(crate) const TCTL_MULR: u32 = 0x10000000;    // Multiple request support
 
+pub(crate) const RCTL: usize = 0x00100;         // RX Control - RW
+pub(crate) const RDTR1: usize = 0x02820;        // RX Delay Timer (1) - RW
+pub(crate) const RDBAL1: usize = 0x02900;       // RX Descriptor Base Address Low (1) - RW
+pub(crate) const RDBAH1: usize = 0x02904;       // RX Descriptor Base Address High (1) - RW
+pub(crate) const RDLEN1: usize = 0x02908;       // RX Descriptor Length (1) - RW
+pub(crate) const RDH1: usize = 0x02910;         // RX Descriptor Head (1) - RW
+pub(crate) const RDT1: usize = 0x02918;         // RX Descriptor Tail (1) - RW
+pub(crate) const FCTTV: usize = 0x00170;         // Flow Control Transmit Timer Value - RW
+pub(crate) const TXCW: usize = 0x00178;          // TX Configuration Word - RW
+pub(crate) const RXCW: usize = 0x00180;          // RX Configuration Word - RO
+pub(crate) const TCTL: usize = 0x00400;          // TX Control - RW
+pub(crate) const TCTL_EXT: usize = 0x00404;      // Extended TX Control - RW
+pub(crate) const TIPG: usize = 0x00410;          // TX Inter-packet gap - RW
+pub(crate) const TBT: usize = 0x00448;           // TX Burst Timer - RW
+pub(crate) const AIT: usize = 0x00458;           // Adaptive Interframe Spacing Throttle - RW
+
+/* Receive Control Flags */
+pub(crate) const RCTL_EN: u32 = 0x00000002;    // enable
+pub(crate) const RCTL_SBP: u32 = 0x00000004;    // store bad packet
+pub(crate) const RCTL_UPE: u32 = 0x00000008;    // unicast promiscuous enable
+pub(crate) const RCTL_MPE: u32 = 0x00000010;    // multicast promiscuous enable
+pub(crate) const RCTL_LPE: u32 = 0x00000020;    // long packet enable
+pub(crate) const RCTL_LBM_NO: u32 = 0x00000000; // no loopback mode
+pub(crate) const RCTL_LBM_MAC: u32 = 0x00000040; // MAC loopback mode
+pub(crate) const RCTL_LBM_TCVR: u32 = 0x000000C0; // tcvr loopback mode
+pub(crate) const RCTL_DTYP_PS: u32 = 0x00000400; // Packet Split descriptor
+pub(crate) const RCTL_RDMTS_HALF: u32 = 0x00000000; // Rx desc min threshold size
+pub(crate) const RCTL_RDMTS_HEX: u32 = 0x00010000;
+pub(crate) const RCTL_MO_SHIFT: u32 = 12;            // multicast offset shift
+pub(crate) const RCTL_MO_3: u32 = 0x00003000;    // multicast offset 15:4
+pub(crate) const RCTL_BAM: u32 = 0x00008000;    // broadcast enable
+
+
+use core::arch::asm;
+
+pub(crate) fn fence() {
+    #[cfg(target_arch = "riscv64")]
+    unsafe {
+        asm!("fence iorw, iorw");
+    }
+
+    #[cfg(not(target_arch = "riscv64"))]
+    core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+}
+pub(crate) fn fence_w() {
+    #[cfg(target_arch = "riscv64")]
+    unsafe {
+        asm!("fence ow, ow");
+    }
+
+    #[cfg(not(target_arch = "riscv64"))]
+    core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+}
+pub(crate) fn fence_r() {
+    #[cfg(target_arch = "riscv64")]
+    unsafe {
+        asm!("fence ir, ir");
+    }
+
+    #[cfg(not(target_arch = "riscv64"))]
+    core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
+}

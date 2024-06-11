@@ -64,5 +64,5 @@ pub(crate) const FEXTNVM6: u16 = 0x00010;    // Future Extended NVM 6 - RW
 pub(crate) const FEXTNVM7: u16 = 0x000E4;    // Future Extended NVM 7 - RW
 pub(crate) const FEXTNVM8: u32 = 0x5BB0;     // Future Extended NVM 8 - RW
 pub(crate) const FEXTNVM9: u32 = 0x5BB4;     // Future Extended NVM 9 - RW
-pub(crate) const FEXTNVM11: u32 = 0x5BBC;    // Future Extended NVM 11 - RW
-pub(crate) const FEXTNVM12: u32 = 0x5BC0;    // Future Extended NVM 12 - RW
+pub(crate) const FEXTNVM11: usize = 0x5BBC;    // Future Extended NVM 11 - RW
+pub(crate) const FEXTNVM12: usize = 0x5BC0;    // Future Extended NVM 12 - RW
