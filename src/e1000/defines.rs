@@ -155,6 +155,52 @@ pub(crate) const FEXTNVM11_DISABLE_MULR_FIX: u32 = 0x00002000;
 
 pub(crate) const RXDCTL_THRESH_UNIT_DESC: u32 = 0x01000000;
 
+pub(crate) const TXDCTL_PTHRESH: u32 = 0x0000003F; /* TXDCTL Prefetch Threshold mask */
+pub(crate) const TXDCTL_HTHRESH: u32 = 0x00003F00; /* TXDCTL Host Threshold mask */
+pub(crate) const TXDCTL_WTHRESH: u32 = 0x003F0000; /* TXDCTL Writeback Threshold mask */
+pub(crate) const TXDCTL_GRAN: u32 = 0x01000000; /* TXDCTL Granularity flag */
+pub(crate) const TXDCTL_FULL_TX_DESC_WB: u32 = 0x01010000; /* GRAN=1, WTHRESH=1 combined value */
+pub(crate) const TXDCTL_MAX_TX_DESC_PREFETCH: u32 = 0x0100001F; /* GRAN=1, PTHRESH=31 combined value */
+/* Enable the counting of desc. still to be processed. */
+pub(crate) const TXDCTL_COUNT_DESC: u32 = 0x00400000;
+/* Adjustments made for more clarity and Rust idiomatic style */
+
+pub(crate) const TXDCTL_DMA_BURST_ENABLE: u32 = TXDCTL_GRAN | TXDCTL_COUNT_DESC | // Descriptor granularity enabled
+    (1 << 16) |      // WTHRESH is one more than the desired to avoid stalls, set to 1
+    (1 << 8)  |      // HTHRESH set to 1
+    0x1f; // PTHRESH set to maximum for efficiency
+
+pub(crate) const RXDCTL_DMA_BURST_ENABLE: u32 = 0x01000000 | // Descriptor granularity enabled
+    (4 << 16) |  // Optimal Writeback Threshold for bus efficiency, set to 4
+    (4 << 8)   |  // Prefetch Threshold set to 4 for performance
+    0x20; // HTHRESH set to a value that suits the hardware requirements
+
+/* Translate the transmit control definitions into Rust constants */
+
+pub(crate) const TCTL_EN: u32 = 0x00000002; // Enable transmission
+pub(crate) const TCTL_PSP: u32 = 0x00000008; // Pad short packets to minimum frame size
+pub(crate) const TCTL_CT: u32 = 0x00000ff0; // Collision threshold mask
+pub(crate) const TCTL_COLD: u32 = 0x003ff000; // Collision distance mask
+pub(crate) const TCTL_RTLC: u32 = 0x01000000; // Retransmit on late collision
+pub(crate) const TCTL_MULR: u32 = 0x10000000; // Multiple requests support
+
+/* Declare constants for collision-related configuration in Rust */
+
+pub(crate) const COLLISION_THRESHOLD: u32 = 15;
+pub(crate) const CT_SHIFT: u32 = 4;
+pub(crate) const COLLISION_DISTANCE: u32 = 63;
+pub(crate) const COLD_SHIFT: u32 = 12;
+
+pub(crate) const TARC0_CB_MULTIQ_3_REQ: u32 = 0x30000000;
+pub(crate) const TARC0_CB_MULTIQ_2_REQ: u32 = 0x20000000;
+
+pub(crate) fn DMA_BIT_MASK(n: u32) -> u64 {
+    match n {
+        64 => u64::MAX,
+        _ => (1u64 << n as u64) - 1,
+    }
+}
+
 pub(crate) fn TDLEN(n: usize) -> usize {
     if n < 4 {
         0x03808 + (n * 0x100)
@@ -264,16 +310,12 @@ pub(crate) const TXD_STAT_TU: u32 = 0x00000008; /* Transmit underrun */
 pub(crate) const TXD_EXTCMD_TSTAMP: u32 = 0x00000010; /* IEEE1588 Timestamp packet */
 
 pub(crate) const TCTL_RST: u32 = 0x00000001; // Software reset
-pub(crate) const TCTL_EN: u32 = 0x00000002; // Enable TX
 pub(crate) const TCTL_BCE: u32 = 0x00000004; // Busy check enable
-pub(crate) const TCTL_PSP: u32 = 0x00000008; // Pad short packets
 pub(crate) const TCTL_CT_SHIFT: u32 = 4; // Collision threshold shift
 pub(crate) const TCTL_COLD_SHIFT: u32 = 12; // Collision distance shift
 pub(crate) const TCTL_SWXOFF: u32 = 0x00400000; // SW Xoff transmission
 pub(crate) const TCTL_PBE: u32 = 0x00800000; // Packet Burst Enable
-pub(crate) const TCTL_RTLC: u32 = 0x01000000; // Re-transmit on late collision
 pub(crate) const TCTL_NRTU: u32 = 0x02000000; // No re-transmit on underrun
-pub(crate) const TCTL_MULR: u32 = 0x10000000; // Multiple request support
 
 pub(crate) const RCTL: usize = 0x00100; // RX Control - RW
 pub(crate) const RDTR1: usize = 0x02820; // RX Delay Timer (1) - RW
@@ -365,14 +407,11 @@ pub(crate) const EECD_GNT: u32 = 0x00000080; /* NVM Access Grant */
 pub(crate) const EECD_PRES: u32 = 0x00000100; /* NVM Present */
 pub(crate) const EECD_SIZE: u32 = 0x00000200; /* NVM Size (0=64 word 1=256 word) */
 
-
-
 pub(crate) const PBA_ECC_COUNTER_MASK: u32 = 0xFFF00000;
 pub(crate) const PBA_ECC_COUNTER_SHIFT: u32 = 20;
 pub(crate) const PBA_ECC_CORR_EN: u32 = 0x00000001;
 pub(crate) const PBA_ECC_STAT_CLR: u32 = 0x00000002;
 pub(crate) const PBA_ECC_INT_EN: u32 = 0x00000004;
-
 
 /* Header split receive */
 pub(crate) const RFCTL_NFSW_DIS: u32 = 0x00000040;
@@ -439,6 +478,9 @@ pub(crate) const BMCR_SPEED100: u16 = 0x2000; // Select 100Mbps
 pub(crate) const BMCR_LOOPBACK: u16 = 0x4000; // TXD loopback bits
 pub(crate) const BMCR_RESET: u16 = 0x8000; // Reset to default state
 pub(crate) const BMCR_SPEED10: u16 = 0x0000; // Select 10Mbps
+
+pub(crate) const MANC2H: usize = 0x05860; // Management Control To Host - RW
+
 use core::arch::asm;
 
 pub(crate) fn fence() {
@@ -469,7 +511,6 @@ pub(crate) fn fence_r() {
     core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
 }
 
-
 pub(crate) const FWSM_WLOCK_MAC_MASK: u32 = 0x0380;
 pub(crate) const FWSM_WLOCK_MAC_SHIFT: u32 = 7;
 pub(crate) const FWSM_ULP_CFG_DONE: u32 = 0x00000400;
@@ -482,4 +523,8 @@ pub(crate) const fn SHRAL_PCH_LPT(i: usize) -> usize {
 
 pub(crate) fn SHRAH_PCH_LPT(i: usize) -> usize {
     0x0540C + (i * 8)
+}
+
+pub(crate) fn MDEF(n: usize) -> usize {
+    0x05890 + (4 * n)
 }

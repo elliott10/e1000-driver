@@ -58,19 +58,39 @@ pub(crate) const STRAP_SMBUS_ADDRESS_SHIFT: usize = 17;
 pub(crate) const STRAP_SMT_FREQ_MASK: usize = 0x00003000;
 pub(crate) const STRAP_SMT_FREQ_SHIFT: usize = 12;
 
-pub(crate) const FEXTNVM: u16 = 0x00028;     // Future Extended NVM - RW
-pub(crate) const FEXTNVM3: u16 = 0x0003C;    // Future Extended NVM 3 - RW
-pub(crate) const FEXTNVM4: u16 = 0x00024;    // Future Extended NVM 4 - RW
-pub(crate) const FEXTNVM5: u16 = 0x00014;    // Future Extended NVM 5 - RW
-pub(crate) const FEXTNVM6: u16 = 0x00010;    // Future Extended NVM 6 - RW
-pub(crate) const FEXTNVM7: u16 = 0x000E4;    // Future Extended NVM 7 - RW
-pub(crate) const FEXTNVM8: u32 = 0x5BB0;     // Future Extended NVM 8 - RW
-pub(crate) const FEXTNVM9: u32 = 0x5BB4;     // Future Extended NVM 9 - RW
-pub(crate) const FEXTNVM11: usize = 0x5BBC;    // Future Extended NVM 11 - RW
-pub(crate) const FEXTNVM12: usize = 0x5BC0;    // Future Extended NVM 12 - RW
+pub(crate) const FEXTNVM: u16 = 0x00028; // Future Extended NVM - RW
+pub(crate) const FEXTNVM3: u16 = 0x0003C; // Future Extended NVM 3 - RW
+pub(crate) const FEXTNVM4: u16 = 0x00024; // Future Extended NVM 4 - RW
+pub(crate) const FEXTNVM5: u16 = 0x00014; // Future Extended NVM 5 - RW
+pub(crate) const FEXTNVM6: u16 = 0x00010; // Future Extended NVM 6 - RW
+pub(crate) const FEXTNVM7: u16 = 0x000E4; // Future Extended NVM 7 - RW
+pub(crate) const FEXTNVM8: u32 = 0x5BB0; // Future Extended NVM 8 - RW
+pub(crate) const FEXTNVM9: u32 = 0x5BB4; // Future Extended NVM 9 - RW
+pub(crate) const FEXTNVM11: usize = 0x5BBC; // Future Extended NVM 11 - RW
+pub(crate) const FEXTNVM12: usize = 0x5BC0; // Future Extended NVM 12 - RW
 
 pub(crate) const PBA_ECC: usize = 0x01100;
+
+pub(crate) const TIDV: usize = 0x03820; // Tx Interrupt Delay Value - RW
+pub(crate) const TADV: usize = 0x0382C; // Tx Interrupt Absolute Delay Value - RW
+pub(crate) const IOSFPC: usize = 0x00F28; // TX corrupted data register
 
 pub(crate) fn TARC(n: usize) -> usize {
     0x03840 + (n * 0x100)
 }
+
+pub(crate) fn TDBAL(n: usize) -> usize {
+    if n < 4 {
+        0x03800 + (0x100 * n)
+    } else {
+        0x0E000 + (0x40 * n)
+    }
+}
+pub(crate) fn TDBAH(n: usize) -> usize {
+    if n < 4 {
+        0x03804 + (0x100 * n)
+    } else {
+        0x0E004 + (0x40 * n)
+    }
+}
+

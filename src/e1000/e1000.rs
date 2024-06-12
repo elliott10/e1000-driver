@@ -650,7 +650,9 @@ where
     }
 
     fn configure(&mut self) -> Result {
-        let stat = self.hw.as_ref().er32(STATUS);
+        self.set_rx_mode();
+        self.init_manageability_pt();
+        self.configure_tx();
 
         Ok(())
     }
@@ -668,12 +670,165 @@ where
     //     Ok(())
     // }
 
+    fn set_rx_mode(&mut self) {
+        /* Check for Promiscuous and All Multicast modes */
+        let mut rctl = self.er32(RCTL);
+
+        /* clear the affected bits */
+        rctl &= !(RCTL_UPE | RCTL_MPE);
+
+        rctl |= (
+            RCTL_EN // enable receiver
+            |  RCTL_BAM
+            // enable broadcast
+            //| RCTL_SZ_2048   // 2048-byte rx buffers
+            //| RCTL_SECRC  // strip CRC
+        ) & !(0b11 << 10);
+
+        self.ew32(RCTL, rctl);
+        // TODO
+    }
+
+    fn init_manageability_pt(&mut self) {
+        if !self.hw.as_ref().flags.mng_pt_enabled {
+            return;
+        }
+        info!("Enabling management packets to the host");
+        let mut manc = self.er32(MANC);
+
+        /* enable receiving management packets to the host. this will probably
+         * generate destination unreachable messages from the host OS, but
+         * the packets will be handled on SMBUS
+         */
+        manc |= MANC_EN_MNG2HOST;
+        let mut manc2h = self.er32(MANC2H);
+
+        match self.hw.as_ref().mac.kind {
+            // Default case handling
+            _ => {
+                manc2h |= (MANC2H_PORT_623 | MANC2H_PORT_664);
+            }
+            MacType::e1000_82574 | MacType::e1000_82583 => {
+                let mut mdef: u32;
+                let mut j: u32 = 0;
+
+                // Check existing filters and enable if they match IPMI ports.
+                for i in 0..8 {
+                    mdef = self.er32(MDEF(i));
+                    if mdef & !(MANC2H_PORT_623 | MANC2H_PORT_664) != 0 {
+                        continue;
+                    }
+                    if mdef != 0 {
+                        manc2h |= 1 << i;
+                    }
+                    j |= mdef;
+                }
+
+                if j != (MANC2H_PORT_623 | MANC2H_PORT_664) {
+                    // Attempt to create a new filter if none matched.
+                    for i in 0..8 {
+                        if self.er32(MDEF(i)) == 0 {
+                            self.ew32(MDEF(i), MANC2H_PORT_623 | MANC2H_PORT_664);
+                            manc2h |= 1 << 1; // Enabling in MANC2H, assuming BIT(1) was a typo for enabling a different bit.
+                            j += 1;
+                            break;
+                        }
+                    }
+
+                    if j == 0 {
+                        warn!("Unable to create IPMI pass-through filter");
+                    }
+                }
+            }
+        }
+
+        // Write the updated values back to the hardware registers.
+        self.ew32(MANC2H, manc2h);
+        self.ew32(MANC, manc);
+    }
+
     fn power_up_phy(&mut self) -> Result {
         let mut mii = self.read_phy_reg_mdic(MII_BMCR)?;
         mii &= !BMCR_PDOWN;
         self.write_phy_reg_mdic(MII_BMCR, mii)?;
         info!("power up phy ok");
         Ok(())
+    }
+
+    fn configure_tx(&mut self) {
+        let mut tdba = self.tx_ring.dma;
+        let tdlen = self.tx_ring.data_len() as u32;
+        self.ew32(TDBAL(0), (tdba & DMA_BIT_MASK(32)) as u32);
+        self.ew32(TDBAH(0), (tdba >> 32) as u32);
+        self.ew32(TDLEN(0), tdlen);
+        self.ew32(TDH(0), 0);
+        self.ew32(TDT(0), 0);
+
+        /* Set the Tx Interrupt Delay register */
+        self.ew32(TIDV, self.hw.as_ref().status.tx_int_delay);
+        /* Tx irq moderation */
+        self.ew32(TADV, self.hw.as_ref().status.tx_abs_int_delay);
+
+        if self.hw.as_ref().flags2.dma_burst {
+            let mut txdctl = self.er32(TXDCTL(0));
+
+            txdctl &= !(TXDCTL_PTHRESH | TXDCTL_HTHRESH | TXDCTL_WTHRESH);
+            /* set up some performance related parameters to encourage the
+             * hardware to use the bus more efficiently in bursts, depends
+             * on the tx_int_delay to be enabled,
+             * wthresh = 1 ==> burst write is disabled to avoid Tx stalls
+             * hthresh = 1 ==> prefetch when one or more available
+             * pthresh = 0x1f ==> prefetch if internal cache 31 or less
+             * BEWARE: this seems to work but should be considered first if
+             * there are Tx hangs or other Tx related bugs
+             */
+            txdctl |= TXDCTL_DMA_BURST_ENABLE;
+            self.ew32(TXDCTL(0), txdctl);
+        }
+        /* erratum work around: set txdctl the same for both queues */
+        self.ew32(TXDCTL(1), self.er32(TXDCTL(0)));
+
+        /* Program the Transmit Control Register */
+        let mut tctl = self.er32(TCTL);
+        tctl &= !TCTL_CT;
+        tctl |= TCTL_PSP | TCTL_RTLC | (COLLISION_THRESHOLD << CT_SHIFT);
+
+        if self.hw.as_ref().flags.tarc_speed_mode_bit {
+            let mut tarc = self.er32(TARC(0));
+            /* set the speed mode bit, we'll clear it if we're not at
+             * gigabit link later
+             */
+            tarc |= BIT(21);
+            self.ew32(TARC(0), tarc);
+        }
+
+        /* errata: program both queues to unweighted RR */
+        if (self.hw.as_ref().flags.tarc_set_bit_zero) {
+            let mut tarc = self.er32(TARC(0));
+            tarc |= 1;
+            self.ew32(TARC(0), tarc);
+            tarc = self.er32(TARC(1));
+            tarc |= 1;
+            self.ew32(TARC(1), tarc);
+        }
+
+        self.ew32(TCTL, tctl);
+
+        /* SPT and KBL Si errata workaround to avoid data corruption */
+        if self.hw.as_ref().mac.kind == MacType::e1000_pch_spt {
+            let mut reg_val = self.er32(IOSFPC);
+            reg_val |= RCTL_RDMTS_HEX;
+            self.ew32(IOSFPC, reg_val);
+
+            reg_val = self.er32(TARC(0));
+            /* SPT and KBL Si errata workaround to avoid Tx hang.
+             * Dropping the number of outstanding requests from
+             * 3 to 2 in order to avoid a buffer overrun.
+             */
+            reg_val &= !TARC0_CB_MULTIQ_3_REQ;
+            reg_val |= TARC0_CB_MULTIQ_2_REQ;
+            self.ew32(TARC(0), reg_val);
+        }
     }
 
     fn read_phy_reg_mdic(&mut self, offset: u32) -> Result<u16> {
@@ -731,7 +886,7 @@ where
 
     fn write_phy_reg_mdic(&mut self, offset: u32, value: u16) -> Result {
         self.hw.as_mut().phy.addr = 1;
-        
+
         if (offset > MAX_PHY_REG_ADDRESS) {
             error!("PHY Address {} is out of range", offset);
             return Err(Error::Unknown("PHY Address"));

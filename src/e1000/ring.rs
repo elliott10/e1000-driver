@@ -49,7 +49,11 @@ where
     }
 
     fn ring_pages(&self) -> usize {
-        ((self.size * size_of::<T>()) + (K::PAGE_SIZE - 1)) / K::PAGE_SIZE
+        (self.data_len() + (K::PAGE_SIZE - 1)) / K::PAGE_SIZE
+    }
+
+    pub(crate) fn data_len(&self) -> usize {
+        self.size * size_of::<T>()
     }
 
     pub(crate) fn init(&mut self) {
