@@ -714,6 +714,7 @@ where
     }
     pub(crate) fn init(&mut self) -> Result {
         let hw = self.as_mut();
+        hw.status.rx_buffer_len = (VLAN_ETH_FRAME_LEN + ETH_FCS_LEN)as u32;
 
         if hw.flags.has_flash && hw.mac.kind < MacType::e1000_pch_spt {
             let addr = hw.kernel.bar_n_remap(1);

@@ -349,6 +349,29 @@ pub(crate) const RCTL_MO_SHIFT: u32 = 12; // multicast offset shift
 pub(crate) const RCTL_MO_3: u32 = 0x00003000; // multicast offset 15:4
 pub(crate) const RCTL_BAM: u32 = 0x00008000; // broadcast enable
 
+// Rx buffer size configurations when E1000_RCTL_BSEX is not set (0)
+pub(crate) const RCTL_SZ_2048: u32 = 0x00000000;
+pub(crate) const RCTL_SZ_1024: u32 = 0x00010000;
+pub(crate) const RCTL_SZ_512: u32 = 0x00020000;
+pub(crate) const RCTL_SZ_256: u32 = 0x00030000;
+
+// Rx buffer size configurations when E1000_RCTL_BSEX is set (1)
+pub(crate) const RCTL_SZ_16384: u32 = 0x00010000;
+pub(crate) const RCTL_SZ_8192: u32 = 0x00020000;
+pub(crate) const RCTL_SZ_4096: u32 = 0x00030000;
+
+// Other RCTL flags
+pub(crate) const RCTL_VFE: u32 = 0x00040000; // VLAN Filter Enable
+pub(crate) const RCTL_CFIEN: u32 = 0x00080000; // Canonical Form Indicator Enable
+pub(crate) const RCTL_CFI: u32 = 0x00100000; // Canonical Form Indicator
+pub(crate) const RCTL_DPF: u32 = 0x00400000; // Discard Pause Frames
+pub(crate) const RCTL_PMCF: u32 = 0x00800000; // Pass MAC Control Frames
+pub(crate) const RCTL_BSEX: u32 = 0x02000000; // Buffer Size Extension
+pub(crate) const RCTL_SECRC: u32 = 0x04000000; // Strip Ethernet CRC
+
+
+
+
 pub(crate) const MASTER_DISABLE_TIMEOUT: usize = 800; // Number of 100 microseconds we wait for PCI Express master disable
 pub(crate) const PHY_CFG_TIMEOUT: usize = 100; // Number of milliseconds we wait for PHY configuration done after MAC reset
 

@@ -529,10 +529,21 @@ where
      * and, if so, writes the EITR registers with the ITR value.
      * Otherwise, it writes the ITR value into the ITR register.
      **/
-    fn e1000e_write_itr(&mut self, itr: u32) {
+    fn write_itr(&mut self, itr: u32) {
         let hw = self.hw.as_mut();
         let new_itr = if itr > 0 { 1000000000 / (itr * 256) } else { 0 };
-        hw.ew32(ITR, new_itr);
+        let msix_vec_num = hw.status.msix_vec_num;
+
+        if msix_vec_num > 0 {
+            for vector in 0..msix_vec_num {
+                unsafe {
+                    let ptr = (hw.mmio + EITR_82574(vector as usize)) as *mut u32;
+                    ptr.write_volatile(new_itr);
+                }
+            }
+        } else {
+            hw.ew32(ITR, new_itr);
+        }
     }
 
     /**
@@ -646,6 +657,8 @@ where
 
         self.power_up_phy()?;
         self.configure()?;
+
+        info!("e1000_init has been completed");
         Ok(())
     }
 
@@ -653,6 +666,8 @@ where
         self.set_rx_mode();
         self.init_manageability_pt();
         self.configure_tx();
+        self.setup_rctl();
+        self.configure_rx();
 
         Ok(())
     }
@@ -677,13 +692,13 @@ where
         /* clear the affected bits */
         rctl &= !(RCTL_UPE | RCTL_MPE);
 
-        rctl |= (
-            RCTL_EN // enable receiver
-            |  RCTL_BAM
-            // enable broadcast
-            //| RCTL_SZ_2048   // 2048-byte rx buffers
-            //| RCTL_SECRC  // strip CRC
-        ) & !(0b11 << 10);
+        // rctl |= (
+        //     RCTL_EN // enable receiver
+        //     |  RCTL_BAM
+        //     // enable broadcast
+        //     //| RCTL_SZ_2048   // 2048-byte rx buffers
+        //     //| RCTL_SECRC  // strip CRC
+        // ) & !(0b11 << 10);
 
         self.ew32(RCTL, rctl);
         // TODO
@@ -829,6 +844,136 @@ where
             reg_val |= TARC0_CB_MULTIQ_2_REQ;
             self.ew32(TARC(0), reg_val);
         }
+    }
+
+    fn configure_rx(&mut self) {
+        //TODO
+
+        let rdlen = self.rx_ring.data_len();
+        let mut hw2 = self.hw.clone();
+        let hw = hw2.as_mut();
+        /* disable receives while setting up the descriptors */
+        let mut rctl = self.er32(RCTL);
+        if !hw.flags2.no_disable_rx {
+            self.ew32(RCTL, rctl & !RCTL_EN);
+        }
+        self.e1e_flush();
+        self.kernel().delay(10000_000);
+
+        if hw.flags2.dma_burst {
+            /* set the writeback threshold (only takes effect if the RDTR
+             * is set). set GRAN=1 and write back up to 0x4 worth, and
+             * enable prefetching of 0x20 Rx descriptors
+             * granularity = 01
+             * wthresh = 04,
+             * hthresh = 04,
+             * pthresh = 0x20
+             */
+            self.ew32(RXDCTL(0), RXDCTL_DMA_BURST_ENABLE);
+            self.ew32(RXDCTL(1), RXDCTL_DMA_BURST_ENABLE);
+        }
+
+        /* set the Receive Delay Timer Register */
+        self.ew32(RDTR, hw.status.rx_int_delay);
+
+        /* irq moderation */
+        self.ew32(RADV, hw.status.rx_abs_int_delay);
+        if (hw.status.itr_setting != 0) && (hw.status.itr != 0) {
+            self.write_itr(hw.status.itr);
+        }
+
+        let mut ctrl_ext = self.er32(CTRL_EXT);
+        /* Auto-Mask interrupts upon ICR access */
+        ctrl_ext |= CTRL_EXT_IAME;
+        self.ew32(IAM, 0xffffffff);
+        self.ew32(CTRL_EXT, ctrl_ext);
+        self.e1e_flush();
+
+        /* Setup the HW Rx Head and Tail Descriptor Pointers and
+         * the Base and Length of the Rx Descriptor Ring
+         */
+        let mut rdba = self.rx_ring.dma;
+        self.ew32(RDBAL(0), (rdba & DMA_BIT_MASK(32)) as u32);
+        self.ew32(RDBAH(0), (rdba >> 32) as u32);
+        self.ew32(RDLEN(0), rdlen as u32);
+        self.ew32(RDH(0), 0);
+        self.ew32(RDT(0), 0);
+        // rx_ring->head = adapter->hw.hw_addr + E1000_RDH(0);
+        // rx_ring->tail = adapter->hw.hw_addr + E1000_RDT(0);
+
+        // writel(0, rx_ring->head);
+        // if (adapter->flags2 & FLAG2_PCIM2PCI_ARBITER_WA)
+        // 	e1000e_update_rdt_wa(rx_ring, 0);
+        // else
+        // 	writel(0, rx_ring->tail);
+
+        /* Enable Receive Checksum Offload for TCP and UDP */
+        // rxcsum = er32(RXCSUM);
+        // if (adapter->netdev->features & NETIF_F_RXCSUM)
+        // 	rxcsum |= E1000_RXCSUM_TUOFL;
+        // else
+        // 	rxcsum &= ~E1000_RXCSUM_TUOFL;
+        // self.ew32(RXCSUM, rxcsum);
+    }
+
+    fn setup_rctl(&mut self) {
+        let mut hw2 = self.hw.clone();
+        let hw = hw2.as_mut();
+
+        /* Program MC offset vector base */
+        let mut rctl = self.er32(RCTL);
+        rctl &= !(3 << RCTL_MO_SHIFT);
+        rctl |= RCTL_EN
+            | RCTL_BAM
+            | RCTL_LBM_NO
+            | RCTL_RDMTS_HALF
+            | (hw.mac.mc_filter_type << RCTL_MO_SHIFT);
+
+        /* Do not Store bad packets */
+        rctl &= !RCTL_SBP;
+
+        /* Enable Long Packet receive */
+        if self.kernel().is_mtu_bg_eth() {
+            rctl |= RCTL_LPE;
+        } else {
+            rctl &= !RCTL_LPE;
+        }
+
+        /* Some systems expect that the CRC is included in SMBUS traffic. The
+         * hardware strips the CRC before sending to both SMBUS (BMC) and to
+         * host memory when this is enabled
+         */
+        if (hw.flags2.crc_stripping) {
+            rctl |= RCTL_SECRC;
+        }
+
+        /* Setup buffer sizes */
+        rctl &= !RCTL_SZ_4096;
+        rctl |= RCTL_BSEX;
+
+        match hw.status.rx_buffer_len {
+            2048 | _ => {
+                // For 2048 or any other default/fallback case, disable BSEX and set 2048 size
+                rctl |= RCTL_SZ_2048;
+                rctl &= !RCTL_BSEX;
+            }
+            4096 => {
+                rctl |= RCTL_SZ_4096;
+            }
+            8192 => {
+                rctl |= RCTL_SZ_8192;
+            }
+            16384 => {
+                rctl |= RCTL_SZ_16384;
+            }
+        }
+
+        // Read RFCTL register, enable extended status, and write back
+        let mut rfctl = self.er32(RFCTL);
+        rfctl |= RFCTL_EXTEN;
+        self.ew32(RFCTL, rfctl);
+
+        hw.flags.restart_now = false;
     }
 
     fn read_phy_reg_mdic(&mut self, offset: u32) -> Result<u16> {
@@ -1012,6 +1157,7 @@ pub struct E1000Status {
 
     pub itr: u32,
     pub itr_setting: u32,
+    pub msix_vec_num: u32,
     pub tx_it: u16,
     pub rx_itr: u16,
 
@@ -1020,6 +1166,7 @@ pub struct E1000Status {
 
     pub rx_int_delay: u32,
     pub rx_abs_int_delay: u32,
+    pub rx_buffer_len: u32,
 
     pub max_frame_size: u32,
     pub min_frame_size: u32,

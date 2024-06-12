@@ -75,6 +75,9 @@ pub(crate) const TIDV: usize = 0x03820; // Tx Interrupt Delay Value - RW
 pub(crate) const TADV: usize = 0x0382C; // Tx Interrupt Absolute Delay Value - RW
 pub(crate) const IOSFPC: usize = 0x00F28; // TX corrupted data register
 
+pub(crate) const RDTR: usize = 0x02820; // Rx Delay Timer - Read-Write
+pub(crate) const RADV: usize = 0x0282C; // Rx Interrupt Absolute Delay Timer - Read-Write
+
 pub(crate) fn TARC(n: usize) -> usize {
     0x03840 + (n * 0x100)
 }
@@ -93,4 +96,9 @@ pub(crate) fn TDBAH(n: usize) -> usize {
         0x0E004 + (0x40 * n)
     }
 }
+
+pub(crate) fn EITR_82574(n: usize) -> usize {
+    0x000E8 + (0x4 * n)
+}
+
 
