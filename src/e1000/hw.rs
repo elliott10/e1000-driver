@@ -98,6 +98,9 @@ pub struct MacInfo {
 
     pub kind: MacType,
 
+
+
+
     pub collision_delta: u32,
     pub ledctl_default: u32,
     pub ledctl_mode1: u32,

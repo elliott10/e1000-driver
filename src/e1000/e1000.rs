@@ -324,6 +324,7 @@ where
     }
 
     pub fn reset(&mut self) -> Result {
+        self.get_speed_and_duplex_copper();
         let mut _hw = self.hw.clone();
         let hw = _hw.as_mut();
         let mut pba = hw.status.pba;
@@ -1028,7 +1029,46 @@ where
 
         Ok(mdic as u16)
     }
+    /**
+     * e1000_get_speed_and_duplex
+     * @hw: Struct containing variables accessed by shared code
+     * @speed: Speed of the connection
+     * @duplex: Duplex setting of the connection
+     *
+     * Detects the current speed and duplex settings of the hardware.
+     */
+    fn get_speed_and_duplex_copper(&mut self) {
+        let mut speed = 0;
+        let mut duplex = 0;
+        let status = self.er32(STATUS);
+        if (status & STATUS_SPEED_1000) > 0 {
+            speed = 1000;
+        } else if (status & STATUS_SPEED_100) > 0 {
+            speed = 100;
+        } else {
+            speed = 10;
+        }
 
+        if (status & STATUS_FD) > 0 {
+            duplex = FULL_DUPLEX;
+        } else {
+            duplex = HALF_DUPLEX;
+        }
+
+        let status = &mut self.hw.as_mut().status;
+        status.link_speed = speed;
+        status.link_duplex = duplex;
+
+        info!(
+            "{} Mbps, {} Duplex\n",
+            speed,
+            if duplex == FULL_DUPLEX {
+                "Full"
+            } else {
+                "Half"
+            }
+        );
+    }
     fn write_phy_reg_mdic(&mut self, offset: u32, value: u16) -> Result {
         self.hw.as_mut().phy.addr = 1;
 

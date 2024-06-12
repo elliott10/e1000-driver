@@ -503,6 +503,9 @@ pub(crate) const BMCR_RESET: u16 = 0x8000; // Reset to default state
 pub(crate) const BMCR_SPEED10: u16 = 0x0000; // Select 10Mbps
 
 pub(crate) const MANC2H: usize = 0x05860; // Management Control To Host - RW
+pub(crate) const HALF_DUPLEX: u16 = 1;
+pub(crate) const FULL_DUPLEX: u16 = 2;
+
 
 use core::arch::asm;
 
