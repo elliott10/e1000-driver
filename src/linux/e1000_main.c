@@ -112,7 +112,7 @@ int e1000e_open(struct net_device *netdev) {
   pr_info("e1000e open");
   size_t err = e1000r_open(e1000);
   if (err != 0) {
-    pr_info("e1000e open fail: %d", err);
+    pr_err("e1000e open fail: %d", err);
     goto err_req_irq;
   }
 
@@ -278,7 +278,6 @@ static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
  **/
 void e1000e_get_stats64(struct net_device *netdev,
                         struct rtnl_link_stats64 *stats) {
-  pr_info("get stats64");
   struct e1000_adapter *adapter = netdev_priv(netdev);
 
   spin_lock(&adapter->stats64_lock);
@@ -314,8 +313,6 @@ void e1000e_get_stats64(struct net_device *netdev,
   /* Tx Dropped needs to be maintained elsewhere */
 
   spin_unlock(&adapter->stats64_lock);
-
-  pr_info("get stats64 ok");
 }
 
 /**
@@ -378,7 +375,10 @@ static void e1000_netpoll(struct net_device *netdev) {}
  * @napi: struct associated with this polling callback
  * @budget: number of packets driver is allowed to process this poll
  **/
-static int e1000e_poll(struct napi_struct *napi, int budget) { return -1; }
+static int e1000e_poll(struct napi_struct *napi, int budget) {
+  pr_info("e1000 poll");
+  return -1;
+}
 static int e1000_set_features(struct net_device *netdev,
                               netdev_features_t features) {
   return -1;
@@ -684,7 +684,7 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent) {
     adapter->eee_advert = MDIO_EEE_100TX | MDIO_EEE_1000T;
 
   netdev->netdev_ops = &e1000e_netdev_ops;
-  e1000e_set_ethtool_ops(netdev);
+  // e1000e_set_ethtool_ops(netdev);
 
   netdev->watchdog_timeo = 5 * HZ;
   netif_napi_add(netdev, &adapter->napi, e1000e_poll);
@@ -757,6 +757,9 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent) {
   netdev->max_mtu = status->max_hw_frame_size - (VLAN_ETH_HLEN + ETH_FCS_LEN);
 
   e1000r_read_mac_addr(e1000, &mac_addr);
+
+  // netdev->flags |= IFF_NOARP;
+  // netdev->features |= NETIF_F_IP_CSUM;
 
   eth_hw_addr_set(netdev, mac_addr);
   if (!is_valid_ether_addr(netdev->dev_addr)) {

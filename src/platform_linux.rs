@@ -224,18 +224,10 @@ extern "C" fn e1000r_get_info_all(ptr: usize) -> e1000r_info_all {
 
 #[no_mangle]
 extern "C" fn e1000r_open(ptr: usize) -> i32 {
-    info!("open");
-
     let dev = dev_mut(ptr);
     match dev.dev.open() {
-        Ok(_) => {
-            info!("open 2 ");
-            0
-        }
-        Err(_) => {
-            info!("open fail");
-            -1
-        }
+        Ok(_) => 0,
+        Err(_) => -1,
     }
 }
 
