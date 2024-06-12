@@ -8,6 +8,7 @@ use crate::*;
 use core::alloc::Layout;
 use core::borrow::Borrow;
 use core::cmp::min;
+use core::iter::Scan;
 use core::mem::{self, align_of_val};
 use core::ptr::NonNull;
 use core::u32;
@@ -1118,10 +1119,50 @@ where
         );
     }
 
+    // fn check_for_copper_link(&mut self) -> Result {
+    //     if self.hw.as_ref().mac.get_link_status {
+    //         return Ok(());
+    //     }
+
+    //     self.hw.as_mut().mac.get_link_status = false;
+
+    //     let link = self.phy_has_link_generic(1, 0)?;
+    //     if !link {
+    //         return Ok(());
+    //     }
+
+
+    //     self.hw.as_mut().mac.get_link_status = true;
+    // }
+
+    // fn phy_has_link_generic(&mut self, iterations: u32, usec_interval: u32) -> Result<bool> {
+    //     let mut success = false;
+
+    //     for i in 0..iterations {
+    //         if self.e1e_rphy(MII_BMSR).is_err() {
+    //             self.kernel().delay(usec_interval * 1000);
+    //         }
+
+    //         let phy_status = self.e1e_rphy(MII_BMSR)?;
+    //         if phy_status & BMSR_LSTATUS != 0 {
+    //             success = true;
+    //             break;
+    //         }
+
+    //         self.kernel().delay(usec_interval * 1000);
+    //     }
+
+    //     success
+    // }
+
+    fn e1e_rphy(&mut self, offset: u32) -> Result<u16> {
+        self.read_phy_reg_mdic(offset)
+    }
+
     pub fn get_stats64(&mut self) -> E1000HWStats {
         let mut hw = self.hw.clone();
         let stats = &mut hw.as_mut().status.stats;
-        let mut  hw = self.hw.clone();
+        let mut hw = self.hw.clone();
         let hw = hw.as_mut();
 
         stats.crcerrs += self.er32(CRCERRS) as u64;

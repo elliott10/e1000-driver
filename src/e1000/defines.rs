@@ -559,3 +559,28 @@ pub(crate) fn SHRAH_PCH_LPT(i: usize) -> usize {
 pub(crate) fn MDEF(n: usize) -> usize {
     0x05890 + (4 * n)
 }
+
+
+pub(crate) const ADVERTISE_10_HALF: u16 = 0x0001;
+pub(crate) const ADVERTISE_10_FULL: u16 = 0x0002;
+pub(crate) const ADVERTISE_100_HALF: u16 = 0x0004;
+pub(crate) const ADVERTISE_100_FULL: u16 = 0x0008;
+// ADVERTISE_1000_HALF is informative and not used, hence commented out.
+// pub(crate) const ADVERTISE_1000_HALF: u32 = 0x0010;
+pub(crate) const ADVERTISE_1000_FULL: u16 = 0x0020;
+
+pub(crate) const E1000_ALL_SPEED_DUPLEX: u16 = 
+    ADVERTISE_10_HALF | ADVERTISE_10_FULL | ADVERTISE_100_HALF | ADVERTISE_100_FULL | ADVERTISE_1000_FULL;
+pub(crate) const E1000_ALL_NOT_GIG: u16 = 
+    ADVERTISE_10_HALF | ADVERTISE_10_FULL | ADVERTISE_100_HALF | ADVERTISE_100_FULL;
+pub(crate) const E1000_ALL_100_SPEED: u16 = 
+    ADVERTISE_100_HALF | ADVERTISE_100_FULL;
+pub(crate) const E1000_ALL_10_SPEED: u16 = 
+    ADVERTISE_10_HALF | ADVERTISE_10_FULL;
+pub(crate) const E1000_ALL_HALF_DUPLEX: u16 = 
+    ADVERTISE_10_HALF | ADVERTISE_100_HALF;
+
+pub(crate) const AUTONEG_ADVERTISE_SPEED_DEFAULT: u16 = E1000_ALL_SPEED_DUPLEX;
+
+
+pub(crate) const BMSR_LSTATUS: u16 = 0x0004; // Link status

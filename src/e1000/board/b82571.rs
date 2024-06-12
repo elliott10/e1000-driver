@@ -1,8 +1,8 @@
 use super::{super::defines::*, NvmOverride};
 use super::{BusWidth, Hw};
 use crate::e1000::board::NvmType;
-use crate::MacType;
 use crate::{e1000::regs::*, err::*, KernelFunc, MediaType};
+use crate::{MacType, PhyType};
 use alloc::vec::Vec;
 
 #[derive(Default)]
@@ -18,6 +18,7 @@ impl DevSpec82571 {
 
         self.init_mac_params(hw)?;
         self.init_nvm_params(hw)?;
+        self.init_phy_params(hw)?;
         Ok(())
     }
 
@@ -214,7 +215,6 @@ impl DevSpec82571 {
         Ok(())
     }
 
-
     fn get_hw_semaphore_82573<K: KernelFunc>(&self, hw: &mut Hw<K>) -> Result {
         Ok(())
     }
@@ -392,5 +392,27 @@ impl DevSpec82571 {
         }
 
         return self.laa_is_present;
+    }
+
+    fn init_phy_params<K: KernelFunc>(&mut self, hw: &mut Hw<K>) -> Result {
+        if (hw.phy.media_type != MediaType::media_type_copper) {
+            hw.phy.kind = PhyType::None;
+            return Ok(());
+        }
+
+        hw.phy.addr = 1;
+        hw.phy.autoneg_mask = AUTONEG_ADVERTISE_SPEED_DEFAULT;
+        hw.phy.reset_delay_us = 100;
+
+        match hw.mac.kind {
+            MacType::e1000_82571 | MacType::e1000_82572 => {
+                hw.phy.kind = PhyType::Igp2;
+            }
+            MacType::e1000_82573 => hw.phy.kind = PhyType::M88,
+            MacType::e1000_82574 | MacType::e1000_82583 => hw.phy.kind = PhyType::Bm,
+            _ => return Err(Error::Unknown("Error getting PHY")),
+        }
+
+        Ok(())
     }
 }

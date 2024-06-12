@@ -116,14 +116,17 @@ int e1000e_open(struct net_device *netdev) {
     goto err_req_irq;
   }
 
-  pr_info("e1000e open ok");
-
   napi_enable(&adapter->napi);
   // e1000_irq_enable(adapter);
   pm_runtime_put(&pdev->dev);
 
   e1000r_trigger_lsc(e1000);
 
+  netif_start_queue(netdev);
+
+  netif_carrier_on(netdev);
+
+  pr_info("e1000e open ok");
   return 0;
 err_req_irq:
 
