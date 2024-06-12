@@ -294,6 +294,9 @@ where
         let tdh = self.er32(TDH(0));
         let mut i = self.er32(TDT(0)) as usize;
 
+        info!("Read TDH 1= {:#x}\n", tdh);
+        info!("Read TDT 1= {:#x}\n", i);
+
         let mut offset = 0;
 
         let mut count = 0;
@@ -301,11 +304,11 @@ where
         let mut src = packet;
 
         loop {
+            let n = self.tx_ring.one_copy_data_from(i, src);
             let mut tx_desc = &mut self.tx_ring.as_mut()[i];
-            let n = tx_desc.copy_from(src);
-            tx_desc.lower.length = n as u16;
-            tx_desc.lower.cmd = (TXD_CMD_RS | TXD_CMD_EOP | TXD_CMD_IFCS) as u8;
-            tx_desc.upper.status = 0;
+            tx_desc.length = n as u16;
+            tx_desc.cmd = (TXD_CMD_RS | TXD_CMD_EOP | TXD_CMD_IFCS) as u8;
+            tx_desc.status = 0;
 
             count += 1;
             i += 1;
@@ -320,9 +323,9 @@ where
 
         // sync
         fence_w();
-
-        debug!("Read E1000_TDH = {:#x}\n", self.er32(TDH(0)));
-        debug!("Read E1000_TDT = {:#x}\n", self.er32(TDT(0)));
+        info!("link speed: 0x{:08x}", self.er32(STATUS));
+        info!("Read E1000_TDH 2= {:#x}\n", self.er32(TDH(0)));
+        info!("Read E1000_TDT 2= {:#x}\n", self.er32(TDT(0)));
 
         Ok(packet.len() as u32)
     }
@@ -650,8 +653,8 @@ where
             let tx_desc = self.tx_ring.next_to_use();
             tx_desc.addr = dma;
 
-            tx_desc.lower.data = (txd_lower | size).to_le();
-            tx_desc.upper.data = 0;
+            // tx_desc.data = (txd_lower | size).to_le();
+            // tx_desc.data = 0;
         }
         /* flush descriptors to memory before notifying the HW */
         fence();
@@ -718,6 +721,7 @@ where
         self.configure_tx();
         self.setup_rctl();
         self.configure_rx();
+        self.setup_tctl();
 
         Ok(())
     }
@@ -965,7 +969,20 @@ where
         // 	rxcsum &= ~E1000_RXCSUM_TUOFL;
         // self.ew32(RXCSUM, rxcsum);
     }
-
+    fn setup_tctl(&mut self) {
+        let mut hw2 = self.hw.clone();
+        let hw = hw2.as_mut();
+        // transmitter control bits.
+        self.ew32(
+            TCTL,
+            TCTL_EN |  // enable
+            TCTL_PSP |  // pad short packets
+            TCTL_RTLC |
+            (0x0f << TCTL_CT_SHIFT) & // collision stuff
+            !(TCTL_COLD) |
+            (0x3f << TCTL_COLD_SHIFT),
+        );
+    }
     fn setup_rctl(&mut self) {
         let mut hw2 = self.hw.clone();
         let hw = hw2.as_mut();
@@ -1130,7 +1147,6 @@ where
     //     if !link {
     //         return Ok(());
     //     }
-
 
     //     self.hw.as_mut().mac.get_link_status = true;
     // }

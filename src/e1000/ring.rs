@@ -55,7 +55,13 @@ where
     pub(crate) fn data_len(&self) -> usize {
         self.size * size_of::<T>()
     }
-
+    pub(crate) fn one_copy_data_from(&mut self, index: usize, data: &[u8]) -> usize {
+        let len = data.len().min(MBUF_SIZE);
+        let buf =
+            unsafe { &mut *slice_from_raw_parts_mut(self.mbufs[index] as *mut u8, MBUF_SIZE) };
+        buf[..len].copy_from_slice(&data[..len]);
+        len
+    }
     pub(crate) fn init(&mut self) {
         let alloc_ring_pages = self.ring_pages();
 
@@ -126,37 +132,50 @@ pub trait TransDesc: Default + Clone {
 
 /// [E1000 3.3.3]
 /// The dma descriptor for transmitting
+// #[derive(Debug, Default, Clone)]
+// #[repr(C, align(16))]
+// pub struct TxLower {
+//     pub data: u32,
+//     pub length: u16,
+//     pub cso: u8,
+//     pub cmd: u8,
+// }
+// /// [E1000 3.3.3]
+// /// The dma descriptor for transmitting
+// #[derive(Debug, Default, Clone)]
+// #[repr(C, align(16))]
+// pub struct TxUpper {
+//     pub data: u8,
+//     pub status: u8,
+//     pub css: u8,
+//     pub special: u16,
+// }
+
+// /// [E1000 3.3.3]
+// /// The dma descriptor for transmitting
+// #[derive(Debug, Default, Clone)]
+// #[repr(C, align(16))]
+// pub struct TxDesc {
+//     pub addr: u64,
+//     pub lower: TxLower,
+//     pub upper: TxUpper,
+// }
+
 #[derive(Debug, Default, Clone)]
 #[repr(C, align(16))]
-pub struct TxLower {
-    pub data: u32,
+pub struct TxDesc {
+    pub addr: u64,
     pub length: u16,
     pub cso: u8,
     pub cmd: u8,
-}
-/// [E1000 3.3.3]
-/// The dma descriptor for transmitting
-#[derive(Debug, Default, Clone)]
-#[repr(C, align(16))]
-pub struct TxUpper {
-    pub data: u8,
     pub status: u8,
     pub css: u8,
     pub special: u16,
 }
 
-/// [E1000 3.3.3]
-/// The dma descriptor for transmitting
-#[derive(Debug, Default, Clone)]
-#[repr(C, align(16))]
-pub struct TxDesc {
-    pub addr: u64,
-    pub lower: TxLower,
-    pub upper: TxUpper,
-}
 impl TransDesc for TxDesc {
     fn set_status(&mut self, status: u8) {
-        self.upper.status = status;
+        self.status = status;
     }
 
     fn set_addr(&mut self, addr: u64) {
@@ -164,14 +183,7 @@ impl TransDesc for TxDesc {
     }
 }
 
-impl TxDesc {
-    pub(crate) fn copy_from(&mut self, data: &[u8]) -> usize {
-        let len = data.len().min(MBUF_SIZE);
-        let buf = unsafe { &mut *slice_from_raw_parts_mut(self.addr as *mut u8, MBUF_SIZE) };
-        buf[..len].copy_from_slice(&data[..len]);
-        len
-    }
-}
+impl TxDesc {}
 
 /// [E1000 3.2.3]
 /// The dma descriptor for receiving
