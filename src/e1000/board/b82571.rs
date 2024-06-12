@@ -214,6 +214,7 @@ impl DevSpec82571 {
         Ok(())
     }
 
+
     fn get_hw_semaphore_82573<K: KernelFunc>(&self, hw: &mut Hw<K>) -> Result {
         Ok(())
     }
@@ -221,6 +222,11 @@ impl DevSpec82571 {
         Ok(())
     }
 
+    pub(crate) fn put_hw_semaphore_82571<K: KernelFunc>(&self, hw: &mut Hw<K>) {
+        let mut swsm = hw.er32(SWSM);
+        swsm &= !(SWSM_SMBI | SWSM_SWESMBI);
+        hw.ew32(SWSM, swsm);
+    }
     fn put_hw_semaphore_82573<K: KernelFunc>(&self, hw: &mut Hw<K>) {}
     fn put_hw_semaphore_82574<K: KernelFunc>(&self, hw: &mut Hw<K>) {}
 
@@ -244,10 +250,6 @@ impl DevSpec82571 {
         for i in 0..hw.mac.mta_reg_count {
             hw.write_reg_array(MTA, i as usize, 0);
         }
-
-        
-
-
         Ok(())
     }
 

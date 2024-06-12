@@ -648,6 +648,32 @@ where
             }
         }
     }
+
+    /**
+     * e1000_power_up_phy_copper - Restore copper link in case of PHY power down
+     * @hw: pointer to the HW structure
+     *
+     * In the case of a PHY power down to save power, or to turn off link during a
+     * driver unload, or wake on lan is not enabled, restore the link to previous
+     * settings.
+     **/
+    pub fn power_up_phy_copper(&self) {
+        // u16 mii_reg = 0;
+        // int ret;
+
+        // /* The PHY will retain its settings across a power down/up cycle */
+        // let ret = e1e_rphy(hw, MII_BMCR, &mii_reg);
+        // if (ret) {
+        // e_dbg("Error reading PHY register\n");
+        // /		return;
+        // /}
+        // mii_reg &= ~BMCR_PDOWN;
+        // e1e_wphy(hw, MII_BMCR, mii_reg);
+    }
+
+
+    
+
 }
 
 #[derive(Clone)]
@@ -788,7 +814,7 @@ impl DevSpec {
         }
     }
 
-    pub (crate)fn init_hw<K: KernelFunc>(&self, hw: &mut Hw<K>) -> Result {
+    pub(crate) fn init_hw<K: KernelFunc>(&self, hw: &mut Hw<K>) -> Result {
         match self {
             DevSpec::E82571(i) => i.init_hw(hw),
             DevSpec::E80003es2lan => todo!(),

@@ -398,6 +398,47 @@ pub(crate) const VFTA_ENTRY_BIT_SHIFT_MASK: u16 = 0x1F;
 pub(crate) const VLAN_FILTER_TBL_SIZE: usize = 128; // VLAN Filter Table (4096 bits)
 pub(crate) const RAH_AV: u32 = 0x80000000;
 
+// SerDes Control
+pub(crate) const GEN_POLL_TIMEOUT: usize = 640;
+
+// Generic MII registers
+pub(crate) const MII_BMCR: u32 = 0x00; // Basic mode control register
+pub(crate) const MII_BMSR: u32 = 0x01; // Basic mode status register
+pub(crate) const MII_PHYSID1: u8 = 0x02; // PHYS ID 1
+pub(crate) const MII_PHYSID2: u8 = 0x03; // PHYS ID 2
+pub(crate) const MII_ADVERTISE: u8 = 0x04; // Advertisement control register
+pub(crate) const MII_LPA: u8 = 0x05; // Link partner ability register
+pub(crate) const MII_EXPANSION: u8 = 0x06; // Expansion register
+pub(crate) const MII_CTRL1000: u8 = 0x09; // 1000BASE-T control
+pub(crate) const MII_STAT1000: u8 = 0x0a; // 1000BASE-T status
+pub(crate) const MII_MMD_CTRL: u8 = 0x0d; // MMD Access Control Register
+pub(crate) const MII_MMD_DATA: u8 = 0x0e; // MMD Access Data Register
+pub(crate) const MII_ESTATUS: u8 = 0x0f; // Extended Status
+pub(crate) const MII_DCOUNTER: u8 = 0x12; // Disconnect counter
+pub(crate) const MII_FCSCOUNTER: u8 = 0x13; // False carrier counter
+pub(crate) const MII_NWAYTEST: u8 = 0x14; // N-way auto-neg test register
+pub(crate) const MII_RERRCOUNTER: u8 = 0x15; // Receive error counter
+pub(crate) const MII_SREVISION: u8 = 0x16; // Silicon revision
+pub(crate) const MII_RESV1: u8 = 0x17; // Reserved...
+pub(crate) const MII_LBRERROR: u8 = 0x18; // Lpback, rx, bypass error
+pub(crate) const MII_PHYADDR: u8 = 0x19; // PHY address
+pub(crate) const MII_RESV2: u8 = 0x1a; // Reserved...
+pub(crate) const MII_TPISTATUS: u8 = 0x1b; // TPI status for 10mbps
+pub(crate) const MII_NCONFIG: u8 = 0x1c; // Network interface config
+
+// Basic mode control register
+pub(crate) const BMCR_RESV: u16 = 0x003f; // Unused...
+pub(crate) const BMCR_SPEED1000: u16 = 0x0040; // MSB of Speed (1000)
+pub(crate) const BMCR_CTST: u16 = 0x0080; // Collision test
+pub(crate) const BMCR_FULLDPLX: u16 = 0x0100; // Full duplex
+pub(crate) const BMCR_ANRESTART: u16 = 0x0200; // Auto negotiation restart
+pub(crate) const BMCR_ISOLATE: u16 = 0x0400; // Isolate data paths from MII
+pub(crate) const BMCR_PDOWN: u16 = 0x0800; // Enable low power state
+pub(crate) const BMCR_ANENABLE: u16 = 0x1000; // Enable auto negotiation
+pub(crate) const BMCR_SPEED100: u16 = 0x2000; // Select 100Mbps
+pub(crate) const BMCR_LOOPBACK: u16 = 0x4000; // TXD loopback bits
+pub(crate) const BMCR_RESET: u16 = 0x8000; // Reset to default state
+pub(crate) const BMCR_SPEED10: u16 = 0x0000; // Select 10Mbps
 use core::arch::asm;
 
 pub(crate) fn fence() {

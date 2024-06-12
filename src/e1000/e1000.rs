@@ -3,14 +3,17 @@ use super::hw::{self, DevSpec, Hw, HwRc, MacType};
 use super::regs::*;
 use super::ring::*;
 use crate::err::{Error, Result};
+use crate::phy::*;
 use crate::*;
 use core::alloc::Layout;
 use core::borrow::Borrow;
 use core::cmp::min;
 use core::mem::{self, align_of_val};
 use core::ptr::NonNull;
+use core::u32;
 use e1000::board;
 use ffi::CStr;
+use hw_semaphore::HwSemaphore;
 
 const TX_RING_SIZE: usize = 256;
 const RX_RING_SIZE: usize = 256;
@@ -478,7 +481,6 @@ where
 
         self.dev_spec.init_hw(hw)?;
 
-    
         Ok(())
     }
     /**
@@ -641,6 +643,137 @@ where
         self.tx_ring.init();
         self.rx_ring.init();
         info!("ring ok");
+
+        self.power_up_phy()?;
+        self.configure()?;
+        Ok(())
+    }
+
+    fn configure(&mut self) -> Result {
+        let stat = self.hw.as_ref().er32(STATUS);
+
+        Ok(())
+    }
+
+    fn get_hw_semaphore(&mut self) -> Result<HwSemaphore<K>> {
+        HwSemaphore::new(self.hw.clone(), &mut self.dev_spec)
+    }
+
+    // fn read_phy_reg_bm2(&self, offset: u32) -> Result<u16> {
+    //     let sp = self.get_hw_semaphore()?;
+    //     let mut page = (offset >> IGP_PAGE_SHIFT) as u16;
+    //     self.hw.as_mut().phy.addr = 1;
+
+    //     drop(sp);
+    //     Ok(())
+    // }
+
+    fn power_up_phy(&mut self) -> Result {
+        let mut mii = self.read_phy_reg_mdic(MII_BMCR)?;
+        mii &= !BMCR_PDOWN;
+        self.write_phy_reg_mdic(MII_BMCR, mii)?;
+        info!("power up phy ok");
+        Ok(())
+    }
+
+    fn read_phy_reg_mdic(&mut self, offset: u32) -> Result<u16> {
+        if (offset > MAX_PHY_REG_ADDRESS) {
+            error!("PHY Address {} is out of range", offset);
+            return Err(Error::Unknown("PHY Address"));
+        }
+        /* Set up Op-code, Phy Address, and register offset in the MDI
+         * Control register.  The MAC will take care of interfacing with the
+         * PHY to retrieve the desired data.
+         */
+        let mut mdic = ((offset << MDIC_REG_SHIFT)
+            | (self.hw.as_mut().phy.addr << MDIC_PHY_SHIFT)
+            | (MDIC_OP_READ));
+
+        self.ew32(MDIC, mdic);
+
+        for _ in 0..GEN_POLL_TIMEOUT {
+            self.kernel().delay(50_000);
+            mdic = self.er32(MDIC);
+            if (mdic & MDIC_READY) > 0 {
+                break;
+            }
+        }
+
+        if (mdic & MDIC_READY) == 0 {
+            error!("MDI Read PHY Reg Address {} did not complete", offset);
+            return Err(Error::Unknown("PHY"));
+        }
+        if (mdic & MDIC_ERROR) > 0 {
+            error!("MDI Read PHY Reg Address {} Error", offset);
+            return Err(Error::Unknown("PHY"));
+        }
+        if (((mdic & MDIC_REG_MASK) >> MDIC_REG_SHIFT) != offset) {
+            error!(
+                "MDI Read offset error - requested {}, returned {}",
+                offset,
+                (mdic & MDIC_REG_MASK) >> MDIC_REG_SHIFT,
+            );
+
+            return Err(Error::Unknown("PHY"));
+        }
+
+        /* Allow some time after each MDIC transaction to avoid
+         * reading duplicate data in the next MDIC transaction.
+         */
+        if (self.hw.as_ref().mac.kind == MacType::e1000_pch2lan) {
+            self.kernel().delay(100_000);
+        }
+
+        Ok(mdic as u16)
+    }
+
+    fn write_phy_reg_mdic(&mut self, offset: u32, value: u16) -> Result {
+        if (offset > MAX_PHY_REG_ADDRESS) {
+            error!("PHY Address {} is out of range", offset);
+            return Err(Error::Unknown("PHY Address"));
+        }
+        /* Set up Op-code, Phy Address, and register offset in the MDI
+         * Control register.  The MAC will take care of interfacing with the
+         * PHY to retrieve the desired data.
+         */
+        let mut mdic = ((offset << MDIC_REG_SHIFT)
+            | (self.hw.as_mut().phy.addr << MDIC_PHY_SHIFT)
+            | (MDIC_OP_WRITE));
+
+        self.ew32(MDIC, mdic);
+
+        for _ in 0..GEN_POLL_TIMEOUT {
+            self.kernel().delay(50_000);
+            mdic = self.er32(MDIC);
+            if (mdic & MDIC_READY) > 0 {
+                break;
+            }
+        }
+
+        if (mdic & MDIC_READY) == 0 {
+            error!("MDI Read PHY Reg Address {} did not complete", offset);
+            return Err(Error::Unknown("PHY"));
+        }
+        if (mdic & MDIC_ERROR) > 0 {
+            error!("MDI Read PHY Reg Address {} Error", offset);
+            return Err(Error::Unknown("PHY"));
+        }
+        if (((mdic & MDIC_REG_MASK) >> MDIC_REG_SHIFT) != offset) {
+            error!(
+                "MDI Read offset error - requested {}, returned {}",
+                offset,
+                (mdic & MDIC_REG_MASK) >> MDIC_REG_SHIFT,
+            );
+
+            return Err(Error::Unknown("PHY"));
+        }
+
+        /* Allow some time after each MDIC transaction to avoid
+         * reading duplicate data in the next MDIC transaction.
+         */
+        if (self.hw.as_ref().mac.kind == MacType::e1000_pch2lan) {
+            self.kernel().delay(100_000);
+        }
 
         Ok(())
     }
