@@ -238,3 +238,11 @@ pub struct e1000r_info_all {
     pub flags2: Flags2,
     pub mac: MacInfo,
 }
+
+
+#[no_mangle]
+unsafe extern "C" fn e1000r_trigger_lsc(ptr: usize) {
+    let dev = dev_mut(ptr);
+    dev.dev.trigger_lsc()
+}
+

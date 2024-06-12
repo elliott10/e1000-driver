@@ -125,6 +125,9 @@ int e1000e_open(struct net_device *netdev) {
 err_req_irq:
 
   pm_runtime_put_sync(&pdev->dev);
+
+  e1000r_trigger_lsc(e1000);
+
   return err;
 }
 /**
@@ -177,6 +180,8 @@ static void e1000_io_resume(struct pci_dev *pdev) {}
 static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
                                     struct net_device *netdev) {
   struct e1000_adapter *adapter = netdev_priv(netdev);
+  pr_info("xmit frame");
+
   // unsigned int first;
   size_t e1000 = adapter->ptr;
   unsigned int len = skb_headlen(skb);
@@ -271,7 +276,9 @@ static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
  * Returns the address of the device statistics structure.
  **/
 void e1000e_get_stats64(struct net_device *netdev,
-                        struct rtnl_link_stats64 *stats) {}
+                        struct rtnl_link_stats64 *stats) {
+  pr_info("get stats64");
+}
 
 /**
  * e1000e_set_rx_mode - secondary unicast, Multicast and Promiscuous mode set

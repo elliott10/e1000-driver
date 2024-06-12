@@ -287,16 +287,43 @@ where
         Ok(pba_num)
     }
 
-    pub fn transmit(&mut self, packet: &[u8])->Result<u32>{
-        info!("transmit");
+    pub fn transmit(&mut self, packet: &[u8]) -> Result<u32> {
+        info!("transmit {}", packet.len());
 
         let tdh = self.er32(TDH(0));
-        let t_index = self.er32(TDT(0));
+        let mut i = self.er32(TDT(0)) as usize;
 
-        
+        let mut offset = 0;
 
+        let mut count = 0;
 
-        Ok(0)
+        let mut src = packet;
+
+        loop {
+            let mut tx_desc = &mut self.tx_ring.as_mut()[i];
+            let n = tx_desc.copy_from(src);
+            tx_desc.lower.length = n as u16;
+            tx_desc.lower.cmd = (TXD_CMD_RS | TXD_CMD_EOP | TXD_CMD_IFCS) as u8;
+            tx_desc.upper.status = 0;
+
+            count += 1;
+            i += 1;
+
+            if n >= src.len() {
+                break;
+            }
+            src = &src[n..];
+        }
+
+        self.ew32(TDT(0), (i % TX_RING_SIZE) as u32);
+
+        // sync
+        fence_w();
+
+        debug!("Read E1000_TDH = {:#x}\n", self.er32(TDH(0)));
+        debug!("Read E1000_TDT = {:#x}\n", self.er32(TDT(0)));
+
+        Ok(packet.len() as u32)
     }
 
     fn is_enable_mng_pass_thru(&mut self) -> bool {
@@ -496,6 +523,15 @@ where
 
         Ok(())
     }
+
+    pub fn trigger_lsc(&self) {
+        if self.hw.as_ref().status.msix_vec_num > 0 {
+            self.ew32(ICS, ICS_LSC | ICS_OTHER);
+        } else {
+            self.ew32(ICS, ICS_LSC);
+        }
+    }
+
     /**
      * e1000e_get_hw_control - get control of the h/w from f/w
      * @adapter: address of board private structure

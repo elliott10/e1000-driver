@@ -1,7 +1,7 @@
 use core::{
     marker,
     mem::size_of,
-    ptr::{self, null},
+    ptr::{self, null, slice_from_raw_parts, slice_from_raw_parts_mut},
     slice::from_raw_parts_mut,
 };
 
@@ -9,7 +9,7 @@ use alloc::vec::Vec;
 
 use super::KernelFunc;
 
-const MBUF_SIZE: usize = 2048;
+pub(crate) const MBUF_SIZE: usize = 2048;
 pub(crate) const TXD_STAT_DD: u32 = 0x00000001; /* Descriptor Done */
 
 pub(crate) struct Ring<T, K>
@@ -81,6 +81,26 @@ where
     }
 }
 
+impl<T, K> AsRef<[T]> for Ring<T, K>
+where
+    T: TransDesc,
+    K: KernelFunc,
+{
+    fn as_ref(&self) -> &[T] {
+        unsafe { &*slice_from_raw_parts(self.ring, self.size) }
+    }
+}
+
+impl<T, K> AsMut<[T]> for Ring<T, K>
+where
+    T: TransDesc,
+    K: KernelFunc,
+{
+    fn as_mut(&mut self) -> &mut [T] {
+        unsafe { &mut *slice_from_raw_parts_mut(self.ring, self.size) }
+    }
+}
+
 impl<T, K> Drop for Ring<T, K>
 where
     T: TransDesc,
@@ -141,6 +161,15 @@ impl TransDesc for TxDesc {
 
     fn set_addr(&mut self, addr: u64) {
         self.addr = addr;
+    }
+}
+
+impl TxDesc {
+    pub(crate) fn copy_from(&mut self, data: &[u8]) -> usize {
+        let len = data.len().min(MBUF_SIZE);
+        let buf = unsafe { &mut *slice_from_raw_parts_mut(self.addr as *mut u8, MBUF_SIZE) };
+        buf[..len].copy_from_slice(&data[..len]);
+        len
     }
 }
 

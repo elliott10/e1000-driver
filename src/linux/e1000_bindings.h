@@ -269,3 +269,5 @@ void e1000r_set_flags(size_t ptr, struct Flags flags);
 struct E1000Status *e1000r_status(size_t ptr);
 
 int32_t e1000r_transmit(size_t ptr, const uint8_t *pkt, uint32_t len);
+
+void e1000r_trigger_lsc(size_t ptr);

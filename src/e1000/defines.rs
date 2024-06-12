@@ -506,6 +506,11 @@ pub(crate) const MANC2H: usize = 0x05860; // Management Control To Host - RW
 pub(crate) const HALF_DUPLEX: u16 = 1;
 pub(crate) const FULL_DUPLEX: u16 = 2;
 
+pub(crate) const ICS_LSC: u32 = ICR_LSC;       // Link Status Change
+pub(crate) const ICS_RXSEQ: u32 = ICR_RXSEQ;   // Rx sequence error
+pub(crate) const ICS_RXDMT0: u32 = ICR_RXDMT0; // Rx desc min. threshold
+pub(crate) const ICS_OTHER: u32 = ICR_OTHER;   // Other Interrupt
+
 
 use core::arch::asm;
 
