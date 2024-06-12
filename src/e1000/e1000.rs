@@ -957,7 +957,7 @@ where
         // 	writel(0, rx_ring->tail);
 
         /* Enable Receive Checksum Offload for TCP and UDP */
-        // rxcsum = er32(RXCSUM);
+        // rxcsum = self.er32(RXCSUM);
         // if (adapter->netdev->features & NETIF_F_RXCSUM)
         // 	rxcsum |= E1000_RXCSUM_TUOFL;
         // else
@@ -1117,6 +1117,71 @@ where
             }
         );
     }
+
+    pub fn get_stats64(&mut self) -> E1000HWStats {
+        let mut hw = self.hw.clone();
+        let stats = &mut hw.as_mut().status.stats;
+        let mut  hw = self.hw.clone();
+        let hw = hw.as_mut();
+
+        stats.crcerrs += self.er32(CRCERRS) as u64;
+        stats.gprc += self.er32(GPRC) as u64;
+        stats.gorc += self.er32(GORCL) as u64;
+        self.er32(GORCH); /* Clear gorc */
+        stats.bprc += self.er32(BPRC) as u64;
+        stats.mprc += self.er32(MPRC) as u64;
+        stats.roc += self.er32(ROC) as u64;
+
+        stats.mpc += self.er32(MPC) as u64;
+
+        /* Half-duplex statistics */
+        if (self.hw.as_ref().status.link_duplex == HALF_DUPLEX) {
+            if (self.hw.as_ref().flags2.has_phy_stats) {
+                // e1000e_update_phy_stats(adapter);
+            } else {
+                stats.scc += self.er32(SCC) as u64;
+                stats.ecol += self.er32(ECOL) as u64;
+                stats.mcc += self.er32(MCC) as u64;
+                stats.latecol += self.er32(LATECOL) as u64;
+                stats.dc += self.er32(DC) as u64;
+
+                // hw->mac.collision_delta = self.er32(COLC);
+
+                if ((hw.mac.kind != MacType::e1000_82574) && (hw.mac.kind != MacType::e1000_82583))
+                {
+                    stats.tncrs += self.er32(TNCRS) as u64;
+                }
+            }
+            stats.colc += hw.mac.collision_delta as u64;
+        }
+
+        stats.xonrxc += self.er32(XONRXC) as u64;
+        stats.xontxc += self.er32(XONTXC) as u64;
+        stats.xoffrxc += self.er32(XOFFRXC) as u64;
+        stats.xofftxc += self.er32(XOFFTXC) as u64;
+        stats.gptc += self.er32(GPTC) as u64;
+        stats.gotc += self.er32(GOTCL) as u64;
+        self.er32(GOTCH); /* Clear gotc */
+        stats.rnbc += self.er32(RNBC) as u64;
+        stats.ruc += self.er32(RUC) as u64;
+
+        stats.mptc += self.er32(MPTC) as u64;
+        stats.bptc += self.er32(BPTC) as u64;
+
+        /* used for adaptive IFS */
+
+        hw.mac.tx_packet_delta = self.er32(TPT);
+        stats.tpt += hw.mac.tx_packet_delta as u64;
+
+        stats.algnerrc += self.er32(ALGNERRC) as u64;
+        stats.rxerrc += self.er32(RXERRC) as u64;
+        stats.cexterr += self.er32(CEXTERR) as u64;
+        stats.tsctc += self.er32(TSCTC) as u64;
+        stats.tsctfc += self.er32(TSCTFC) as u64;
+
+        stats.clone()
+    }
+
     fn write_phy_reg_mdic(&mut self, offset: u32, value: u16) -> Result {
         self.hw.as_mut().phy.addr = 1;
 

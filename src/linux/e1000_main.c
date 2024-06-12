@@ -120,13 +120,14 @@ int e1000e_open(struct net_device *netdev) {
 
   napi_enable(&adapter->napi);
   // e1000_irq_enable(adapter);
+  pm_runtime_put(&pdev->dev);
+
+  e1000r_trigger_lsc(e1000);
 
   return 0;
 err_req_irq:
 
   pm_runtime_put_sync(&pdev->dev);
-
-  e1000r_trigger_lsc(e1000);
 
   return err;
 }
@@ -278,6 +279,43 @@ static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
 void e1000e_get_stats64(struct net_device *netdev,
                         struct rtnl_link_stats64 *stats) {
   pr_info("get stats64");
+  struct e1000_adapter *adapter = netdev_priv(netdev);
+
+  spin_lock(&adapter->stats64_lock);
+
+  struct E1000HWStats st = e1000r_stats64(adapter->ptr);
+
+  /* Fill out the OS statistics structure */
+  stats->rx_bytes = st.gorc;
+  stats->rx_packets = st.gprc;
+  stats->tx_bytes = st.gotc;
+  stats->tx_packets = st.gptc;
+  stats->multicast = st.mprc;
+  stats->collisions = st.colc;
+
+  /* Rx Errors */
+
+  /* RLEC on some newer hardware can be incorrect so build
+   * our own version based on RUC and ROC
+   */
+  stats->rx_errors =
+      st.rxerrc + st.crcerrs + st.algnerrc + st.ruc + st.roc + st.cexterr;
+  stats->rx_length_errors = st.ruc + st.roc;
+  stats->rx_crc_errors = st.crcerrs;
+  stats->rx_frame_errors = st.algnerrc;
+  stats->rx_missed_errors = st.mpc;
+
+  /* Tx Errors */
+  stats->tx_errors = st.ecol + st.latecol;
+  stats->tx_aborted_errors = st.ecol;
+  stats->tx_window_errors = st.latecol;
+  stats->tx_carrier_errors = st.tncrs;
+
+  /* Tx Dropped needs to be maintained elsewhere */
+
+  spin_unlock(&adapter->stats64_lock);
+
+  pr_info("get stats64 ok");
 }
 
 /**

@@ -176,9 +176,15 @@ unsafe extern "C" fn e1000r_status<'a>(ptr: usize) -> &'static mut E1000Status {
 }
 
 #[no_mangle]
+unsafe extern "C" fn e1000r_stats64<'a>(ptr: usize) -> E1000HWStats {
+    let dev = dev_mut(ptr);
+    dev.dev.get_stats64()
+}
+
+#[no_mangle]
 unsafe extern "C" fn e1000r_transmit(ptr: usize, pkt: *const u8, len: u32) -> i32 {
     let dev = dev_mut(ptr);
-    let pkt = unsafe { &*slice_from_raw_parts(pkt , len as usize) };
+    let pkt = unsafe { &*slice_from_raw_parts(pkt, len as usize) };
 
     match dev.dev.transmit(pkt) {
         Ok(n) => n as i32,
@@ -221,7 +227,16 @@ extern "C" fn e1000r_open(ptr: usize) -> i32 {
     info!("open");
 
     let dev = dev_mut(ptr);
-    rfn(|| dev.dev.open())
+    match dev.dev.open() {
+        Ok(_) => {
+            info!("open 2 ");
+            0
+        }
+        Err(_) => {
+            info!("open fail");
+            -1
+        }
+    }
 }
 
 #[no_mangle]
@@ -239,10 +254,8 @@ pub struct e1000r_info_all {
     pub mac: MacInfo,
 }
 
-
 #[no_mangle]
 unsafe extern "C" fn e1000r_trigger_lsc(ptr: usize) {
     let dev = dev_mut(ptr);
     dev.dev.trigger_lsc()
 }
-

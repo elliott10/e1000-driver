@@ -53,10 +53,10 @@ pub(crate) const EIAC_82574: usize = 0x000DC;
 pub(crate) const EIAC_MASK_82574: u32 = 0x01F00000;
 
 pub(crate) const STRAP: usize = 0x0000C;
-pub(crate) const STRAP_SMBUS_ADDRESS_MASK: usize = 0x00FE0000;
-pub(crate) const STRAP_SMBUS_ADDRESS_SHIFT: usize = 17;
-pub(crate) const STRAP_SMT_FREQ_MASK: usize = 0x00003000;
-pub(crate) const STRAP_SMT_FREQ_SHIFT: usize = 12;
+pub(crate) const STRAP_SMBUS_ADDRESS_MASK: u32 = 0x00FE0000;
+pub(crate) const STRAP_SMBUS_ADDRESS_SHIFT: u32 = 17;
+pub(crate) const STRAP_SMT_FREQ_MASK: u32 = 0x00003000;
+pub(crate) const STRAP_SMT_FREQ_SHIFT: u32 = 12;
 
 pub(crate) const FEXTNVM: u16 = 0x00028; // Future Extended NVM - RW
 pub(crate) const FEXTNVM3: u16 = 0x0003C; // Future Extended NVM 3 - RW
@@ -64,8 +64,8 @@ pub(crate) const FEXTNVM4: u16 = 0x00024; // Future Extended NVM 4 - RW
 pub(crate) const FEXTNVM5: u16 = 0x00014; // Future Extended NVM 5 - RW
 pub(crate) const FEXTNVM6: u16 = 0x00010; // Future Extended NVM 6 - RW
 pub(crate) const FEXTNVM7: u16 = 0x000E4; // Future Extended NVM 7 - RW
-pub(crate) const FEXTNVM8: u32 = 0x5BB0; // Future Extended NVM 8 - RW
-pub(crate) const FEXTNVM9: u32 = 0x5BB4; // Future Extended NVM 9 - RW
+pub(crate) const FEXTNVM8: usize = 0x5BB0; // Future Extended NVM 8 - RW
+pub(crate) const FEXTNVM9: usize = 0x5BB4; // Future Extended NVM 9 - RW
 pub(crate) const FEXTNVM11: usize = 0x5BBC; // Future Extended NVM 11 - RW
 pub(crate) const FEXTNVM12: usize = 0x5BC0; // Future Extended NVM 12 - RW
 
@@ -101,4 +101,52 @@ pub(crate) fn EITR_82574(n: usize) -> usize {
     0x000E8 + (0x4 * n)
 }
 
+pub(crate) const CRCERRS: usize = 0x04000; // CRC Error Count - Read/clear
+pub(crate) const ALGNERRC: usize = 0x04004; // Alignment Error Count - Read/clear
+pub(crate) const SYMERRS: usize = 0x04008; // Symbol Error Count - Read/clear
+pub(crate) const RXERRC: usize = 0x0400C; // Receive Error Count - Read/clear
+pub(crate) const MPC: usize = 0x04010; // Missed Packet Count - Read/clear
+pub(crate) const SCC: usize = 0x04014; // Single Collision Count - Read/clear
+pub(crate) const ECOL: usize = 0x04018; // Excessive Collision Count - Read/clear
+pub(crate) const MCC: usize = 0x0401C; // Multiple Collision Count - Read/clear
+pub(crate) const LATECOL: usize = 0x04020; // Late Collision Count - Read/clear
+pub(crate) const COLC: usize = 0x04028; // Collision Count - Read/clear
+pub(crate) const DC: usize = 0x04030; // Defer Count - Read/clear
+pub(crate) const TNCRS: usize = 0x04034; // Tx-No CRS - Read/clear
+pub(crate) const SEC: usize = 0x04038; // Sequence Error Count - Read/clear
+pub(crate) const CEXTERR: usize = 0x0403C; // Carrier Extension Error Count - Read/clear
+pub(crate) const RLEC: usize = 0x04040; // Receive Length Error Count - Read/clear
+pub(crate) const XONRXC: usize = 0x04048; // XON Rx Count - Read/clear
+pub(crate) const XONTXC: usize = 0x0404C; // XON Tx Count - Read/clear
+pub(crate) const XOFFRXC: usize = 0x04050; // XOFF Rx Count - Read/clear
+pub(crate) const XOFFTXC: usize = 0x04054; // XOFF Tx Count - Read/clear
+pub(crate) const FCRUC: usize = 0x04058; // Flow Control Rx Unsupported Count - Read/clear
+pub(crate) const PRC64: usize = 0x0405C; // Packets Rx (64 bytes) - Read/clear
+pub(crate) const PRC127: usize = 0x04060; // Packets Rx (65-127 bytes) - Read/clear
+pub(crate) const PRC255: usize = 0x04064; // Packets Rx (128-255 bytes) - Read/clear
+pub(crate) const PRC511: usize = 0x04068; // Packets Rx (256-511 bytes) - Read/clear
+pub(crate) const PRC1023: usize = 0x0406C; // Packets Rx (512-1023 bytes) - Read/clear
+pub(crate) const PRC1522: usize = 0x04070; // Packets Rx (1024-1522 bytes) - Read/clear
+pub(crate) const GPRC: usize = 0x04074; // Good Packets Rx Count - Read/clear
+pub(crate) const BPRC: usize = 0x04078; // Broadcast Packets Rx Count - Read/clear
+pub(crate) const MPRC: usize = 0x0407C; // Multicast Packets Rx Count - Read/clear
+pub(crate) const GPTC: usize = 0x04080; // Good Packets Tx Count - Read/clear
+pub(crate) const GORCL: usize = 0x04088; // Good Octets Rx Count Low - Read/clear
+pub(crate) const GORCH: usize = 0x0408C; // Good Octets Rx Count High - Read/clear
+pub(crate) const GOTCL: usize = 0x04090; // Good Octets Tx Count Low - Read/clear
+pub(crate) const GOTCH: usize = 0x04094; // Good Octets Tx Count High - Read/clear
+pub(crate) const RNBC: usize = 0x040A0; // Rx No Buffers Count - Read/clear
+pub(crate) const RUC: usize = 0x040A4; // Rx Undersize Count - Read/clear
+pub(crate) const RFC: usize = 0x040A8; // Rx Fragment Count - Read/clear
+pub(crate) const ROC: usize = 0x040AC; // Rx Oversize Count - Read/clear
+pub(crate) const RJC: usize = 0x040B0; // Rx Jabber Count - Read/clear
 
+
+pub(crate) const MPTC: usize = 0x040F0;         // Multicast Packets Tx Count - Read/clear
+pub(crate) const BPTC: usize = 0x040F4;         // Broadcast Packets Tx Count - Read/clear
+pub(crate) const TSCTC: usize   = 0x040F8;        // TCP Segmentation Context Tx Count - Read/clear
+pub(crate) const TSCTFC: usize = 0x040FC;       // TCP Segmentation Context Tx Fail Count - Read/clear
+
+
+pub(crate) const TPR: usize = 0x040D0;         // Total Packets Rx - Read/clear
+pub(crate) const TPT: usize = 0x040D4;         // Total Packets Tx - Read/clear
