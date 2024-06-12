@@ -677,6 +677,8 @@ where
     }
 
     fn read_phy_reg_mdic(&mut self, offset: u32) -> Result<u16> {
+        self.hw.as_mut().phy.addr = 1;
+
         if (offset > MAX_PHY_REG_ADDRESS) {
             error!("PHY Address {} is out of range", offset);
             return Err(Error::Unknown("PHY Address"));
@@ -728,6 +730,8 @@ where
     }
 
     fn write_phy_reg_mdic(&mut self, offset: u32, value: u16) -> Result {
+        self.hw.as_mut().phy.addr = 1;
+        
         if (offset > MAX_PHY_REG_ADDRESS) {
             error!("PHY Address {} is out of range", offset);
             return Err(Error::Unknown("PHY Address"));
