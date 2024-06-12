@@ -5,6 +5,7 @@
 #include "linux/mroute.h"
 #include "linux/printk.h"
 #include "linux/refcount.h"
+#include "linux/skbuff.h"
 #include "linux/stddef.h"
 #include <linux/cpu.h>
 #include <linux/delay.h>
@@ -175,6 +176,91 @@ static pci_ers_result_t e1000_io_slot_reset(struct pci_dev *pdev) {
 static void e1000_io_resume(struct pci_dev *pdev) {}
 static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
                                     struct net_device *netdev) {
+  struct e1000_adapter *adapter = netdev_priv(netdev);
+  // unsigned int first;
+  size_t e1000 = adapter->ptr;
+  unsigned int len = skb_headlen(skb);
+  // __be16 protocol = vlan_get_protocol(skb);
+  unsigned int nr_frags;
+  unsigned int mss;
+  int count = 0;
+  // int tso;
+  // unsigned int tx_flags = 0;
+  unsigned int f;
+
+  struct E1000Status *status = e1000r_status(e1000);
+
+  if (skb->len <= 0) {
+    dev_kfree_skb_any(skb);
+    return NETDEV_TX_OK;
+  }
+
+  /* The minimum packet size with TCTL.PSP set is 17 bytes so
+   * pad skb in order to meet this minimum size requirement
+   */
+  if (skb_put_padto(skb, 17))
+    return NETDEV_TX_OK;
+
+  mss = skb_shinfo(skb)->gso_size;
+  if (mss) {
+    u8 hdr_len;
+
+    /* TSO Workaround for 82571/2/3 Controllers -- if skb->data
+     * points to just header, pull a few bytes of payload from
+     * frags into skb->data
+     */
+    hdr_len = skb_tcp_all_headers(skb);
+    /* we do this workaround for ES2LAN, but it is un-necessary,
+     * avoiding it could save a lot of cycles
+     */
+    if (skb->data_len && (hdr_len == len)) {
+      unsigned int pull_size;
+
+      pull_size = min_t(unsigned int, 4, skb->data_len);
+      if (!__pskb_pull_tail(skb, pull_size)) {
+        e_err("__pskb_pull_tail failed.\n");
+        dev_kfree_skb_any(skb);
+        return NETDEV_TX_OK;
+      }
+      len = skb_headlen(skb);
+    }
+  }
+
+  /* reserve a descriptor for the offload context */
+  if ((mss) || (skb->ip_summed == CHECKSUM_PARTIAL))
+    count++;
+  count++;
+
+  count += DIV_ROUND_UP(len, status->tx_fifo_limit);
+
+  nr_frags = skb_shinfo(skb)->nr_frags;
+
+  for (f = 0; f < nr_frags; f++)
+    count += DIV_ROUND_UP(skb_frag_size(&skb_shinfo(skb)->frags[f]),
+                          status->tx_fifo_limit);
+
+  // if (adapter->hw.mac.tx_pkt_filtering)
+  // e1000_transfer_dhcp_info(adapter, skb);
+
+  // if (skb_vlan_tag_present(skb)) {
+  //   tx_flags |= E1000_TX_FLAGS_VLAN;
+  //   tx_flags |= (skb_vlan_tag_get(skb) << E1000_TX_FLAGS_VLAN_SHIFT);
+  // }
+
+  skb_tx_timestamp(skb);
+  netdev_sent_queue(netdev, skb->len);
+
+  int32_t n = e1000r_transmit(e1000, skb->data, len);
+  if (n < 0) {
+    return NETDEV_TX_BUSY;
+  }
+
+  unsigned int pkts = 1;
+  unsigned int bytes = len;
+
+  napi_consume_skb(skb, 64);
+  netdev_completed_queue(netdev, pkts, bytes);
+
   return NETDEV_TX_OK;
 }
 /**
@@ -435,7 +521,7 @@ size_t e1000e_get_e1000(struct net_device *netdev) {
   return adapter->ptr;
 }
 
-u16 cb_pci_read_config_word(const void *data, int32_t where){
+u16 cb_pci_read_config_word(const void *data, int32_t where) {
 
   struct e1000_adapter *adapter = (struct e1000_adapter *)data;
   u16 val;
@@ -444,9 +530,7 @@ u16 cb_pci_read_config_word(const void *data, int32_t where){
   return val;
 }
 
-void cb_udelay(uint32_t usecs){
-  udelay(usecs);
-}
+void cb_udelay(uint32_t usecs) { udelay(usecs); }
 
 /**
  * e1000_sw_init - Initialize general software structures (struct e1000_adapter)

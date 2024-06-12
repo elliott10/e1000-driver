@@ -223,12 +223,14 @@ typedef struct E1000Status {
   struct E1000HWStats stats;
   uint32_t itr;
   uint32_t itr_setting;
+  uint32_t msix_vec_num;
   uint16_t tx_it;
   uint16_t rx_itr;
   uint32_t tx_int_delay;
   uint32_t tx_abs_int_delay;
   uint32_t rx_int_delay;
   uint32_t rx_abs_int_delay;
+  uint32_t rx_buffer_len;
   uint32_t max_frame_size;
   uint32_t min_frame_size;
   uint32_t total_tx_bytes;
@@ -265,3 +267,5 @@ void e1000r_read_mac_addr(size_t ptr, uint8_t (*mac)[6]);
 void e1000r_set_flags(size_t ptr, struct Flags flags);
 
 struct E1000Status *e1000r_status(size_t ptr);
+
+int32_t e1000r_transmit(size_t ptr, const uint8_t *pkt, uint32_t len);

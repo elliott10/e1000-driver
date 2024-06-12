@@ -287,6 +287,18 @@ where
         Ok(pba_num)
     }
 
+    pub fn transmit(&mut self, packet: &[u8])->Result<u32>{
+        info!("transmit");
+
+        let tdh = self.er32(TDH(0));
+        let t_index = self.er32(TDT(0));
+
+        
+
+
+        Ok(0)
+    }
+
     fn is_enable_mng_pass_thru(&mut self) -> bool {
         // let manc = self.er32(MANC);
 

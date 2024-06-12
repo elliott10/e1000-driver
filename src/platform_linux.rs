@@ -3,7 +3,10 @@
 
 #[macro_use]
 mod linux;
-use core::ffi::{self, c_void};
+use core::{
+    ffi::{self, c_void},
+    ptr::slice_from_raw_parts,
+};
 
 use ::alloc::collections;
 pub(crate) use alloc::alloc;
@@ -170,6 +173,17 @@ extern "C" fn e1000r_init(ptr: usize) -> i32 {
 unsafe extern "C" fn e1000r_status<'a>(ptr: usize) -> &'static mut E1000Status {
     let dev = dev_mut(ptr);
     dev.dev.status_mut()
+}
+
+#[no_mangle]
+unsafe extern "C" fn e1000r_transmit(ptr: usize, pkt: *const u8, len: u32) -> i32 {
+    let dev = dev_mut(ptr);
+    let pkt = unsafe { &*slice_from_raw_parts(pkt , len as usize) };
+
+    match dev.dev.transmit(pkt) {
+        Ok(n) => n as i32,
+        Err(_) => -1,
+    }
 }
 
 #[no_mangle]
