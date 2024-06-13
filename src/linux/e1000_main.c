@@ -76,6 +76,7 @@ static irqreturn_t e1000_intr_msix_rx(int __always_unused irq, void *data) {
   struct net_device *netdev = data;
   size_t e1000 = e1000e_get_e1000(netdev);
   struct e1000_adapter *adapter = netdev_priv(netdev);
+  pr_info("irq rx");
   e1000r_irq_handle_msix_rx(e1000, irq);
 
   // struct e1000_ring *rx_ring = adapter->rx_ring;
