@@ -305,6 +305,7 @@ where
         loop {
             let n = self.tx_ring.one_copy_data_from(i, src);
             let mut tx_desc = &mut self.tx_ring.as_mut()[i];
+
             tx_desc.length = n as u16;
             tx_desc.cmd = (TXD_CMD_RS | TXD_CMD_EOP | TXD_CMD_IFCS) as u8;
             tx_desc.status = 0;
@@ -318,12 +319,12 @@ where
             src = &src[n..];
         }
 
-        self.ew32(TDT(0), (i % TX_RING_SIZE) as u32);
-
+        i %= TX_RING_SIZE;
+        self.ew32(TDT(0), i as u32);
+        info!("xmit TDT = {:#x}", i);
         // sync
         fence_w();
         // info!("Read E1000_TDH 2= {:#x}\n", self.er32(TDH(0)));
-        // info!("Read E1000_TDT 2= {:#x}\n", self.er32(TDT(0)));
 
         Ok(packet.len() as u32)
     }
@@ -1047,13 +1048,30 @@ where
         let mut pkts = 0;
         let mut bytes = 0;
 
+        let mut i = self.tx_ring.next_to_clean;
+        let mut desc = &self.tx_ring.as_ref()[i];
+        while (desc.status & (TXD_STAT_DD as u8)) != 0 {
+            pkts += 1;
+            bytes += desc.length as u32;
+
+            if (desc.status & TXD_STAT_EC as u8) > 0 {
+                error!("tx {:#x} error", i);
+            } else {
+                info!("tx {:#x} ok", i);
+            }
+
+            fence_r();
+
+            i += 1;
+
+            desc = &self.tx_ring.as_ref()[i];
+            // self.tx_ring.as_ref()[i].status = 0;
+        }
+
         let mut status = &mut self.hw.as_mut().status;
-
-        
-
-
         status.total_tx_bytes += bytes;
         status.total_tx_packets += pkts;
+        self.tx_ring.next_to_clean = i;
         self.kernel().on_xmit_completed(pkts, bytes);
         true
     }

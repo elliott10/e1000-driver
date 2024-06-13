@@ -10,7 +10,6 @@ use alloc::vec::Vec;
 use super::KernelFunc;
 
 pub(crate) const MBUF_SIZE: usize = 2048;
-pub(crate) const TXD_STAT_DD: u32 = 0x00000001; /* Descriptor Done */
 
 pub(crate) struct Ring<T, K>
 where
@@ -22,7 +21,9 @@ where
     pub(crate) dma: u64,
     ring: *mut T,
     mbufs: Vec<usize>,
+    pub(crate) buff_info: Vec<BuffInfo>,
     pub(crate) next_to_use: usize,
+    pub(crate) next_to_clean: usize,
     pub(crate) ims_val: u32,
     _marker: marker::PhantomData<T>,
 }
@@ -38,8 +39,10 @@ where
             size,
             dma: 0,
             next_to_use: 0,
+            next_to_clean: 0,
             ring: ptr::null_mut(),
             mbufs: Vec::new(),
+            buff_info: Vec::new(),
             ims_val: 0,
             _marker: Default::default(),
         }
@@ -78,8 +81,9 @@ where
         let (mut mbufs_vaddr, mut mbufs_dma) = self.kernel.dma_alloc_coherent(alloc_buffer_pages);
 
         for i in 0..self.size {
-            ring[i].set_status(TXD_STAT_DD as u8);
+            ring[i].set_status(0);
             ring[i].set_addr(mbufs_dma);
+            self.buff_info.try_push(BuffInfo::default()).unwrap();
             mbufs.try_push(mbufs_vaddr).unwrap();
             mbufs_dma += MBUF_SIZE as u64;
             mbufs_vaddr += MBUF_SIZE;
@@ -207,4 +211,11 @@ impl TransDesc for RxDesc {
     fn set_addr(&mut self, addr: u64) {
         self.addr = addr;
     }
+}
+
+#[derive(Default)]
+pub(crate) struct BuffInfo {
+    pub(crate) length: usize,
+    pub(crate) time_stamp: u64,
+    pub(crate) next_to_watch: usize,
 }
