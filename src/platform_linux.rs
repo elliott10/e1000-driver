@@ -286,3 +286,9 @@ unsafe extern "C" fn e1000r_trigger_lsc(ptr: usize) {
     let dev = dev_mut(ptr);
     dev.dev.trigger_lsc()
 }
+#[no_mangle]
+unsafe extern "C" fn e1000r_task_watchdog(ptr: usize) {
+    let dev = dev_mut(ptr);
+    dev.dev.task_watchdog();
+}
+

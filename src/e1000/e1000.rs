@@ -1467,6 +1467,15 @@ where
 
         Ok(())
     }
+
+    pub fn task_watchdog(&mut self) {
+        /* Cause software interrupt to ensure Rx ring is cleaned */
+        if (self.hw.as_ref().status.msix_vec_num > 0) {
+            self.ew32(ICS, self.rx_ring.ims_val);
+        } else {
+            self.ew32(ICS, ICS_RXDMT0);
+        }
+    }
 }
 
 impl E1000Status {

@@ -291,6 +291,8 @@ struct E1000HWStats e1000r_stats64(size_t ptr);
 
 struct E1000Status *e1000r_status(size_t ptr);
 
+void e1000r_task_watchdog(size_t ptr);
+
 int32_t e1000r_transmit(size_t ptr, struct E1000XmitConfig cfg, const uint8_t *pkt, uint32_t len);
 
 void e1000r_trigger_lsc(size_t ptr);

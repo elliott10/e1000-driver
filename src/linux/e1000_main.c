@@ -71,7 +71,18 @@ static void cb_on_xmit_completed(const void *data, uint32_t pkts,
   struct e1000_adapter *adapter = (struct e1000_adapter *)data;
   netdev_completed_queue(adapter->netdev, pkts, bytes);
 }
+/**
+ * e1000_watchdog - Timer Call-back
+ * @t: pointer to timer_list containing private info adapter
+ **/
+static void e1000_watchdog(struct timer_list *t) {
+  struct e1000_adapter *adapter = from_timer(adapter, t, watchdog_timer);
 
+  /* Do the rest outside of interrupt context */
+  schedule_work(&adapter->watchdog_task);
+
+  /* TODO: make this use queue_delayed_work() */
+}
 static irqreturn_t e1000_intr_msix_rx(int __always_unused irq, void *data) {
   struct net_device *netdev = data;
   size_t e1000 = e1000e_get_e1000(netdev);
@@ -101,6 +112,107 @@ static irqreturn_t e1000_intr_msix_rx(int __always_unused irq, void *data) {
   }
   return IRQ_HANDLED;
 }
+
+static void e1000_watchdog_task(struct work_struct *work) {
+  printk("task_watchdog");
+
+  struct e1000_adapter *adapter =
+      container_of(work, struct e1000_adapter, watchdog_task);
+  struct net_device *netdev = adapter->netdev;
+
+  if ((netif_carrier_ok(netdev))) {
+    /* Cancel scheduled suspend requests. */
+    pm_runtime_resume(netdev->dev.parent);
+    goto link_up;
+  }
+
+link_up:
+
+  e1000r_task_watchdog(adapter->ptr);
+  // spin_lock(&adapter->stats64_lock);
+  // e1000e_update_stats(adapter);
+
+  // mac->tx_packet_delta = adapter->stats.tpt - adapter->tpt_old;
+  // adapter->tpt_old = adapter->stats.tpt;
+  // mac->collision_delta = adapter->stats.colc - adapter->colc_old;
+  // adapter->colc_old = adapter->stats.colc;
+
+  // adapter->gorc = adapter->stats.gorc - adapter->gorc_old;
+  // adapter->gorc_old = adapter->stats.gorc;
+  // adapter->gotc = adapter->stats.gotc - adapter->gotc_old;
+  // adapter->gotc_old = adapter->stats.gotc;
+  // spin_unlock(&adapter->stats64_lock);
+
+  /* If the link is lost the controller stops DMA, but
+   * if there is queued Tx work it cannot be done.  So
+   * reset the controller to flush the Tx packet buffers.
+   */
+  // if (!netif_carrier_ok(netdev) &&
+  //     (e1000_desc_unused(tx_ring) + 1 < tx_ring->count))
+  // 	adapter->flags |= FLAG_RESTART_NOW;
+
+  // /* If reset is necessary, do it outside of interrupt context. */
+  // if (adapter->flags & FLAG_RESTART_NOW) {
+  // 	schedule_work(&adapter->reset_task);
+  // 	/* return immediately since reset is imminent */
+  // 	return;
+  // }
+
+  // e1000e_update_adaptive(&adapter->hw);
+
+  /* Simple mode for Interrupt Throttle Rate (ITR) */
+  // if (adapter->itr_setting == 4) {
+  // 	/* Symmetric Tx/Rx gets a reduced ITR=2000;
+  // 	 * Total asymmetrical Tx or Rx gets ITR=8000;
+  // 	 * everyone else is between 2000-8000.
+  // 	 */
+  // 	u32 goc = (adapter->gotc + adapter->gorc) / 10000;
+  // 	u32 dif = (adapter->gotc > adapter->gorc ?
+  // 			   adapter->gotc - adapter->gorc :
+  // 			   adapter->gorc - adapter->gotc) /
+  // 		  10000;
+  // 	u32 itr = goc > 0 ? (dif * 6000 / goc + 2000) : 8000;
+
+  // 	e1000e_write_itr(adapter, itr);
+  // }
+
+  /* Cause software interrupt to ensure Rx ring is cleaned */
+  // if (adapter->msix_entries)
+  // 	ew32(ICS, adapter->rx_ring->ims_val);
+  // else
+  // 	ew32(ICS, E1000_ICS_RXDMT0);
+
+  // /* flush pending descriptors to memory before detecting Tx hang */
+  // e1000e_flush_descriptors(adapter);
+
+  // /* Force detection of hung controller every watchdog period */
+  // adapter->detect_tx_hung = true;
+
+  // /* With 82571 controllers, LAA may be overwritten due to controller
+  //  * reset from the other port. Set the appropriate LAA in RAR[0]
+  //  */
+  // if (e1000e_get_laa_state_82571(hw))
+  // 	hw->mac.ops.rar_set(hw, adapter->hw.mac.addr, 0);
+
+  // if (adapter->flags2 & FLAG2_CHECK_PHY_HANG)
+  // 	e1000e_check_82574_phy_workaround(adapter);
+
+  // /* Clear valid timestamp stuck in RXSTMPL/H due to a Rx error */
+  // if (adapter->hwtstamp_config.rx_filter != HWTSTAMP_FILTER_NONE) {
+  // 	if ((adapter->flags2 & FLAG2_CHECK_RX_HWTSTAMP) &&
+  // 	    (er32(TSYNCRXCTL) & E1000_TSYNCRXCTL_VALID)) {
+  // 		er32(RXSTMPH);
+  // 		adapter->rx_hwtstamp_cleared++;
+  // 	} else {
+  // 		adapter->flags2 |= FLAG2_CHECK_RX_HWTSTAMP;
+  // 	}
+  // }
+
+  /* Reset the timer */
+  if (!adapter->is_down)
+    mod_timer(&adapter->watchdog_timer, round_jiffies(jiffies + 2 * HZ));
+}
+
 static irqreturn_t e1000_intr_msix_tx(int __always_unused irq, void *data) {
   struct net_device *netdev = data;
   size_t e1000 = e1000e_get_e1000(netdev);
@@ -295,6 +407,7 @@ int e1000e_open(struct net_device *netdev) {
 
   netif_carrier_on(netdev);
 
+  mod_timer(&adapter->watchdog_timer, jiffies + 1);
   pr_info("e1000e open ok");
   return 0;
 err_req_irq:
@@ -838,6 +951,7 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent) {
   mmio_len = pci_resource_len(pdev, 0);
 
   adapter = netdev_priv(netdev);
+  adapter->is_down = false;
   adapter->bars = bars;
   adapter->pdev = pdev;
   adapter->netdev = netdev;
@@ -954,6 +1068,9 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent) {
     err = -EIO;
     goto err_eeprom;
   }
+
+  timer_setup(&adapter->watchdog_timer, e1000_watchdog, 0);
+  INIT_WORK(&adapter->watchdog_task, e1000_watchdog_task);
 
   strscpy(netdev->name, "eth%d", sizeof(netdev->name));
   err = register_netdev(netdev);
