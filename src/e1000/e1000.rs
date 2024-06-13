@@ -287,14 +287,14 @@ where
         Ok(pba_num)
     }
 
-    pub fn transmit(&mut self, packet: &[u8]) -> Result<u32> {
+    pub fn transmit(&mut self, config: E1000XmitConfig, packet: &[u8]) -> Result<u32> {
         info!("transmit {}", packet.len());
 
         let tdh = self.er32(TDH(0));
         let mut i = self.er32(TDT(0)) as usize;
 
-        info!("Read TDH 1= {:#x}\n", tdh);
-        info!("Read TDT 1= {:#x}\n", i);
+        // info!("Read TDH 1= {:#x}\n", tdh);
+        // info!("Read TDT 1= {:#x}\n", i);
 
         let mut offset = 0;
 
@@ -322,8 +322,8 @@ where
 
         // sync
         fence_w();
-        info!("Read E1000_TDH 2= {:#x}\n", self.er32(TDH(0)));
-        info!("Read E1000_TDT 2= {:#x}\n", self.er32(TDT(0)));
+        // info!("Read E1000_TDH 2= {:#x}\n", self.er32(TDH(0)));
+        // info!("Read E1000_TDT 2= {:#x}\n", self.er32(TDT(0)));
 
         Ok(packet.len() as u32)
     }
@@ -921,8 +921,9 @@ where
             rfctl |= RFCTL_ACK_DIS;
             self.ew32(RFCTL, rfctl);
         }
-        // let itr_val = self.hw.as_ref().status.itr;
-        let itr_val = 0;
+        let itr_val = self.hw.as_ref().status.itr;
+
+        info!("itr val = {}", itr_val);
 
         /* Configure Rx vector */
         self.rx_ring.ims_val = IMS_RXQ0;
@@ -976,19 +977,16 @@ where
     }
 
     pub fn irq_handle_msix_tx(&mut self) {
-        // let icr = self.er32(ICR);
-        // if (icr & ICR_INT_ASSERTED) == 0 {
-        //     // warn!("icr not asserted");
-        //     return Ok(());
-        // }
         info!("intr msix tx");
         self.hw.as_mut().status.total_tx_bytes = 0;
         self.hw.as_mut().status.total_tx_packets = 0;
 
-
-
-
-
+        if self.clean_tx_irq() {
+            self.ew32(IMS, self.tx_ring.ims_val);
+        } else {
+            /* Ring was not completely cleaned, so fire another interrupt */
+            self.ew32(ICS, self.tx_ring.ims_val);
+        }
     }
 
     /// interrupt handler
@@ -1043,6 +1041,21 @@ where
         hw.status.total_rx_packets = 0;
 
         Ok(())
+    }
+
+    fn clean_tx_irq(&mut self) -> bool {
+        let mut pkts = 0;
+        let mut bytes = 0;
+
+        let mut status = &mut self.hw.as_mut().status;
+
+        
+
+
+        status.total_tx_bytes += bytes;
+        status.total_tx_packets += pkts;
+        self.kernel().on_xmit_completed(pkts, bytes);
+        true
     }
 
     fn configure_rx(&mut self) {

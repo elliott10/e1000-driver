@@ -140,6 +140,8 @@ typedef void (*E1000CbDmaFreeCoherent)(const void *pdev, size_t vaddr, uint64_t 
 
 typedef uint16_t (*E1000CbPciReadConfigWord)(const void *pdev, int32_t where_);
 
+typedef void (*E1000CbOnXmitCompleted)(const void *pdev, uint32_t pkts, uint32_t bytes);
+
 typedef struct E1000Config {
   uint32_t device_id;
   E1000CbBarNremap cb_bar_n_remap;
@@ -150,6 +152,7 @@ typedef struct E1000Config {
   E1000CbDmaAllocCoherent cb_dma_alloc_coherent;
   E1000CbDmaFreeCoherent cb_dma_free_coherent;
   E1000CbPciReadConfigWord cb_pci_read_config_word;
+  E1000CbOnXmitCompleted cb_on_xmit_completed;
   const void *adapter;
 } E1000Config;
 
@@ -248,6 +251,14 @@ typedef struct E1000Status {
   uint32_t pba;
 } E1000Status;
 
+typedef struct E1000XmitConfig {
+  uint64_t timestamp;
+  uint32_t segs;
+  bool ipv4;
+  bool no_fcs;
+  bool vlan_tag_present;
+} E1000XmitConfig;
+
 void e1000_print_device_info(size_t ptr);
 
 void e1000r_configure_msix(size_t ptr);
@@ -280,6 +291,6 @@ struct E1000HWStats e1000r_stats64(size_t ptr);
 
 struct E1000Status *e1000r_status(size_t ptr);
 
-int32_t e1000r_transmit(size_t ptr, const uint8_t *pkt, uint32_t len);
+int32_t e1000r_transmit(size_t ptr, struct E1000XmitConfig cfg, const uint8_t *pkt, uint32_t len);
 
 void e1000r_trigger_lsc(size_t ptr);

@@ -4,17 +4,20 @@ pub(crate) mod defines;
 pub(crate) mod dev_id;
 mod e1000;
 pub mod err;
-pub(crate) mod phy;
 pub(crate) mod hw;
 pub(crate) mod hw_semaphore;
 pub(crate) mod params;
+pub(crate) mod phy;
 mod regs;
 pub(crate) mod ring;
 pub use self::e1000::*;
 pub use board::*;
-use core::{fmt::{self, Display}, u16};
+use core::{
+    fmt::{self, Display},
+    u16,
+};
 pub use hw::{E1000HWStats, MacInfo, MacType, MediaType, PhyInfo, PhyType};
-pub use ring::{TxDesc, RxDesc};
+pub use ring::{RxDesc, TxDesc};
 const PAGE_SIZE: usize = 4096;
 
 pub trait KernelFunc: Send + Sync + Clone {
@@ -44,12 +47,23 @@ pub trait KernelFunc: Send + Sync + Clone {
     fn pcie_info(&self) -> E1000rPcieInfo;
 
     /// Pcie 读取
-    fn pci_read_config_word(&self, where_: i32)->u16;
+    fn pci_read_config_word(&self, where_: i32) -> u16;
 
     /// mtu 大于 ETH_DATA_LEN
-    fn is_mtu_bg_eth(&self)->bool;
+    fn is_mtu_bg_eth(&self) -> bool;
+
+    fn on_xmit_completed(&self, pkts: u32, bytes: u32);
 
     // fn num_msix_vectors(&self)->usize;
+}
+
+#[repr(C)]
+pub struct E1000XmitConfig {
+    pub timestamp: u64,
+    pub segs: u32,
+    pub ipv4: bool,
+    pub no_fcs: bool,
+    pub vlan_tag_present: bool,
 }
 
 #[repr(C)]
@@ -70,7 +84,3 @@ impl Display for MacAddress {
         )
     }
 }
-
-
-
-

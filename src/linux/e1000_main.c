@@ -64,6 +64,14 @@ static pci_ers_result_t e1000_io_slot_reset(struct pci_dev *pdev);
 void e1000e_set_interrupt_capability(struct e1000_adapter *adapter);
 void e1000e_reset_interrupt_capability(struct e1000_adapter *adapter);
 static int e1000_request_msix(struct e1000_adapter *adapter);
+
+static void cb_on_xmit_completed(const void *data, uint32_t pkts,
+                                 uint32_t bytes) {
+
+  struct e1000_adapter *adapter = (struct e1000_adapter *)data;
+  netdev_completed_queue(adapter->netdev, pkts, bytes);
+}
+
 static irqreturn_t e1000_intr_msix_rx(int __always_unused irq, void *data) {
   struct net_device *netdev = data;
   size_t e1000 = e1000e_get_e1000(netdev);
@@ -348,14 +356,13 @@ static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
   // unsigned int first;
   size_t e1000 = adapter->ptr;
   unsigned int len = skb_headlen(skb);
-  // __be16 protocol = vlan_get_protocol(skb);
   unsigned int nr_frags;
   unsigned int mss;
   int count = 0;
   // int tso;
   // unsigned int tx_flags = 0;
   unsigned int f;
-
+  __be16 protocol = vlan_get_protocol(skb);
   struct E1000Status *status = e1000r_status(e1000);
 
   if (skb->len <= 0) {
@@ -407,6 +414,16 @@ static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
     count += DIV_ROUND_UP(skb_frag_size(&skb_shinfo(skb)->frags[f]),
                           status->tx_fifo_limit);
 
+  pr_info("frags : %d", nr_frags);
+
+  struct E1000XmitConfig config = {
+      .timestamp = jiffies,
+      .segs = 1,
+      .ipv4 = protocol == htons(ETH_P_IP),
+      .no_fcs = unlikely(skb->no_fcs),
+      .vlan_tag_present = skb_vlan_tag_present(skb),
+  };
+
   // if (adapter->hw.mac.tx_pkt_filtering)
   // e1000_transfer_dhcp_info(adapter, skb);
 
@@ -418,16 +435,16 @@ static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
   skb_tx_timestamp(skb);
   netdev_sent_queue(netdev, skb->len);
 
-  int32_t n = e1000r_transmit(e1000, skb->data, len);
+  int32_t n = e1000r_transmit(e1000, config, skb->data, len);
   if (n < 0) {
     return NETDEV_TX_BUSY;
   }
 
-  unsigned int pkts = 1;
-  unsigned int bytes = len;
+  // unsigned int pkts = 1;
+  // unsigned int bytes = len;
 
   napi_consume_skb(skb, 64);
-  netdev_completed_queue(netdev, pkts, bytes);
+  // netdev_completed_queue(netdev, pkts, bytes);
 
   return NETDEV_TX_OK;
 }
@@ -835,6 +852,7 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent) {
   config.cb_dma_free_coherent = cb_dma_free;
   config.cb_pci_read_config_word = cb_pci_read_config_word;
   config.cb_udelay = cb_udelay;
+  config.cb_on_xmit_completed = cb_on_xmit_completed;
 
   size_t e1000 = e1000r_new(config);
   if (!e1000)

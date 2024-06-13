@@ -28,6 +28,7 @@ struct KFun {
     cb_dma_alloc: E1000CbDmaAllocCoherent,
     cb_dma_free: E1000CbDmaFreeCoherent,
     cb_pci_read_config_word: E1000CbPciReadConfigWord,
+    cb_on_xmit_completed: E1000CbOnXmitCompleted,
     adapter: *const c_void,
 }
 
@@ -69,6 +70,10 @@ impl KernelFunc for KFun {
     fn pci_read_config_word(&self, where_: i32) -> u16 {
         unsafe { (self.cb_pci_read_config_word)(self.adapter, where_) }
     }
+
+    fn on_xmit_completed(&self, pkts: u32, bytes: u32) {
+        unsafe { (self.cb_on_xmit_completed)(self.adapter, pkts, bytes) }
+    }
 }
 
 type DevicePtr = *mut Device;
@@ -95,6 +100,7 @@ pub type E1000CbDmaFreeCoherent =
     unsafe extern "C" fn(pdev: *const c_void, vaddr: usize, dma: u64, pages: usize);
 
 pub type E1000CbPciReadConfigWord = unsafe extern "C" fn(pdev: *const c_void, where_: i32) -> u16;
+pub type E1000CbOnXmitCompleted = unsafe extern "C" fn(pdev: *const c_void, pkts: u32, bytes: u32);
 
 #[repr(C)]
 pub struct E1000Config {
@@ -107,6 +113,7 @@ pub struct E1000Config {
     cb_dma_alloc_coherent: E1000CbDmaAllocCoherent,
     cb_dma_free_coherent: E1000CbDmaFreeCoherent,
     cb_pci_read_config_word: E1000CbPciReadConfigWord,
+    cb_on_xmit_completed: E1000CbOnXmitCompleted,
     adapter: *const c_void,
 }
 
@@ -132,6 +139,7 @@ extern "C" fn e1000r_new(config: E1000Config) -> usize {
         cb_dma_alloc: config.cb_dma_alloc_coherent,
         cb_dma_free: config.cb_dma_free_coherent,
         cb_pci_read_config_word: config.cb_pci_read_config_word,
+        cb_on_xmit_completed: config.cb_on_xmit_completed,
     };
 
     let e1000 = match E1000::new(kfun, config.device_id) {
@@ -182,11 +190,16 @@ unsafe extern "C" fn e1000r_stats64<'a>(ptr: usize) -> E1000HWStats {
 }
 
 #[no_mangle]
-unsafe extern "C" fn e1000r_transmit(ptr: usize, pkt: *const u8, len: u32) -> i32 {
+unsafe extern "C" fn e1000r_transmit(
+    ptr: usize,
+    cfg: E1000XmitConfig,
+    pkt: *const u8,
+    len: u32,
+) -> i32 {
     let dev = dev_mut(ptr);
     let pkt = unsafe { &*slice_from_raw_parts(pkt, len as usize) };
 
-    match dev.dev.transmit(pkt) {
+    match dev.dev.transmit(cfg, pkt) {
         Ok(n) => n as i32,
         Err(_) => -1,
     }
