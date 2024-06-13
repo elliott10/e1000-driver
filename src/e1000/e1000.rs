@@ -287,14 +287,11 @@ where
         Ok(pba_num)
     }
 
-    pub fn transmit(&mut self, config: E1000XmitConfig, packet: &[u8]) -> Result<u32> {
+    pub fn xmit(&mut self, config: E1000XmitConfig, packet: &[u8]) -> Result<u32> {
         info!("transmit {}", packet.len());
 
         let tdh = self.er32(TDH(0));
         let mut i = self.er32(TDT(0)) as usize;
-
-        // info!("Read TDH 1= {:#x}\n", tdh);
-        // info!("Read TDT 1= {:#x}\n", i);
 
         let mut offset = 0;
 
@@ -327,6 +324,35 @@ where
         // info!("Read E1000_TDH 2= {:#x}\n", self.er32(TDH(0)));
 
         Ok(packet.len() as u32)
+    }
+
+    pub fn clean_rx(&mut self, max: u32) -> Vec<RcvPkt> {
+        let mut out = Vec::new();
+        let mut index = self.rx_ring.next_to_clean % RX_RING_SIZE;
+        for _ in 0..max {
+            let desc = &mut self.rx_ring.as_mut()[index];
+            if (desc.status & RXD_STAT_DD as u8) == 0 {
+                self.ew32(RDT(0), index as u32 );
+                break;
+            }
+            desc.status = 0;
+            let len = desc.length as usize;
+            info!("rx index: {}, len: {}", index, len);
+            let mbuf =
+                unsafe { &*slice_from_raw_parts(self.rx_ring.mbufs[index] as *mut u8, len) };
+            let mut data = Vec::try_with_capacity(len).unwrap();
+            for b in mbuf {
+                data.try_push(*b).unwrap();
+            }
+
+            out.try_push(RcvPkt { data }).unwrap();
+
+            fence_w();
+
+            index = (index + 1) % RX_RING_SIZE;
+        }
+
+        out
     }
 
     fn is_enable_mng_pass_thru(&mut self) -> bool {
@@ -1593,4 +1619,8 @@ fn align_to(value: u32, alignment: u32) -> u32 {
     } else {
         value + (alignment - remainder)
     }
+}
+
+pub struct RcvPkt {
+    pub data: Vec<u8>,
 }

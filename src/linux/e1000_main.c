@@ -1,3 +1,4 @@
+#include "asm-generic/int-ll64.h"
 #include "e1000.h"
 #include "linux/cleanup.h"
 #include "linux/etherdevice.h"
@@ -87,22 +88,6 @@ static irqreturn_t e1000_intr_msix_rx(int __always_unused irq, void *data) {
   struct net_device *netdev = data;
   size_t e1000 = e1000e_get_e1000(netdev);
   struct e1000_adapter *adapter = netdev_priv(netdev);
-  pr_info("irq rx");
-  e1000r_irq_handle_msix_rx(e1000, irq);
-
-  // struct e1000_ring *rx_ring = adapter->rx_ring;
-
-  /* Write the ITR value calculated at the end of the
-   * previous interrupt.
-   */
-  // if (rx_ring->set_itr) {
-  // 	u32 itr = rx_ring->itr_val ?
-  // 			  1000000000 / (rx_ring->itr_val * 256) :
-  // 			  0;
-
-  // 	writel(itr, rx_ring->itr_register);
-  // 	rx_ring->set_itr = 0;
-  // }
 
   if (napi_schedule_prep(&adapter->napi)) {
     struct E1000Status *status = e1000r_status(e1000);
@@ -114,7 +99,6 @@ static irqreturn_t e1000_intr_msix_rx(int __always_unused irq, void *data) {
 }
 
 static void e1000_watchdog_task(struct work_struct *work) {
-  printk("task_watchdog");
 
   struct e1000_adapter *adapter =
       container_of(work, struct e1000_adapter, watchdog_task);
@@ -129,85 +113,6 @@ static void e1000_watchdog_task(struct work_struct *work) {
 link_up:
 
   e1000r_task_watchdog(adapter->ptr);
-  // spin_lock(&adapter->stats64_lock);
-  // e1000e_update_stats(adapter);
-
-  // mac->tx_packet_delta = adapter->stats.tpt - adapter->tpt_old;
-  // adapter->tpt_old = adapter->stats.tpt;
-  // mac->collision_delta = adapter->stats.colc - adapter->colc_old;
-  // adapter->colc_old = adapter->stats.colc;
-
-  // adapter->gorc = adapter->stats.gorc - adapter->gorc_old;
-  // adapter->gorc_old = adapter->stats.gorc;
-  // adapter->gotc = adapter->stats.gotc - adapter->gotc_old;
-  // adapter->gotc_old = adapter->stats.gotc;
-  // spin_unlock(&adapter->stats64_lock);
-
-  /* If the link is lost the controller stops DMA, but
-   * if there is queued Tx work it cannot be done.  So
-   * reset the controller to flush the Tx packet buffers.
-   */
-  // if (!netif_carrier_ok(netdev) &&
-  //     (e1000_desc_unused(tx_ring) + 1 < tx_ring->count))
-  // 	adapter->flags |= FLAG_RESTART_NOW;
-
-  // /* If reset is necessary, do it outside of interrupt context. */
-  // if (adapter->flags & FLAG_RESTART_NOW) {
-  // 	schedule_work(&adapter->reset_task);
-  // 	/* return immediately since reset is imminent */
-  // 	return;
-  // }
-
-  // e1000e_update_adaptive(&adapter->hw);
-
-  /* Simple mode for Interrupt Throttle Rate (ITR) */
-  // if (adapter->itr_setting == 4) {
-  // 	/* Symmetric Tx/Rx gets a reduced ITR=2000;
-  // 	 * Total asymmetrical Tx or Rx gets ITR=8000;
-  // 	 * everyone else is between 2000-8000.
-  // 	 */
-  // 	u32 goc = (adapter->gotc + adapter->gorc) / 10000;
-  // 	u32 dif = (adapter->gotc > adapter->gorc ?
-  // 			   adapter->gotc - adapter->gorc :
-  // 			   adapter->gorc - adapter->gotc) /
-  // 		  10000;
-  // 	u32 itr = goc > 0 ? (dif * 6000 / goc + 2000) : 8000;
-
-  // 	e1000e_write_itr(adapter, itr);
-  // }
-
-  /* Cause software interrupt to ensure Rx ring is cleaned */
-  // if (adapter->msix_entries)
-  // 	ew32(ICS, adapter->rx_ring->ims_val);
-  // else
-  // 	ew32(ICS, E1000_ICS_RXDMT0);
-
-  // /* flush pending descriptors to memory before detecting Tx hang */
-  // e1000e_flush_descriptors(adapter);
-
-  // /* Force detection of hung controller every watchdog period */
-  // adapter->detect_tx_hung = true;
-
-  // /* With 82571 controllers, LAA may be overwritten due to controller
-  //  * reset from the other port. Set the appropriate LAA in RAR[0]
-  //  */
-  // if (e1000e_get_laa_state_82571(hw))
-  // 	hw->mac.ops.rar_set(hw, adapter->hw.mac.addr, 0);
-
-  // if (adapter->flags2 & FLAG2_CHECK_PHY_HANG)
-  // 	e1000e_check_82574_phy_workaround(adapter);
-
-  // /* Clear valid timestamp stuck in RXSTMPL/H due to a Rx error */
-  // if (adapter->hwtstamp_config.rx_filter != HWTSTAMP_FILTER_NONE) {
-  // 	if ((adapter->flags2 & FLAG2_CHECK_RX_HWTSTAMP) &&
-  // 	    (er32(TSYNCRXCTL) & E1000_TSYNCRXCTL_VALID)) {
-  // 		er32(RXSTMPH);
-  // 		adapter->rx_hwtstamp_cleared++;
-  // 	} else {
-  // 		adapter->flags2 |= FLAG2_CHECK_RX_HWTSTAMP;
-  // 	}
-  // }
-
   /* Reset the timer */
   if (!adapter->is_down)
     mod_timer(&adapter->watchdog_timer, round_jiffies(jiffies + 2 * HZ));
@@ -663,14 +568,51 @@ static int e1000_vlan_rx_kill_vid(struct net_device *netdev,
  * the interrupt routine is executing.
  */
 static void e1000_netpoll(struct net_device *netdev) {}
+
+
+
+void cb_on_rcv_pkt(const void *pdev, struct E1000RcvPkt pkt){
+    struct e1000_adapter *adapter = (struct e1000_adapter *)pdev;
+    struct sk_buff *skb = napi_alloc_skb(&adapter->napi, pkt.length);
+    skb_copy_to_linear_data_offset(skb, -NET_IP_ALIGN, (pkt.data - NET_IP_ALIGN),
+                                   (pkt.length + NET_IP_ALIGN));
+    /* end copybreak code */
+    skb_put(skb, pkt.length);
+    skb->protocol = eth_type_trans(skb, adapter->netdev);
+    // skb_checksum_none_assert(skb);
+    napi_gro_receive(&adapter->napi, skb);
+}
+
 /**
  * e1000e_poll - NAPI Rx polling callback
  * @napi: struct associated with this polling callback
  * @budget: number of packets driver is allowed to process this poll
  **/
 static int e1000e_poll(struct napi_struct *napi, int budget) {
-  pr_info("e1000 poll");
-  return -1;
+  struct e1000_adapter *adapter =
+      container_of(napi, struct e1000_adapter, napi);
+
+  int work_done = e1000r_clear_rx(adapter->ptr, budget, cb_on_rcv_pkt, adapter);
+
+  if (work_done == budget)
+    return budget;
+
+  /* Exit the polling mode, but don't re-enable interrupts if stack might
+   * poll us due to busy-polling
+   */
+  if (likely(napi_complete_done(napi, work_done))) {
+    e1000r_irq_enable(adapter->ptr);
+    //   if (adapter->itr_setting & 3)
+    //     e1000_set_itr(adapter);
+    //   if (!test_bit(__E1000_DOWN, &adapter->state)) {
+    //     if (adapter->msix_entries)
+    //       ew32(IMS, adapter->rx_ring->ims_val);
+    //     else
+    //       e1000_irq_enable(adapter);
+    //   }
+  }
+
+  return work_done;
 }
 static int e1000_set_features(struct net_device *netdev,
                               netdev_features_t features) {

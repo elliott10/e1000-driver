@@ -304,6 +304,24 @@ pub(crate) const TXD_STAT_DD: u32 = 0x00000001; /* Descriptor Done */
 pub(crate) const TXD_STAT_EC: u32 = 0x00000002; /* Excess Collisions */
 pub(crate) const TXD_STAT_LC: u32 = 0x00000004; /* Late Collisions */
 pub(crate) const TXD_STAT_TU: u32 = 0x00000008; /* Transmit underrun */
+
+
+pub(crate) const RXD_STAT_DD: u32 = 0x01;     // Descriptor Done
+pub(crate) const RXD_STAT_EOP: u32 = 0x02;     // End of Packet
+pub(crate) const RXD_STAT_IXSM: u32 = 0x04;    // Ignore checksum
+pub(crate) const RXD_STAT_VP: u32 = 0x08;      // IEEE VLAN Packet
+pub(crate) const RXD_STAT_UDPCS: u32 = 0x10;   // UDP checksum calculated
+pub(crate) const RXD_STAT_TCPCS: u32 = 0x20;   // TCP checksum calculated
+pub(crate) const RXD_ERR_CE: u32 = 0x01;       // CRC Error
+pub(crate) const RXD_ERR_SE: u32 = 0x02;       // Symbol Error
+pub(crate) const RXD_ERR_SEQ: u32 = 0x04;      // Sequence Error
+pub(crate) const RXD_ERR_CXE: u32 = 0x10;      // Carrier Extension Error
+pub(crate) const RXD_ERR_TCPE: u32 = 0x20;     // TCP/UDP Checksum Error
+pub(crate) const RXD_ERR_IPE: u32 = 0x40;      // IP Checksum Error
+pub(crate) const RXD_ERR_RXE: u32 = 0x80;      // Rx Data Error
+pub(crate) const RXD_SPC_VLAN_MASK: u32 = 0x0FFF; // VLAN ID is in lower 12 bits
+
+
 // 注意重复的定义，根据实际用途可能需要调整或去除重复项
 // TXD_CMD_TCP, TXD_CMD_IP, TXD_CMD_TSE 与之前的 E1000_TXD_CMD_EOP, E1000_TXD_CMD_IFCS, E1000_TXD_CMD_IC 重复
 // TXD_STAT_TC 与 TXD_STAT_LC 重复定义

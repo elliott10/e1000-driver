@@ -101,6 +101,7 @@ pub type E1000CbDmaFreeCoherent =
 
 pub type E1000CbPciReadConfigWord = unsafe extern "C" fn(pdev: *const c_void, where_: i32) -> u16;
 pub type E1000CbOnXmitCompleted = unsafe extern "C" fn(pdev: *const c_void, pkts: u32, bytes: u32);
+pub type E1000CbOnRcv = unsafe extern "C" fn(pdev: *const c_void, pkt: E1000RcvPkt);
 
 #[repr(C)]
 pub struct E1000Config {
@@ -199,7 +200,7 @@ unsafe extern "C" fn e1000r_transmit(
     let dev = dev_mut(ptr);
     let pkt = unsafe { &*slice_from_raw_parts(pkt, len as usize) };
 
-    match dev.dev.transmit(cfg, pkt) {
+    match dev.dev.xmit(cfg, pkt) {
         Ok(n) => n as i32,
         Err(_) => -1,
     }
@@ -292,3 +293,35 @@ unsafe extern "C" fn e1000r_task_watchdog(ptr: usize) {
     dev.dev.task_watchdog();
 }
 
+#[repr(C)]
+pub struct E1000RcvPkt {
+    pub data: *const u8,
+    pub length: usize,
+}
+
+#[no_mangle]
+unsafe extern "C" fn e1000r_clear_rx(
+    ptr: usize,
+    max: u32,
+    on_rcv: E1000CbOnRcv,
+    meta: *const c_void,
+) -> usize {
+    let dev = dev_mut(ptr);
+    let pkts = dev.dev.clean_rx(max);
+
+    unsafe {
+        for i in 0..pkts.len() {
+            let pkt: &RcvPkt = &pkts[i];
+
+            on_rcv(
+                meta,
+                E1000RcvPkt {
+                    data: pkt.data.as_ptr(),
+                    length: pkt.data.len(),
+                },
+            );
+        }
+
+        pkts.len()
+    }
+}

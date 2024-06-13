@@ -20,7 +20,7 @@ where
     pub(crate) size: usize,
     pub(crate) dma: u64,
     ring: *mut T,
-    mbufs: Vec<usize>,
+    pub(crate) mbufs: Vec<usize>,
     pub(crate) buff_info: Vec<BuffInfo>,
     pub(crate) next_to_use: usize,
     pub(crate) next_to_clean: usize,

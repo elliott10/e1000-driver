@@ -25,6 +25,13 @@ enum MacType {
 };
 typedef uint32_t MacType;
 
+typedef struct E1000RcvPkt {
+  const uint8_t *data;
+  size_t length;
+} E1000RcvPkt;
+
+typedef void (*E1000CbOnRcv)(const void *pdev, struct E1000RcvPkt pkt);
+
 typedef struct Flags {
   bool has_amt;
   bool has_flash;
@@ -260,6 +267,8 @@ typedef struct E1000XmitConfig {
 } E1000XmitConfig;
 
 void e1000_print_device_info(size_t ptr);
+
+size_t e1000r_clear_rx(size_t ptr, uint32_t max, E1000CbOnRcv on_rcv, const void *meta);
 
 void e1000r_configure_msix(size_t ptr);
 
