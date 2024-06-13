@@ -284,8 +284,6 @@ void e1000r_irq_enable(size_t ptr);
 
 int32_t e1000r_irq_handle(size_t ptr, int32_t irq);
 
-int32_t e1000r_irq_handle_msix_rx(size_t ptr, int32_t irq);
-
 int32_t e1000r_irq_handle_msix_tx(size_t ptr, int32_t irq);
 
 size_t e1000r_new(struct E1000Config config);

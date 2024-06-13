@@ -211,12 +211,7 @@ unsafe extern "C" fn e1000r_irq_handle(ptr: usize, irq: i32) -> i32 {
     let dev = dev_mut(ptr);
     rfn(|| dev.dev.irq_handle(irq))
 }
-#[no_mangle]
-unsafe extern "C" fn e1000r_irq_handle_msix_rx(ptr: usize, irq: i32) -> i32 {
-    let dev = dev_mut(ptr);
-    dev.dev.irq_handle_msix_rx();
-    0
-}
+
 #[no_mangle]
 unsafe extern "C" fn e1000r_irq_handle_msix_tx(ptr: usize, irq: i32) -> i32 {
     let dev = dev_mut(ptr);

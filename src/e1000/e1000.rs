@@ -999,12 +999,9 @@ where
         self.e1e_flush();
     }
 
-    pub fn irq_handle_msix_rx(&mut self) {
-        info!("intr msix rx");
-    }
+
 
     pub fn irq_handle_msix_tx(&mut self) {
-        info!("intr msix tx");
         self.hw.as_mut().status.total_tx_bytes = 0;
         self.hw.as_mut().status.total_tx_packets = 0;
 
