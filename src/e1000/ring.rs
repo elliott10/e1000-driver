@@ -23,6 +23,7 @@ where
     ring: *mut T,
     mbufs: Vec<usize>,
     pub(crate) next_to_use: usize,
+    pub(crate) ims_val: u32,
     _marker: marker::PhantomData<T>,
 }
 
@@ -39,6 +40,7 @@ where
             next_to_use: 0,
             ring: ptr::null_mut(),
             mbufs: Vec::new(),
+            ims_val: 0,
             _marker: Default::default(),
         }
     }

@@ -195,9 +195,21 @@ unsafe extern "C" fn e1000r_transmit(ptr: usize, pkt: *const u8, len: u32) -> i3
 #[no_mangle]
 unsafe extern "C" fn e1000r_irq_handle(ptr: usize, irq: i32) -> i32 {
     let dev = dev_mut(ptr);
-    rfn(|| dev.dev.intr(irq))
+    rfn(|| dev.dev.irq_handle(irq))
 }
+#[no_mangle]
+unsafe extern "C" fn e1000r_irq_handle_msix_rx(ptr: usize, irq: i32) -> i32 {
+    let dev = dev_mut(ptr);
+    dev.dev.irq_handle_msix_rx();
+    0
+}
+#[no_mangle]
+unsafe extern "C" fn e1000r_irq_handle_msix_tx(ptr: usize, irq: i32) -> i32 {
+    let dev = dev_mut(ptr);
 
+    dev.dev.irq_handle_msix_tx();
+    0
+}
 #[no_mangle]
 unsafe extern "C" fn e1000r_set_flags(ptr: usize, flags: Flags) {
     let dev = dev_mut(ptr);
@@ -205,9 +217,19 @@ unsafe extern "C" fn e1000r_set_flags(ptr: usize, flags: Flags) {
 }
 
 #[no_mangle]
-extern "C" fn e1000r_irq_disable(ptr: usize, misx_enabled: bool) {
+extern "C" fn e1000r_irq_disable(ptr: usize) {
     let dev = dev_mut(ptr);
-    dev.dev.irq_disable(misx_enabled);
+    dev.dev.irq_disable();
+}
+#[no_mangle]
+extern "C" fn e1000r_irq_enable(ptr: usize) {
+    let dev = dev_mut(ptr);
+    dev.dev.irq_enable();
+}
+#[no_mangle]
+extern "C" fn e1000r_configure_msix(ptr: usize) {
+    let dev = dev_mut(ptr);
+    dev.dev.configure_msix();
 }
 
 #[no_mangle]

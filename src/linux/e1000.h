@@ -66,9 +66,9 @@ struct e1000_adapter {
   u32 msg_enable;
   u32 bd_number;
 
-  unsigned int num_vectors;
+  // unsigned int num_vectors;
   struct msix_entry *msix_entries;
-  int int_mode;
+  // int int_mode;
 
   /* OS defined structs */
   struct net_device *netdev;

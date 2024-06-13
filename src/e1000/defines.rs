@@ -511,6 +511,7 @@ pub(crate) const ICS_RXSEQ: u32 = ICR_RXSEQ;   // Rx sequence error
 pub(crate) const ICS_RXDMT0: u32 = ICR_RXDMT0; // Rx desc min. threshold
 pub(crate) const ICS_OTHER: u32 = ICR_OTHER;   // Other Interrupt
 
+pub(crate) const IVAR_INT_ALLOC_VALID: u32 = 0x8;
 
 use core::arch::asm;
 

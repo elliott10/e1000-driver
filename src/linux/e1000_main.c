@@ -2,6 +2,7 @@
 #include "linux/cleanup.h"
 #include "linux/etherdevice.h"
 #include "linux/gfp_types.h"
+#include "linux/irqreturn.h"
 #include "linux/mroute.h"
 #include "linux/printk.h"
 #include "linux/refcount.h"
@@ -60,6 +61,175 @@ MODULE_PARM_DESC(
 static pci_ers_result_t e1000_io_error_detected(struct pci_dev *pdev,
                                                 pci_channel_state_t state);
 static pci_ers_result_t e1000_io_slot_reset(struct pci_dev *pdev);
+void e1000e_set_interrupt_capability(struct e1000_adapter *adapter);
+void e1000e_reset_interrupt_capability(struct e1000_adapter *adapter);
+static int e1000_request_msix(struct e1000_adapter *adapter);
+static irqreturn_t e1000_intr_msix_rx(int __always_unused irq, void *data) {
+  struct net_device *netdev = data;
+  size_t e1000 = e1000e_get_e1000(netdev);
+  struct e1000_adapter *adapter = netdev_priv(netdev);
+  // struct e1000_ring *rx_ring = adapter->rx_ring;
+
+  /* Write the ITR value calculated at the end of the
+   * previous interrupt.
+   */
+  // if (rx_ring->set_itr) {
+  // 	u32 itr = rx_ring->itr_val ?
+  // 			  1000000000 / (rx_ring->itr_val * 256) :
+  // 			  0;
+
+  // 	writel(itr, rx_ring->itr_register);
+  // 	rx_ring->set_itr = 0;
+  // }
+
+  if (napi_schedule_prep(&adapter->napi)) {
+    struct E1000Status *status = e1000r_status(e1000);
+    status->total_rx_bytes = 0;
+    status->total_rx_packets = 0;
+    __napi_schedule(&adapter->napi);
+  }
+  return IRQ_HANDLED;
+}
+static irqreturn_t e1000_intr_msix_tx(int __always_unused irq, void *data) {
+  struct net_device *netdev = data;
+  size_t e1000 = e1000e_get_e1000(netdev);
+  e1000r_irq_handle_msix_tx(e1000, irq);
+  return IRQ_HANDLED;
+}
+static irqreturn_t e1000_msix_other(int __always_unused irq, void *data) {
+  struct net_device *netdev = data;
+  size_t e1000 = e1000e_get_e1000(netdev);
+  if (e1000r_irq_handle(e1000, irq)) {
+    return IRQ_NONE;
+  }
+  // struct e1000_adapter *adapter = netdev_priv(netdev);
+  // struct e1000_hw *hw = &adapter->hw;
+  // u32 icr = er32(ICR);
+
+  // if (icr & adapter->eiac_mask)
+  // 	ew32(ICS, (icr & adapter->eiac_mask));
+
+  // if (icr & E1000_ICR_LSC) {
+  // 	hw->mac.get_link_status = true;
+  // 	/* guard against interrupt when we're going down */
+  // 	if (!test_bit(__E1000_DOWN, &adapter->state))
+  // 		mod_timer(&adapter->watchdog_timer, jiffies + 1);
+  // }
+
+  // if (!test_bit(__E1000_DOWN, &adapter->state))
+  // 	ew32(IMS, E1000_IMS_OTHER | IMS_OTHER_MASK);
+
+  return IRQ_HANDLED;
+}
+/**
+ * e1000_intr_msi - Interrupt Handler
+ * @irq: interrupt number
+ * @data: pointer to a network interface device structure
+ **/
+static irqreturn_t e1000_intr_msi(int __always_unused irq, void *data) {
+  struct net_device *netdev = data;
+  size_t e1000 = e1000e_get_e1000(netdev);
+  if (e1000r_irq_handle(e1000, irq)) {
+    return IRQ_NONE;
+  }
+  return IRQ_HANDLED;
+}
+
+/**
+ * e1000_request_irq - initialize interrupts
+ * @adapter: board private structure
+ *
+ * Attempts to configure interrupts using the best available
+ * capabilities of the hardware and kernel.
+ **/
+static int e1000_request_irq(struct e1000_adapter *adapter) {
+  struct net_device *netdev = adapter->netdev;
+  size_t e1000 = e1000e_get_e1000(adapter->netdev);
+  struct E1000Status *status = e1000r_status(e1000);
+  struct e1000r_info_all info = e1000r_get_info_all(e1000);
+  struct Flags flags = info.flags;
+  int err;
+
+  if (adapter->msix_entries) {
+    err = e1000_request_msix(adapter);
+    if (!err)
+      return err;
+    /* fall back to MSI */
+    e1000e_reset_interrupt_capability(adapter);
+    status->int_mode = E1000E_INT_MODE_MSI;
+    e1000e_set_interrupt_capability(adapter);
+  }
+  if (flags.msi_enabled) {
+    err = request_irq(adapter->pdev->irq, e1000_intr_msi, 0, netdev->name,
+                      netdev);
+    if (!err)
+      return err;
+
+    /* fall back to legacy interrupt */
+    e1000e_reset_interrupt_capability(adapter);
+    status->int_mode = E1000E_INT_MODE_LEGACY;
+  }
+
+  err = request_irq(adapter->pdev->irq, e1000_intr_msi, IRQF_SHARED,
+                    netdev->name, netdev);
+  if (err)
+    e_err("Unable to allocate interrupt, Error: %d\n", err);
+
+  return err;
+}
+
+/**
+ * e1000_request_msix - Initialize MSI-X interrupts
+ * @adapter: board private structure
+ *
+ * e1000_request_msix allocates MSI-X vectors and requests interrupts from the
+ * kernel.
+ **/
+static int e1000_request_msix(struct e1000_adapter *adapter) {
+  struct net_device *netdev = adapter->netdev;
+  size_t e1000 = e1000e_get_e1000(adapter->netdev);
+
+  int err = 0, vector = 0;
+
+  // if (strlen(netdev->name) < (IFNAMSIZ - 5))
+  // 	snprintf(adapter->rx_ring->name,
+  // 		 sizeof(adapter->rx_ring->name) - 1, "%.14s-rx-0",
+  // 		 netdev->name);
+  // else
+  // 	memcpy(adapter->rx_ring->name, netdev->name, IFNAMSIZ);
+  err = request_irq(adapter->msix_entries[vector].vector, e1000_intr_msix_rx, 0,
+                    "E1000R_RX", netdev);
+  if (err)
+    return err;
+  // adapter->rx_ring->itr_register =
+  //     adapter->hw.hw_addr + E1000_EITR_82574(vector);
+  // adapter->rx_ring->itr_val = adapter->itr;
+  vector++;
+
+  // if (strlen(netdev->name) < (IFNAMSIZ - 5))
+  //   snprintf(adapter->tx_ring->name, sizeof(adapter->tx_ring->name) - 1,
+  //            "%.14s-tx-0", netdev->name);
+  // else
+  //   memcpy(adapter->tx_ring->name, netdev->name, IFNAMSIZ);
+  err = request_irq(adapter->msix_entries[vector].vector, e1000_intr_msix_tx, 0,
+                    "E1000R_TX", netdev);
+  if (err)
+    return err;
+  // adapter->tx_ring->itr_register =
+  //     adapter->hw.hw_addr + E1000_EITR_82574(vector);
+  // adapter->tx_ring->itr_val = adapter->itr;
+  vector++;
+
+  err = request_irq(adapter->msix_entries[vector].vector, e1000_msix_other, 0,
+                    netdev->name, netdev);
+  if (err)
+    return err;
+
+  // e1000_configure_msix(adapter);
+  e1000r_configure_msix(e1000);
+
+  return 0;
+}
 static void e1000_io_resume(struct pci_dev *pdev);
 
 /**
@@ -116,8 +286,14 @@ int e1000e_open(struct net_device *netdev) {
     goto err_req_irq;
   }
 
+  err = e1000_request_irq(adapter);
+  if (err)
+    goto err_req_irq;
+
   napi_enable(&adapter->napi);
-  // e1000_irq_enable(adapter);
+
+  e1000r_irq_enable(e1000);
+
   pm_runtime_put(&pdev->dev);
 
   e1000r_trigger_lsc(e1000);
@@ -393,9 +569,11 @@ static netdev_features_t e1000_fix_features(struct net_device *netdev,
 void e1000e_reset_interrupt_capability(struct e1000_adapter *adapter) {
   size_t e1000 = e1000e_get_e1000(adapter->netdev);
   struct e1000r_info_all info = e1000r_get_info_all(e1000);
+  struct E1000Status *status = e1000r_status(e1000);
   struct Flags flags = info.flags;
   if (adapter->msix_entries) {
     pci_disable_msix(adapter->pdev);
+    status->msix_vec_num = 0;
     kfree(adapter->msix_entries);
     adapter->msix_entries = NULL;
   } else if (flags.msi_enabled) {
@@ -417,21 +595,23 @@ void e1000e_set_interrupt_capability(struct e1000_adapter *adapter) {
   size_t e1000 = e1000e_get_e1000(adapter->netdev);
   struct e1000r_info_all info = e1000r_get_info_all(e1000);
   struct Flags flags = info.flags;
+  struct E1000Status *status = e1000r_status(e1000);
 
-  switch (adapter->int_mode) {
+  switch (status->int_mode) {
   case E1000E_INT_MODE_MSIX:
     if (flags.has_msix) {
-      adapter->num_vectors = 3; /* RxQ0, TxQ0 and other */
+      status->num_vectors = 3; /* RxQ0, TxQ0 and other */
+      status->msix_vec_num = status->num_vectors;
       adapter->msix_entries =
-          kcalloc(adapter->num_vectors, sizeof(struct msix_entry), GFP_KERNEL);
+          kcalloc(status->num_vectors, sizeof(struct msix_entry), GFP_KERNEL);
       if (adapter->msix_entries) {
         struct e1000_adapter *a = adapter;
 
-        for (i = 0; i < adapter->num_vectors; i++)
+        for (i = 0; i < status->num_vectors; i++)
           adapter->msix_entries[i].entry = i;
 
-        err = pci_enable_msix_range(a->pdev, a->msix_entries, a->num_vectors,
-                                    a->num_vectors);
+        err = pci_enable_msix_range(a->pdev, a->msix_entries,
+                                    status->num_vectors, status->num_vectors);
         if (err > 0)
           return;
       }
@@ -440,14 +620,14 @@ void e1000e_set_interrupt_capability(struct e1000_adapter *adapter) {
             "interrupts.\n");
       e1000e_reset_interrupt_capability(adapter);
     }
-    adapter->int_mode = E1000E_INT_MODE_MSI;
+    status->int_mode = E1000E_INT_MODE_MSI;
     fallthrough;
   case E1000E_INT_MODE_MSI:
     if (!pci_enable_msi(adapter->pdev)) {
       flags.msi_enabled = true;
       e1000r_set_flags(e1000, flags);
     } else {
-      adapter->int_mode = E1000E_INT_MODE_LEGACY;
+      status->int_mode = E1000E_INT_MODE_LEGACY;
       e_err("Failed to initialize MSI interrupts.  Falling back to legacy "
             "interrupts.\n");
     }
@@ -458,19 +638,21 @@ void e1000e_set_interrupt_capability(struct e1000_adapter *adapter) {
   }
 
   /* store the number of vectors being used */
-  adapter->num_vectors = 1;
+  status->num_vectors = 1;
 }
 /**
  * e1000_irq_disable - Mask off interrupt generation on the NIC
  * @adapter: board private structure
  **/
 static void e1000_irq_disable(struct e1000_adapter *adapter) {
-  e1000r_irq_disable(e1000e_get_e1000(adapter->netdev), adapter->msix_entries);
+  size_t e1000 = e1000e_get_e1000(adapter->netdev);
+  e1000r_irq_disable(e1000);
+  struct E1000Status *status = e1000r_status(e1000);
 
   if (adapter->msix_entries) {
     int i;
 
-    for (i = 0; i < adapter->num_vectors; i++)
+    for (i = 0; i < status->num_vectors; i++)
       synchronize_irq(adapter->msix_entries[i].vector);
   } else {
     synchronize_irq(adapter->pdev->irq);

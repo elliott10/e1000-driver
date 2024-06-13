@@ -118,27 +118,21 @@ where
     }
 
     fn check_opention(&mut self) {
+        let flags = self.hw.as_ref().flags.clone();
         let flags2 = self.hw.as_ref().flags2.clone();
 
-        self.hw.as_mut().status.check_opention(&flags2);
+        self.hw.as_mut().status.check_opention(&flags, &flags2);
         self.hw.as_mut().crc_stripping();
         self.hw.as_mut().write_protect_nvm();
     }
 
     fn init_rings(&self) {}
 
-    /// interrupt handler
-    pub fn intr(&mut self, irq: i32) -> Result {
-        info!("intr {}!", irq);
-
-        Ok(())
-    }
     pub fn set_flags(&mut self, flags: Flags) {
         self.hw.as_mut().flags = flags;
     }
-    pub fn irq_enable(&mut self, is_msix_enabled: bool) {
-        info!("Enable interrupts");
-
+    pub fn irq_enable(&mut self) {
+        let is_msix_enabled = self.hw.as_ref().status.msix_vec_num > 0;
         if is_msix_enabled {
             // 当使用MSI-X中断时
             self.ew32(EIAC_82574, self.eiac_mask & EIAC_MASK_82574);
@@ -159,6 +153,13 @@ where
         self.hw.as_ref().mac.clone()
     }
 
+    fn write_reg(&self, offset: usize, value: u32) {
+        unsafe {
+            let ptr = (self.hw.as_ref().mmio + offset) as *mut u32;
+            ptr.write_volatile(value);
+        }
+    }
+
     fn ew32(&self, offset: usize, value: u32) {
         self.hw.as_ref().ew32(offset, value);
     }
@@ -170,11 +171,9 @@ where
         self.hw.as_ref().e1e_flush();
     }
 
-    pub fn irq_disable(&mut self, is_msix_enabled: bool) {
-        info!("Disable interrupts");
-
+    pub fn irq_disable(&mut self) {
         self.ew32(IMC, !0);
-
+        let is_msix_enabled = self.hw.as_ref().status.msix_vec_num > 0;
         if is_msix_enabled {
             self.ew32(EIAC_82574, 0);
         }
@@ -706,7 +705,17 @@ where
         info!("e1000 begin open");
         self.tx_ring.init();
         self.rx_ring.init();
-        info!("ring ok");
+        let status = &self.hw.as_ref().status;
+
+        info!(
+            "Int mode: {} MSIX num: {}",
+            match status.int_mode {
+                2 => "MSIX",
+                1 => "MSI",
+                _ => "Legacy",
+            },
+            status.msix_vec_num
+        );
 
         self.power_up_phy()?;
         self.configure()?;
@@ -898,6 +907,79 @@ where
             reg_val |= TARC0_CB_MULTIQ_2_REQ;
             self.ew32(TARC(0), reg_val);
         }
+    }
+
+    pub fn configure_msix(&mut self) {
+        info!("Configuring MSI-X");
+        self.eiac_mask = 0;
+        let mut ivar = 0;
+        let mut vector = 0;
+
+        /* Workaround issue with spurious interrupts on 82574 in MSI-X mode */
+        if self.hw.as_ref().mac.kind == MacType::e1000_82574 {
+            let mut rfctl = self.er32(RFCTL);
+
+            rfctl |= RFCTL_ACK_DIS;
+            self.ew32(RFCTL, rfctl);
+        }
+        let itr_val = self.hw.as_ref().status.itr;
+
+        /* Configure Rx vector */
+        self.rx_ring.ims_val = IMS_RXQ0;
+        self.eiac_mask |= self.rx_ring.ims_val;
+
+        if itr_val > 0 {
+            let val = 1000000000 / (itr_val * 256);
+            self.write_reg(EITR_82574(vector as _), val);
+        } else {
+            self.write_reg(EITR_82574(vector as _), 1);
+        }
+        ivar = IVAR_INT_ALLOC_VALID | vector;
+
+        /* Configure Tx vector */
+        self.tx_ring.ims_val = IMS_TXQ0;
+        vector += 1;
+        self.eiac_mask |= self.tx_ring.ims_val;
+
+        if itr_val > 0 {
+            let val = 1000000000 / (itr_val * 256);
+            self.write_reg(EITR_82574(vector as _), val);
+        } else {
+            self.write_reg(EITR_82574(vector as _), 1);
+        }
+        ivar |= ((IVAR_INT_ALLOC_VALID | vector) << 8);
+
+        /* set vector for Other Causes, e.g. link changes */
+        vector += 1;
+        ivar |= ((IVAR_INT_ALLOC_VALID | vector) << 16);
+        if itr_val > 0 {
+            let val = 1000000000 / (itr_val * 256);
+            self.write_reg(EITR_82574(vector as _), val);
+        } else {
+            self.write_reg(EITR_82574(vector as _), 1);
+        }
+
+        /* Cause Tx interrupts on every write back */
+        ivar |= BIT(31);
+
+        self.ew32(IVAR, ivar);
+
+        /* enable MSI-X PBA support */
+        let mut ctrl_ext = self.er32(CTRL_EXT) & !CTRL_EXT_IAME;
+        ctrl_ext |= CTRL_EXT_PBA_CLR | CTRL_EXT_EIAME;
+        self.ew32(CTRL_EXT, ctrl_ext);
+        self.e1e_flush();
+    }
+
+    pub fn irq_handle_msix_rx(&mut self) {}
+
+    pub fn irq_handle_msix_tx(&mut self) {}
+
+    /// interrupt handler
+    pub fn irq_handle(&mut self, irq: i32) -> Result {
+        info!("intr {}!", irq);
+
+        Ok(())
     }
 
     fn configure_rx(&mut self) {
@@ -1294,7 +1376,7 @@ where
 }
 
 impl E1000Status {
-    fn check_opention(&mut self, flags2: &Flags2) {
+    fn check_opention(&mut self, flags: &Flags, flags2: &Flags2) {
         use super::params::*;
         //TODO 检查最大网卡数量
 
@@ -1341,7 +1423,11 @@ impl E1000Status {
             }
         }
 
-        //TODO Interrupt Mode
+        if flags.has_msix {
+            self.int_mode = 2;
+        } else {
+            self.int_mode = 1;
+        }
     }
 }
 
@@ -1367,7 +1453,9 @@ pub struct E1000Status {
 
     pub itr: u32,
     pub itr_setting: u32,
+    pub int_mode: i32,
     pub msix_vec_num: u32,
+    pub num_vectors: u32,
     pub tx_it: u16,
     pub rx_itr: u16,
 

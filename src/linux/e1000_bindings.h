@@ -223,7 +223,9 @@ typedef struct E1000Status {
   struct E1000HWStats stats;
   uint32_t itr;
   uint32_t itr_setting;
+  int32_t int_mode;
   uint32_t msix_vec_num;
+  uint32_t num_vectors;
   uint16_t tx_it;
   uint16_t rx_itr;
   uint32_t tx_int_delay;
@@ -248,15 +250,23 @@ typedef struct E1000Status {
 
 void e1000_print_device_info(size_t ptr);
 
+void e1000r_configure_msix(size_t ptr);
+
 void e1000r_drop(size_t ptr);
 
 struct e1000r_info_all e1000r_get_info_all(size_t ptr);
 
 int32_t e1000r_init(size_t ptr);
 
-void e1000r_irq_disable(size_t ptr, bool misx_enabled);
+void e1000r_irq_disable(size_t ptr);
+
+void e1000r_irq_enable(size_t ptr);
 
 int32_t e1000r_irq_handle(size_t ptr, int32_t irq);
+
+int32_t e1000r_irq_handle_msix_rx(size_t ptr, int32_t irq);
+
+int32_t e1000r_irq_handle_msix_tx(size_t ptr, int32_t irq);
 
 size_t e1000r_new(struct E1000Config config);
 
