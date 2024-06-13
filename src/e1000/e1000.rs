@@ -322,7 +322,6 @@ where
 
         // sync
         fence_w();
-        info!("link speed: 0x{:08x}", self.er32(STATUS));
         info!("Read E1000_TDH 2= {:#x}\n", self.er32(TDH(0)));
         info!("Read E1000_TDT 2= {:#x}\n", self.er32(TDT(0)));
 
@@ -922,7 +921,8 @@ where
             rfctl |= RFCTL_ACK_DIS;
             self.ew32(RFCTL, rfctl);
         }
-        let itr_val = self.hw.as_ref().status.itr;
+        // let itr_val = self.hw.as_ref().status.itr;
+        let itr_val = 0;
 
         /* Configure Rx vector */
         self.rx_ring.ims_val = IMS_RXQ0;
@@ -971,13 +971,76 @@ where
         self.e1e_flush();
     }
 
-    pub fn irq_handle_msix_rx(&mut self) {}
+    pub fn irq_handle_msix_rx(&mut self) {
+        info!("intr msix rx");
+    }
 
-    pub fn irq_handle_msix_tx(&mut self) {}
+    pub fn irq_handle_msix_tx(&mut self) {
+        // let icr = self.er32(ICR);
+        // if (icr & ICR_INT_ASSERTED) == 0 {
+        //     // warn!("icr not asserted");
+        //     return Ok(());
+        // }
+        info!("intr msix tx");
+        self.hw.as_mut().status.total_tx_bytes = 0;
+        self.hw.as_mut().status.total_tx_packets = 0;
+
+
+
+
+
+    }
 
     /// interrupt handler
     pub fn irq_handle(&mut self, irq: i32) -> Result {
+        let icr = self.er32(ICR);
+        if (icr & ICR_INT_ASSERTED) == 0 {
+            // warn!("icr not asserted");
+            return Ok(());
+        }
+
         info!("intr {}!", irq);
+        let mut hw = self.hw.clone();
+        let hw = hw.as_mut();
+
+        if (icr & self.eiac_mask) > 0 {
+            self.ew32(ICS, (icr & self.eiac_mask));
+        }
+
+        if (icr & ICR_LSC) > 0 {
+            info!("interrupt: link status change");
+            hw.mac.get_link_status = true;
+
+            if hw.flags.rx_needs_restart {
+                info!("restart rx");
+                let rctl = self.er32(RCTL);
+                self.ew32(RCTL, rctl & !RCTL_EN);
+                hw.flags.restart_now = true;
+            }
+        }
+
+        /* Reset on uncorrectable ECC error */
+        if (icr & ICR_ECCER) > 0 && (hw.mac.kind >= MacType::e1000_pch_lpt) {
+            info!("ECC error detected");
+            //  pbeccsts = er32(PBECCSTS);
+
+            // adapter->corr_errors += pbeccsts &
+            // 			E1000_PBECCSTS_CORR_ERR_CNT_MASK;
+            // adapter->uncorr_errors +=
+            // 	(pbeccsts & E1000_PBECCSTS_UNCORR_ERR_CNT_MASK) >>
+            // 	E1000_PBECCSTS_UNCORR_ERR_CNT_SHIFT;
+
+            // /* Do the reset outside of interrupt context */
+            // schedule_work(&adapter->reset_task);
+
+            /* return immediately since reset is imminent */
+            return Ok(());
+        }
+
+        hw.status.total_tx_bytes = 0;
+        hw.status.total_rx_bytes = 0;
+        hw.status.total_tx_packets = 0;
+        hw.status.total_rx_packets = 0;
 
         Ok(())
     }

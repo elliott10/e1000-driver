@@ -68,6 +68,8 @@ static irqreturn_t e1000_intr_msix_rx(int __always_unused irq, void *data) {
   struct net_device *netdev = data;
   size_t e1000 = e1000e_get_e1000(netdev);
   struct e1000_adapter *adapter = netdev_priv(netdev);
+  e1000r_irq_handle_msix_rx(e1000, irq);
+
   // struct e1000_ring *rx_ring = adapter->rx_ring;
 
   /* Write the ITR value calculated at the end of the
@@ -191,33 +193,17 @@ static int e1000_request_msix(struct e1000_adapter *adapter) {
 
   int err = 0, vector = 0;
 
-  // if (strlen(netdev->name) < (IFNAMSIZ - 5))
-  // 	snprintf(adapter->rx_ring->name,
-  // 		 sizeof(adapter->rx_ring->name) - 1, "%.14s-rx-0",
-  // 		 netdev->name);
-  // else
-  // 	memcpy(adapter->rx_ring->name, netdev->name, IFNAMSIZ);
   err = request_irq(adapter->msix_entries[vector].vector, e1000_intr_msix_rx, 0,
                     "E1000R_RX", netdev);
   if (err)
     return err;
-  // adapter->rx_ring->itr_register =
-  //     adapter->hw.hw_addr + E1000_EITR_82574(vector);
-  // adapter->rx_ring->itr_val = adapter->itr;
-  vector++;
 
-  // if (strlen(netdev->name) < (IFNAMSIZ - 5))
-  //   snprintf(adapter->tx_ring->name, sizeof(adapter->tx_ring->name) - 1,
-  //            "%.14s-tx-0", netdev->name);
-  // else
-  //   memcpy(adapter->tx_ring->name, netdev->name, IFNAMSIZ);
+  vector++;
   err = request_irq(adapter->msix_entries[vector].vector, e1000_intr_msix_tx, 0,
                     "E1000R_TX", netdev);
   if (err)
     return err;
-  // adapter->tx_ring->itr_register =
-  //     adapter->hw.hw_addr + E1000_EITR_82574(vector);
-  // adapter->tx_ring->itr_val = adapter->itr;
+
   vector++;
 
   err = request_irq(adapter->msix_entries[vector].vector, e1000_msix_other, 0,
@@ -225,9 +211,7 @@ static int e1000_request_msix(struct e1000_adapter *adapter) {
   if (err)
     return err;
 
-  // e1000_configure_msix(adapter);
   e1000r_configure_msix(e1000);
-
   return 0;
 }
 static void e1000_io_resume(struct pci_dev *pdev);
@@ -360,7 +344,6 @@ static void e1000_io_resume(struct pci_dev *pdev) {}
 static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
                                     struct net_device *netdev) {
   struct e1000_adapter *adapter = netdev_priv(netdev);
-  pr_info("xmit frame");
 
   // unsigned int first;
   size_t e1000 = adapter->ptr;

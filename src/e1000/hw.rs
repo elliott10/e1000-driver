@@ -39,6 +39,7 @@ where
     pub(crate) variant: BoardVariant,
     pub(crate) status: E1000Status,
     pub(crate) mng_cookie: HostMngDhcpCookie,
+    pub(crate) is_down: bool,
 }
 
 #[derive(Default, Clone)]
@@ -97,9 +98,6 @@ pub struct MacInfo {
     pub perm_addr: [u8; 6],
 
     pub kind: MacType,
-
-
-
 
     pub collision_delta: u32,
     pub ledctl_default: u32,
@@ -673,10 +671,6 @@ where
         // mii_reg &= ~BMCR_PDOWN;
         // e1e_wphy(hw, MII_BMCR, mii_reg);
     }
-
-
-    
-
 }
 
 #[derive(Clone)]
@@ -705,6 +699,7 @@ where
             hw.nvm = Default::default();
             hw.fc = Default::default();
             hw.mng_cookie = Default::default();
+            hw.is_down = false;
             hw.mac.kind = board.mac;
             hw.flags = board.flags;
             hw.flags2 = board.flags2;
@@ -717,7 +712,7 @@ where
     }
     pub(crate) fn init(&mut self) -> Result {
         let hw = self.as_mut();
-        hw.status.rx_buffer_len = (VLAN_ETH_FRAME_LEN + ETH_FCS_LEN)as u32;
+        hw.status.rx_buffer_len = (VLAN_ETH_FRAME_LEN + ETH_FCS_LEN) as u32;
 
         if hw.flags.has_flash && hw.mac.kind < MacType::e1000_pch_spt {
             let addr = hw.kernel.bar_n_remap(1);
