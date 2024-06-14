@@ -677,3 +677,4 @@ pub(crate) const E1000_ALL_HALF_DUPLEX: u16 = ADVERTISE_10_HALF | ADVERTISE_100_
 
 pub(crate) const AUTONEG_ADVERTISE_SPEED_DEFAULT: u16 = E1000_ALL_SPEED_DUPLEX;
 
+pub(crate) const MIN_NUM_XMITS: u32 = 1000; // Minimum number of transmissions

@@ -1659,8 +1659,47 @@ where
         Ok(())
     }
 
+    /**
+     *  e1000e_update_adaptive - Update Adaptive Interframe Spacing
+     *  @hw: pointer to the HW structure
+     *
+     *  Update the Adaptive Interframe Spacing Throttle value based on the
+     *  time between transmitted packets and time between collisions.
+     **/
+    fn update_adaptive(&mut self) {
+        let mut hw = self.hw.clone();
+        let mac = &mut hw.as_mut().mac;
+
+        if (!mac.adaptive_ifs) {
+            error!("Not in Adaptive IFS mode!\n");
+            return;
+        }
+
+        if ((mac.collision_delta * mac.ifs_ratio as u32) > mac.tx_packet_delta) {
+            if (mac.tx_packet_delta > MIN_NUM_XMITS) {
+                mac.in_ifs_mode = true;
+                if (mac.current_ifs_val < mac.ifs_max_val) {
+                    if mac.current_ifs_val == 0 {
+                        mac.current_ifs_val = mac.ifs_min_val;
+                    } else {
+                        mac.current_ifs_val += mac.ifs_step_size;
+                    }
+                    self.ew32(AIT, mac.current_ifs_val as u32);
+                }
+            }
+        } else {
+            if (mac.in_ifs_mode && (mac.tx_packet_delta <= MIN_NUM_XMITS)) {
+                mac.current_ifs_val = 0;
+                mac.in_ifs_mode = false;
+                self.ew32(AIT, 0);
+            }
+        }
+    }
+
     pub fn task_watchdog(&mut self) -> Result {
         // let link = self.has_link();
+
+        self.update_adaptive();
 
         /* Cause software interrupt to ensure Rx ring is cleaned */
         if (self.hw.as_ref().status.msix_vec_num > 0) {
