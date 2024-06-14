@@ -774,7 +774,7 @@ where
         self.configure_tx();
         self.setup_rctl();
         self.configure_rx();
-        self.setup_tctl();
+        // self.setup_tctl();
 
         Ok(())
     }
@@ -1553,6 +1553,30 @@ where
         self.phy_read_status()?;
         self.get_speed_and_duplex_copper();
 
+        self.check_downshift()?;
+
+        if (self.hw.as_ref().phy.speed_downgraded) {
+            warn!("Link Speed was downgraded by SmartSpeed");
+        }
+
+        let mut txb2b = true;
+
+        /* workaround: re-program speed mode bit after
+         * link-up event
+         */
+        if (self.hw.as_ref().flags.tarc_speed_mode_bit && !txb2b) {
+            let mut tarc0 = self.er32(TARC(0));
+            tarc0 &= !BIT(21);
+            self.ew32(TARC(0), tarc0);
+        }
+
+        /* enable transmits in the hardware, need to do this
+         * after setting TARC(0)
+         */
+        let mut tctl = self.er32(TCTL);
+        tctl |= TCTL_EN;
+        self.ew32(TCTL, tctl);
+
         Ok(())
     }
 
@@ -1564,7 +1588,7 @@ where
      *
      *  A downshift is detected by querying the PHY link health.
      **/
-    fn e1000e_check_downshift(&mut self) -> Result {
+    fn check_downshift(&mut self) -> Result {
         let mut offset = 0;
         let mut mask = 0u16;
 
@@ -1590,7 +1614,9 @@ where
         return Ok(());
     }
 
-    fn phy_hw_reset(&mut self) {}
+    fn phy_hw_reset(&mut self) {
+        info!("phy hw reset");
+    }
 
     fn phy_read_status(&mut self) -> Result {
         let mut hw = self.hw.clone();
