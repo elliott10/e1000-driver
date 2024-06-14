@@ -10,7 +10,7 @@ use core::alloc::Layout;
 use core::borrow::Borrow;
 use core::cmp::min;
 use core::iter::Scan;
-use core::mem::{self, align_of_val};
+use core::mem::{self, align_of_val, size_of};
 use core::ptr::NonNull;
 use core::u32;
 use e1000::board;
@@ -726,7 +726,10 @@ where
 
     /// open
     pub fn open(&mut self) -> Result {
+        // self.old_open()?;
+
         info!("e1000 begin open");
+
         self.tx_ring.init();
         self.rx_ring.init();
         let status = &self.hw.as_ref().status;
@@ -750,6 +753,70 @@ where
         self.after_link_up()?;
 
         fence_r();
+        Ok(())
+    }
+
+    fn old_open(&mut self) -> Result {
+        // Reset the device
+        self.irq_disable();
+        let mut ctrl = self.er32(CTRL);
+        self.ew32(CTRL, ctrl | CTRL_RST);
+
+        self.irq_disable();
+
+        ctrl = self.er32(CTRL);
+        self.ew32(CTRL, ctrl | CTRL_PHY_RST);
+        ctrl = self.er32(CTRL);
+        self.ew32(CTRL, ctrl | CTRL_ASDE | (0x1 << 8));
+
+        ctrl = self.er32(CTRL);
+
+        self.ew32(CTRL, ctrl | CTRL_SLU);
+        self.e1e_flush();
+
+        // 内存壁垒 fence
+        //__sync_synchronize();
+        fence_w();
+
+        self.tx_ring.init();
+        self.rx_ring.init();
+
+        if (self.tx_ring.size * size_of::<TxDesc>()) % 128 != 0 {
+            //panic("e1000");
+            error!("e1000, size of tx_ring is invalid");
+        }
+
+        self.ew32(
+            TCTL,
+            TCTL_EN |  // enable
+            TCTL_PSP |  // pad short packets
+            TCTL_RTLC |
+            (0x0f << TCTL_CT_SHIFT) & // collision stuff
+            !(TCTL_COLD) |
+            (0x3f << TCTL_COLD_SHIFT),
+        );
+
+        self.ew32(TIPG, 10 | (8 << 10) | (6 << 20));
+
+        self.ew32(TDBAL(0), 10 | (8 << 10) | (6 << 20));
+
+        let mut tdba = self.tx_ring.dma;
+        let tdlen = self.tx_ring.data_len() as u32;
+        self.ew32(TDBAL(0), (tdba & DMA_BIT_MASK(32)) as u32);
+        self.ew32(TDBAH(0), (tdba >> 32) as u32);
+        self.ew32(TDLEN(0), tdlen);
+        self.ew32(TDH(0), 0);
+        self.ew32(TDT(0), 0);
+
+        self.ew32(TXDCTL(0), TXDCTL_GRAN | TXDCTL_WTHRESH);
+        self.ew32(TXDCTL(1), TXDCTL_GRAN | TXDCTL_WTHRESH);
+
+        ctrl = self.er32(CTRL_EXT);
+        self.ew32(CTRL_EXT, ctrl | CTRL_EXT_RO_DIS);
+        self.e1e_flush();
+
+        info!("e1000_init has been completed");
+
         Ok(())
     }
 
@@ -936,7 +1003,13 @@ where
 
         self.copper_link_setup_m88()?;
 
-        self.force_speed_1000()?;
+        self.setup_copper_link()
+    }
+
+    fn setup_copper_link(&mut self) -> Result {
+        if self.hw.as_ref().mac.autoneg {
+            self.copper_link_autoneg()?;
+        }
 
         let link = self.phy_has_link_generic(10, 10)?;
 
@@ -952,10 +1025,216 @@ where
     }
 
     fn config_fc_after_link_up(&mut self) -> Result {
-        
         self.get_speed_and_duplex_copper();
         self.force_mac_fc()?;
-    
+
+        Ok(())
+    }
+
+    fn copper_link_autoneg(&mut self) -> Result {
+        let mut hw = self.hw.clone();
+        let hw = hw.as_mut();
+
+        /* Perform some bounds checking on the autoneg advertisement
+         * parameter.
+         */
+        hw.phy.autoneg_advertised &= hw.phy.autoneg_mask;
+
+        /* If autoneg_advertised is zero, we assume it was not defaulted
+         * by the calling code so we set to advertise full capability.
+         */
+        if hw.phy.autoneg_advertised == 0 {
+            hw.phy.autoneg_advertised = hw.phy.autoneg_mask;
+        }
+
+        info!("Reconfiguring auto-neg advertisement params");
+        self.phy_setup_autoneg()?;
+
+        info!("Restarting Auto-Neg");
+
+        /* Restart auto-negotiation by setting the Auto Neg Enable bit and
+         * the Auto Neg Restart bit in the PHY control register.
+         */
+        let mut phy_ctrl = self.e1e_rphy(MII_BMCR)?;
+
+        phy_ctrl |= (BMCR_ANENABLE | BMCR_ANRESTART);
+        self.e1e_wphy(MII_BMCR, phy_ctrl)?;
+
+        /* Does the user want to wait for Auto-Neg to complete here, or
+         * check at a later time (for example, callback routine).
+         */
+        if (hw.phy.autoneg_wait_to_complete) {
+            let r = self.wait_autoneg();
+            if r.is_err() {
+                info!("Error while waiting for autoneg to complete");
+                r?;
+            }
+        }
+
+        hw.mac.get_link_status = true;
+
+        Ok(())
+    }
+
+    /**
+     *  e1000_wait_autoneg - Wait for auto-neg completion
+     *  @hw: pointer to the HW structure
+     *
+     *  Waits for auto-negotiation to complete or for the auto-negotiation time
+     *  limit to expire, which ever happens first.
+     **/
+    fn wait_autoneg(&mut self) -> Result {
+        /* Break after autoneg completes or PHY_AUTO_NEG_LIMIT expires. */
+        for _ in 0..45 {
+            let mut phy_status = self.e1e_rphy(MII_BMSR)?;
+            phy_status = self.e1e_rphy(MII_BMSR)?;
+
+            if (phy_status & BMSR_ANEGCOMPLETE) > 0 {
+                break;
+            }
+            self.udelay(100 * 1000 * 1000);
+        }
+
+        /* PHY_AUTO_NEG_TIME expiration doesn't guarantee auto-negotiation
+         * has completed.
+         */
+        Ok(())
+    }
+
+    fn phy_setup_autoneg(&mut self) -> Result {
+        let mut hw = self.hw.clone();
+        let phy = &mut hw.as_mut().phy;
+        phy.autoneg_advertised &= phy.autoneg_mask;
+
+        let mut mii_1000t_ctrl_reg = 0;
+
+        /* Read the MII Auto-Neg Advertisement Register (Address 4). */
+        let mut mii_autoneg_adv_reg = self.e1e_rphy(MII_ADVERTISE)?;
+
+        if (phy.autoneg_mask & ADVERTISE_1000_FULL) > 0 {
+            /* Read the MII 1000Base-T Control Register (Address 9). */
+            mii_1000t_ctrl_reg = self.e1e_rphy(MII_CTRL1000)?;
+        }
+
+        /* Need to parse both autoneg_advertised and fc and set up
+         * the appropriate PHY registers.  First we will parse for
+         * autoneg_advertised software override.  Since we can advertise
+         * a plethora of combinations, we need to check each bit
+         * individually.
+         */
+
+        /* First we clear all the 10/100 mb speed bits in the Auto-Neg
+         * Advertisement Register (Address 4) and the 1000 mb speed bits in
+         * the  1000Base-T Control Register (Address 9).
+         */
+        mii_autoneg_adv_reg &=
+            !(ADVERTISE_100FULL | ADVERTISE_100HALF | ADVERTISE_10FULL | ADVERTISE_10HALF);
+        mii_1000t_ctrl_reg &= !(ADVERTISE_1000HALF | ADVERTISE_1000FULL);
+
+        info!("autoneg_advertised {:#X}", phy.autoneg_advertised);
+
+        /* Do we want to advertise 10 Mb Half Duplex? */
+        if (phy.autoneg_advertised & ADVERTISE_10_HALF) > 0 {
+            info!("Advertise 10mb Half duplex\n");
+            mii_autoneg_adv_reg |= ADVERTISE_10HALF;
+        }
+
+        /* Do we want to advertise 10 Mb Full Duplex? */
+        if (phy.autoneg_advertised & ADVERTISE_10_FULL) > 0 {
+            info!("Advertise 10mb Full duplex\n");
+            mii_autoneg_adv_reg |= ADVERTISE_10FULL;
+        }
+
+        /* Do we want to advertise 100 Mb Half Duplex? */
+        if (phy.autoneg_advertised & ADVERTISE_100_HALF) > 0 {
+            info!("Advertise 100mb Half duplex\n");
+            mii_autoneg_adv_reg |= ADVERTISE_100HALF;
+        }
+
+        /* Do we want to advertise 100 Mb Full Duplex? */
+        if (phy.autoneg_advertised & ADVERTISE_100_FULL) > 0 {
+            info!("Advertise 100mb Full duplex\n");
+            mii_autoneg_adv_reg |= ADVERTISE_100FULL;
+        }
+
+        /* We do not allow the Phy to advertise 1000 Mb Half Duplex */
+        if (phy.autoneg_advertised & ADVERTISE_1000_HALF) > 0 {
+            info!("Advertise 1000mb Half duplex request denied!\n");
+        }
+        /* Do we want to advertise 1000 Mb Full Duplex? */
+        if (phy.autoneg_advertised & ADVERTISE_1000_FULL) > 0 {
+            info!("Advertise 1000mb Full duplex\n");
+            mii_1000t_ctrl_reg |= ADVERTISE_1000FULL;
+        }
+
+        /* Check for a software override of the flow control settings, and
+         * setup the PHY advertisement registers accordingly.  If
+         * auto-negotiation is enabled, then software will have to set the
+         * "PAUSE" bits to the correct value in the Auto-Negotiation
+         * Advertisement Register (MII_ADVERTISE) and re-start auto-
+         * negotiation.
+         *
+         * The possible values of the "fc" parameter are:
+         *      0:  Flow control is completely disabled
+         *      1:  Rx flow control is enabled (we can receive pause frames
+         *          but not send pause frames).
+         *      2:  Tx flow control is enabled (we can send pause frames
+         *          but we do not support receiving pause frames).
+         *      3:  Both Rx and Tx flow control (symmetric) are enabled.
+         *  other:  No software override.  The flow control configuration
+         *          in the EEPROM is used.
+         */
+        match self.hw.as_ref().fc.current_mode {
+            FcMode::None => {
+                /* Flow control (Rx & Tx) is completely disabled by a
+                 * software over-ride.
+                 */
+                mii_autoneg_adv_reg &= !(ADVERTISE_PAUSE_ASYM | ADVERTISE_PAUSE_CAP);
+                phy.autoneg_advertised &= !(ADVERTISED_Pause | ADVERTISED_Asym_Pause);
+            }
+            FcMode::RxPause => {
+                /* Rx Flow control is enabled, and Tx Flow control is
+                 * disabled, by a software over-ride.
+                 *
+                 * Since there really isn't a way to advertise that we are
+                 * capable of Rx Pause ONLY, we will advertise that we
+                 * support both symmetric and asymmetric Rx PAUSE.  Later
+                 * (in e1000e_config_fc_after_link_up) we will disable the
+                 * hw's ability to send PAUSE frames.
+                 */
+                mii_autoneg_adv_reg |= (ADVERTISE_PAUSE_ASYM | ADVERTISE_PAUSE_CAP);
+                phy.autoneg_advertised |= (ADVERTISED_Pause | ADVERTISED_Asym_Pause);
+            }
+            FcMode::TxPause => {
+                /* Tx Flow control is enabled, and Rx Flow control is
+                 * disabled, by a software over-ride.
+                 */
+                mii_autoneg_adv_reg |= ADVERTISE_PAUSE_ASYM;
+                mii_autoneg_adv_reg &= !ADVERTISE_PAUSE_CAP;
+                phy.autoneg_advertised |= ADVERTISED_Asym_Pause;
+                phy.autoneg_advertised &= !ADVERTISED_Pause;
+            }
+            FcMode::Full => {
+                /* Flow control (both Rx and Tx) is enabled by a software
+                 * over-ride.
+                 */
+                mii_autoneg_adv_reg |= (ADVERTISE_PAUSE_ASYM | ADVERTISE_PAUSE_CAP);
+                phy.autoneg_advertised |= (ADVERTISED_Pause | ADVERTISED_Asym_Pause);
+            }
+            _ => {
+                error!("Flow control param set incorrectly\n");
+                return Err(Error::Config("Flow control param set incorrectly"));
+            }
+        }
+
+        self.e1e_wphy(MII_ADVERTISE, mii_autoneg_adv_reg)?;
+
+        info!("Auto-Neg Advertising {:#X}", mii_autoneg_adv_reg);
+
+        if (phy.autoneg_mask & ADVERTISE_1000_FULL) > 0 {
+            self.e1e_wphy(MII_CTRL1000, mii_1000t_ctrl_reg);
+        }
+
         Ok(())
     }
 
@@ -1935,15 +2214,10 @@ where
         let status = self.er32(STATUS);
         let ctrl = self.er32(CTRL);
         info!(
-            "MAC Status: FD {}, LU {}, Speed {}, Flow Control {}",
+            "MAC Status: {:#X} FD {}, LU {}, Flow Control {}",
+            status,
             (status & STATUS_FD) != 0,
             (status & STATUS_LU) != 0,
-            match (status & STATUS_SPEED_MASK) {
-                0 => "10 Mbps",
-                0b01 => "100 Mbps",
-                0b10 => "1000 Mbps",
-                _ => "1000 Mbps",
-            },
             if ((ctrl & CTRL_TFCE) > 0) && ((ctrl & CTRL_RFCE) > 0) {
                 "Rx/Tx"
             } else if (ctrl & CTRL_RFCE) > 0 {

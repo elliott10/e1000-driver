@@ -1,4 +1,4 @@
-#![allow(non_snake_case)]
+#![allow(non_snake_case,non_upper_case_globals)]
 
 pub(crate) const ICR_TXDW: u32 = 0x00000001; // Transmit desc written back
 pub(crate) const ICR_LSC: u32 = 0x00000004; // Link Status Change
@@ -587,6 +587,8 @@ pub(crate) const ADVERTISE_1000HALF: u16 = 0x0100; // Advertise 1000BASE-T half 
 pub(crate) const CTL1000_PREFER_MASTER: u16 = 0x0400; // Prefer to operate as master
 pub(crate) const CTL1000_AS_MASTER: u16 = 0x0800; // Operate as master
 pub(crate) const CTL1000_ENABLE_MASTER: u16 = 0x1000; // Enable master/slave functionality
+// Given the macro definition and understanding it's not practically used but for informational purposes:
+pub(crate) const ADVERTISE_1000_HALF: u16 = 0x0010; // Placeholder for advertising 1000BASE-T half duplex, not utilized in current configuration
 
 pub(crate) const M88E1000_PHY_SPEC_CTRL: u32 = 0x10; // PHY Specific Control Register
 pub(crate) const M88E1000_PHY_SPEC_STATUS: u32 = 0x11; // PHY Specific Status Register
@@ -609,6 +611,10 @@ pub(crate) const PHY_REG_MASK: u8 = 0x1F; // Mask to get the register address wi
 pub(crate) const IGP01E1000_PLHR_SS_DOWNGRADE: u16 = 0x8000; // Signal Speed Downgrade in PHY Link Health Register
 
 pub(crate) const M88E1000_PSCR_AUTO_X_MODE: u16 = 0x0060; // Bitmask for Auto MDI/MDI-X mode
+
+
+pub(crate) const ADVERTISED_Pause: u16 = 1<< 13;
+pub(crate) const ADVERTISED_Asym_Pause: u16 = 1<< 14;
 
 use core::arch::asm;
 
