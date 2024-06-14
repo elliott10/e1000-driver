@@ -141,12 +141,15 @@ pub(crate) const RFC: usize = 0x040A8; // Rx Fragment Count - Read/clear
 pub(crate) const ROC: usize = 0x040AC; // Rx Oversize Count - Read/clear
 pub(crate) const RJC: usize = 0x040B0; // Rx Jabber Count - Read/clear
 
+pub(crate) const MPTC: usize = 0x040F0; // Multicast Packets Tx Count - Read/clear
+pub(crate) const BPTC: usize = 0x040F4; // Broadcast Packets Tx Count - Read/clear
+pub(crate) const TSCTC: usize = 0x040F8; // TCP Segmentation Context Tx Count - Read/clear
+pub(crate) const TSCTFC: usize = 0x040FC; // TCP Segmentation Context Tx Fail Count - Read/clear
 
-pub(crate) const MPTC: usize = 0x040F0;         // Multicast Packets Tx Count - Read/clear
-pub(crate) const BPTC: usize = 0x040F4;         // Broadcast Packets Tx Count - Read/clear
-pub(crate) const TSCTC: usize   = 0x040F8;        // TCP Segmentation Context Tx Count - Read/clear
-pub(crate) const TSCTFC: usize = 0x040FC;       // TCP Segmentation Context Tx Fail Count - Read/clear
+pub(crate) const TPR: usize = 0x040D0; // Total Packets Rx - Read/clear
+pub(crate) const TPT: usize = 0x040D4; // Total Packets Tx - Read/clear
 
+pub(crate) const SWSM2: usize = 0x05B58; // Driver-only software semaphore
 
-pub(crate) const TPR: usize = 0x040D0;         // Total Packets Rx - Read/clear
-pub(crate) const TPT: usize = 0x040D4;         // Total Packets Tx - Read/clear
+pub(crate) const FCRTL: usize = 0x02160; // Flow Control Receive Threshold Low Register - Read/Write
+pub(crate) const FCRTH: usize = 0x02168; // Flow Control Receive Threshold High Register - Read/Write

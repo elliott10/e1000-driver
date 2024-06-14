@@ -678,3 +678,10 @@ pub(crate) const E1000_ALL_HALF_DUPLEX: u16 = ADVERTISE_10_HALF | ADVERTISE_100_
 pub(crate) const AUTONEG_ADVERTISE_SPEED_DEFAULT: u16 = E1000_ALL_SPEED_DUPLEX;
 
 pub(crate) const MIN_NUM_XMITS: u32 = 1000; // Minimum number of transmissions
+
+pub(crate) const SWSM2_LOCK: u32 = 0x00000002; // Bitmask for secondary driver semaphore lock
+
+
+pub(crate) const FLOW_CONTROL_ADDRESS_LOW: u32 = 0x00C28001; // Lower part of the flow control address
+pub(crate) const FLOW_CONTROL_ADDRESS_HIGH: u32 = 0x00000100; // Higher part of the flow control address
+pub(crate) const FLOW_CONTROL_TYPE: u32 = 0x8808;            // EtherType for flow control packets (802.3x PAUSE frame)

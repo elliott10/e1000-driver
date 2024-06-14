@@ -30,11 +30,28 @@ impl DevSpec82571 {
         // /* Set rar entry count */
         hw.mac.rar_entry_count = RAR_ENTRIES as _;
 
-        hw.mac.has_fwsm = true;
+        hw.mac.has_fwsm = false;
 
         hw.mac.adaptive_ifs = true;
 
-        let force_clear_smbi = true;
+        let mut force_clear_smbi = true;
+
+        match hw.mac.kind {
+            MacType::e1000_82571 | MacType::e1000_82572 => {
+                let swsm2 = hw.er32(SWSM2);
+
+                if (swsm2 & SWSM2_LOCK) == 0 {
+                    /* Only do this for the first interface on this card */
+                    hw.ew32(SWSM2, swsm2 | SWSM2_LOCK);
+                    force_clear_smbi = true;
+                } else {
+                    force_clear_smbi = false;
+                }
+            }
+            _ => {
+                force_clear_smbi = true;
+            }
+        }
 
         if force_clear_smbi {
             /* Make sure SWSM.SMBI is clear */

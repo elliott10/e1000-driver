@@ -3,6 +3,7 @@ use super::hw::{self, DevSpec, Hw, HwRc, MacType};
 use super::regs::*;
 use super::ring::*;
 use crate::err::{Error, Result};
+use crate::hw::FcMode;
 use crate::phy::*;
 use crate::*;
 use core::alloc::Layout;
@@ -304,7 +305,8 @@ where
             let mut tx_desc = &mut self.tx_ring.as_mut()[i];
 
             tx_desc.length = n as u16;
-            tx_desc.cmd = (TXD_CMD_RS | TXD_CMD_EOP | TXD_CMD_IFCS) as u8;
+            // tx_desc.cmd = (TXD_CMD_RS | TXD_CMD_EOP | TXD_CMD_IFCS) as u8;
+            tx_desc.cmd = (TXD_CMD_RS | TXD_CMD_IDE | TXD_CMD_EOP | TXD_CMD_IFCS) as u8;
             tx_desc.status = 0;
 
             count += 1;
@@ -318,11 +320,8 @@ where
 
         i %= TX_RING_SIZE;
         self.ew32(TDT(0), i as u32);
-        info!("xmit TDT = {:#x}", i);
         // sync
         fence_w();
-        // info!("Read E1000_TDH 2= {:#x}\n", self.er32(TDH(0)));
-
         Ok(packet.len() as u32)
     }
 
@@ -751,20 +750,6 @@ where
         self.after_link_up()?;
 
         fence_r();
-        let mac_status = self.er32(STATUS);
-        let phy_status = self.e1e_rphy(MII_BMSR)?;
-        let phy_1000t_status = self.e1e_rphy(MII_STAT1000)?;
-        let phy_ext_status = self.e1e_rphy(MII_ESTATUS)?;
-
-        info!(
-            "Status:\n
-    MAC Status            <{:#X}>\n
-    PHY Status            <{:#X}>\n
-    PHY 1000BASE-T Status <{:#X}>\n
-    PHYU Extended Status  <{:#X}>",
-            mac_status, phy_status, phy_1000t_status, phy_ext_status
-        );
-
         Ok(())
     }
 
@@ -873,10 +858,128 @@ where
         let mut mii = self.read_phy_reg_mdic(MII_BMCR)?;
         mii &= !BMCR_PDOWN;
         self.write_phy_reg_mdic(MII_BMCR, mii)?;
+
+        self.setup_link();
         info!("power up phy ok");
         Ok(())
     }
 
+    fn setup_link(&mut self) -> Result {
+        match self.dev_spec {
+            DevSpec::E82571(_) => self.setup_link_82571(),
+            DevSpec::E80003es2lan => todo!(),
+            DevSpec::Ich8lan(_) => todo!(),
+        }
+    }
+
+    fn setup_link_82571(&mut self) -> Result {
+        let mut hw = self.hw.clone();
+        let hw = hw.as_mut();
+
+        match hw.mac.kind {
+            MacType::e1000_82573 | MacType::e1000_82574 | MacType::e1000_82583 => {
+                if hw.fc.requested_mode == FcMode::Default {
+                    hw.fc.requested_mode = FcMode::Full;
+                }
+            }
+            _ => {}
+        }
+        self.setup_link_generic()
+    }
+    fn setup_link_generic(&mut self) -> Result {
+        let mut hw = self.hw.clone();
+        let hw = hw.as_mut();
+
+        if hw.fc.requested_mode == FcMode::Default {
+            return self.set_default_fc_generic();
+        }
+        /* Save off the requested flow control mode for use later.  Depending
+         * on the link partner's capabilities, we may or may not use this mode.
+         */
+        hw.fc.current_mode = hw.fc.requested_mode;
+
+        info!(
+            "After fix-ups FlowControl is now = {:?}",
+            hw.fc.current_mode
+        );
+
+        self.setup_physical_interface()?;
+
+        /* Initialize the flow control address, type, and PAUSE timer
+         * registers to their default values.  This is done even if flow
+         * control is disabled, because it does not hurt anything to
+         * initialize these registers.
+         */
+        info!("Initializing the Flow Control address, type and timer regs");
+        self.ew32(FCT, FLOW_CONTROL_TYPE);
+        self.ew32(FCAH, FLOW_CONTROL_ADDRESS_HIGH);
+        self.ew32(FCAL, FLOW_CONTROL_ADDRESS_LOW);
+
+        self.ew32(FCTTV, hw.fc.pause_time as u32);
+
+        self.set_fc_watermarks()
+    }
+
+
+    fn setup_physical_interface(&mut self)->Result{
+        match self.dev_spec {
+            DevSpec::E82571(_) => self.setup_copper_link_82571(),
+            DevSpec::E80003es2lan => todo!(),
+            DevSpec::Ich8lan(_) => todo!(),
+        }
+    }
+
+
+    fn setup_copper_link_82571(&mut self)->Result{
+        Ok(())
+    }
+
+    fn set_fc_watermarks(&mut self) -> Result {
+        let mut fcrtl = 0;
+        let mut fcrth = 0;
+        if self.hw.as_ref().fc.current_mode == FcMode::TxPause {
+            /* We need to set up the Receive Threshold high and low water
+             * marks as well as (optionally) enabling the transmission of
+             * XON frames.
+             */
+            fcrtl = self.hw.as_ref().fc.low_water;
+            if self.hw.as_ref().fc.send_xon {
+                fcrtl |= FCRTL_XONE;
+            }
+
+            fcrth = self.hw.as_ref().fc.high_water;
+        }
+        self.ew32(FCRTL, fcrtl);
+        self.ew32(FCRTH, fcrth);
+
+        Ok(())
+    }
+
+    fn read_nvm(&mut self, offset: u16, words: u16) -> Result<Vec<u16>> {
+        let mut hw = self.hw.clone();
+        self.dev_spec.read_nvm(hw.as_mut(), offset, words)
+    }
+
+    fn set_default_fc_generic(&mut self) -> Result {
+        /* Read and store word 0x0F of the EEPROM. This word contains bits
+         * that determine the hardware's default PAUSE (flow control) mode,
+         * a bit that determines whether the HW defaults to enabling or
+         * disabling auto-negotiation, and the direction of the
+         * SW defined pins. If there is no SW over-ride of the flow
+         * control setting, then the variable hw->fc will
+         * be initialized based on a value in the EEPROM.
+         */
+        let nvm_data = self.read_nvm(NVM_INIT_CONTROL2_REG, 1)?[0];
+
+        if (nvm_data & NVM_WORD0F_PAUSE_MASK) == 0 {
+            self.hw.as_mut().fc.requested_mode = FcMode::None;
+        } else if (nvm_data & NVM_WORD0F_PAUSE_MASK) == NVM_WORD0F_ASM_DIR {
+            self.hw.as_mut().fc.requested_mode = FcMode::TxPause;
+        } else {
+            self.hw.as_mut().fc.requested_mode = FcMode::Full;
+        }
+        Ok(())
+    }
     fn configure_tx(&mut self) {
         let mut tdba = self.tx_ring.dma;
         let tdlen = self.tx_ring.data_len() as u32;
@@ -936,6 +1039,8 @@ where
 
         self.ew32(TCTL, tctl);
 
+        self.config_collision_dist_generic();
+
         /* SPT and KBL Si errata workaround to avoid data corruption */
         if self.hw.as_ref().mac.kind == MacType::e1000_pch_spt {
             let mut reg_val = self.er32(IOSFPC);
@@ -951,6 +1056,23 @@ where
             reg_val |= TARC0_CB_MULTIQ_2_REQ;
             self.ew32(TARC(0), reg_val);
         }
+    }
+
+    /**
+     *  e1000e_config_collision_dist_generic - Configure collision distance
+     *  @hw: pointer to the HW structure
+     *
+     *  Configures the collision distance to the default value and is used
+     *  during link setup.
+     **/
+    fn config_collision_dist_generic(&mut self) {
+        let mut tctl = self.er32(TCTL);
+
+        tctl &= !TCTL_COLD;
+        tctl |= COLLISION_DISTANCE << COLD_SHIFT;
+
+        self.ew32(TCTL, tctl);
+        self.e1e_flush();
     }
 
     pub fn configure_msix(&mut self) {
@@ -1093,18 +1215,11 @@ where
             pkts += 1;
             bytes += desc.length as u32;
 
-            if (desc.status & TXD_STAT_EC as u8) > 0 {
-                error!("tx {:#x} error", i);
-            } else {
-                info!("tx {:#x} ok", i);
-            }
-
             fence_r();
 
             i += 1;
 
             desc = &self.tx_ring.as_ref()[i];
-            // self.tx_ring.as_ref()[i].status = 0;
         }
 
         let mut status = &mut self.hw.as_mut().status;
@@ -1577,6 +1692,8 @@ where
         tctl |= TCTL_EN;
         self.ew32(TCTL, tctl);
 
+        self.print_status();
+
         Ok(())
     }
 
@@ -1694,6 +1811,31 @@ where
                 self.ew32(AIT, 0);
             }
         }
+    }
+
+    fn print_status(&mut self) {
+        let status = self.er32(STATUS);
+        let ctrl = self.er32(CTRL);
+        info!(
+            "MAC Status: FD {}, LU {}, Speed {}, Flow Control {}",
+            (status & STATUS_FD) != 0,
+            (status & STATUS_LU) != 0,
+            match (status & STATUS_SPEED_MASK) {
+                0 => "10 Mbps",
+                0b01 => "100 Mbps",
+                0b10 => "1000 Mbps",
+                _ => "1000 Mbps",
+            },
+            if ((ctrl & CTRL_TFCE) > 0) && ((ctrl & CTRL_RFCE) > 0) {
+                "Rx/Tx"
+            } else if (ctrl & CTRL_RFCE) > 0 {
+                "Rx"
+            } else if (ctrl & CTRL_TFCE) > 0 {
+                "Tx"
+            } else {
+                "None"
+            },
+        );
     }
 
     pub fn task_watchdog(&mut self) -> Result {

@@ -433,8 +433,6 @@ static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
     count += DIV_ROUND_UP(skb_frag_size(&skb_shinfo(skb)->frags[f]),
                           status->tx_fifo_limit);
 
-  pr_info("frags : %d", nr_frags);
-
   struct E1000XmitConfig config = {
       .timestamp = jiffies,
       .segs = 1,
@@ -446,11 +444,6 @@ static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
   // if (adapter->hw.mac.tx_pkt_filtering)
   // e1000_transfer_dhcp_info(adapter, skb);
 
-  // if (skb_vlan_tag_present(skb)) {
-  //   tx_flags |= E1000_TX_FLAGS_VLAN;
-  //   tx_flags |= (skb_vlan_tag_get(skb) << E1000_TX_FLAGS_VLAN_SHIFT);
-  // }
-
   skb_tx_timestamp(skb);
   netdev_sent_queue(netdev, skb->len);
 
@@ -458,13 +451,7 @@ static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
   if (n < 0) {
     return NETDEV_TX_BUSY;
   }
-
-  // unsigned int pkts = 1;
-  // unsigned int bytes = len;
-
   napi_consume_skb(skb, 64);
-  // netdev_completed_queue(netdev, pkts, bytes);
-
   return NETDEV_TX_OK;
 }
 /**
@@ -559,6 +546,36 @@ static int e1000_vlan_rx_kill_vid(struct net_device *netdev,
                                   __always_unused __be16 proto, u16 vid) {
   return -1;
 }
+
+static irqreturn_t e1000_intr_msix(int __always_unused irq, void *data) {
+  struct net_device *netdev = data;
+  struct e1000_adapter *adapter = netdev_priv(netdev);
+
+  if (adapter->msix_entries) {
+    int vector, msix_irq;
+
+    vector = 0;
+    msix_irq = adapter->msix_entries[vector].vector;
+    if (disable_hardirq(msix_irq))
+      e1000_intr_msix_rx(msix_irq, netdev);
+    enable_irq(msix_irq);
+
+    vector++;
+    msix_irq = adapter->msix_entries[vector].vector;
+    if (disable_hardirq(msix_irq))
+      e1000_intr_msix_tx(msix_irq, netdev);
+    enable_irq(msix_irq);
+
+    vector++;
+    msix_irq = adapter->msix_entries[vector].vector;
+    if (disable_hardirq(msix_irq))
+      e1000_msix_other(msix_irq, netdev);
+    enable_irq(msix_irq);
+  }
+
+  return IRQ_HANDLED;
+}
+
 /**
  * e1000_netpoll
  * @netdev: network interface device structure
@@ -567,20 +584,22 @@ static int e1000_vlan_rx_kill_vid(struct net_device *netdev,
  * without having to re-enable interrupts. It's not called while
  * the interrupt routine is executing.
  */
-static void e1000_netpoll(struct net_device *netdev) {}
+static void e1000_netpoll(struct net_device *netdev) {
 
+  struct e1000_adapter *adapter = netdev_priv(netdev);
+  e1000_intr_msix(adapter->pdev->irq, netdev);
+}
 
-
-void cb_on_rcv_pkt(const void *pdev, struct E1000RcvPkt pkt){
-    struct e1000_adapter *adapter = (struct e1000_adapter *)pdev;
-    struct sk_buff *skb = napi_alloc_skb(&adapter->napi, pkt.length);
-    skb_copy_to_linear_data_offset(skb, -NET_IP_ALIGN, (pkt.data - NET_IP_ALIGN),
-                                   (pkt.length + NET_IP_ALIGN));
-    /* end copybreak code */
-    skb_put(skb, pkt.length);
-    skb->protocol = eth_type_trans(skb, adapter->netdev);
-    // skb_checksum_none_assert(skb);
-    napi_gro_receive(&adapter->napi, skb);
+void cb_on_rcv_pkt(const void *pdev, struct E1000RcvPkt pkt) {
+  struct e1000_adapter *adapter = (struct e1000_adapter *)pdev;
+  struct sk_buff *skb = napi_alloc_skb(&adapter->napi, pkt.length);
+  skb_copy_to_linear_data_offset(skb, -NET_IP_ALIGN, (pkt.data - NET_IP_ALIGN),
+                                 (pkt.length + NET_IP_ALIGN));
+  /* end copybreak code */
+  skb_put(skb, pkt.length);
+  skb->protocol = eth_type_trans(skb, adapter->netdev);
+  // skb_checksum_none_assert(skb);
+  napi_gro_receive(&adapter->napi, skb);
 }
 
 /**
