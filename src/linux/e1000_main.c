@@ -332,7 +332,10 @@ err_req_irq:
  * needs to be disabled.  A global MAC reset is issued to stop the
  * hardware, and all transmit and receive resources are freed.
  **/
-int e1000e_close(struct net_device *netdev) { return -1; }
+int e1000e_close(struct net_device *netdev) {
+  pr_info("e1000e_close");
+  return -1;
+}
 
 /**
  * e1000_io_error_detected - called when PCI error is detected
@@ -509,7 +512,9 @@ void e1000e_get_stats64(struct net_device *netdev,
  * responsible for configuring the hardware for proper unicast, multicast,
  * promiscuous mode, and all-multi behavior.
  **/
-static void e1000e_set_rx_mode(struct net_device *netdev) {}
+static void e1000e_set_rx_mode(struct net_device *netdev) {
+  pr_info("e1000e_set_rx_mode");
+}
 /**
  * e1000_set_mac - Change the Ethernet Address of the NIC
  * @netdev: network interface device structure
@@ -526,6 +531,8 @@ static int e1000_set_mac(struct net_device *netdev, void *p) { return -1; }
  * Returns 0 on success, negative on failure
  **/
 static int e1000_change_mtu(struct net_device *netdev, int new_mtu) {
+
+  pr_info("e1000_change_mtu");
   return -1;
 }
 static int e1000_ioctl(struct net_device *netdev, struct ifreq *ifr, int cmd) {
@@ -635,10 +642,26 @@ static int e1000e_poll(struct napi_struct *napi, int budget) {
 }
 static int e1000_set_features(struct net_device *netdev,
                               netdev_features_t features) {
+  pr_info("e1000_set_features");
   return -1;
 }
 static netdev_features_t e1000_fix_features(struct net_device *netdev,
                                             netdev_features_t features) {
+
+  pr_info("e1000_fix_features");
+
+  /* Jumbo frame workaround on 82579 and newer requires CRC be stripped */
+  if (netdev->mtu > ETH_DATA_LEN)
+    features &= ~NETIF_F_RXFCS;
+
+  /* Since there is no support for separate Rx/Tx vlan accel
+   * enable/disable make sure Tx flag is always in same state as Rx.
+   */
+  if (features & NETIF_F_HW_VLAN_CTAG_RX)
+    features |= NETIF_F_HW_VLAN_CTAG_TX;
+  else
+    features &= ~NETIF_F_HW_VLAN_CTAG_TX;
+
   return features;
 }
 void e1000e_reset_interrupt_capability(struct e1000_adapter *adapter) {
@@ -975,27 +998,30 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent) {
    * some hardware issues and for i219 to fix transfer
    * speed being capped at 60%
    */
-  if (!flags.tso_force) {
-    switch (status->link_speed) {
-    case SPEED_10:
-    case SPEED_100:
-      e_info("10/100 speed: disabling TSO\n");
-      netdev->features &= ~NETIF_F_TSO;
-      netdev->features &= ~NETIF_F_TSO6;
-      break;
-    case SPEED_1000:
-      netdev->features |= NETIF_F_TSO;
-      netdev->features |= NETIF_F_TSO6;
-      break;
-    default:
-      /* oops */
-      break;
-    }
-    if (info.mac.kind == e1000_pch_spt) {
-      netdev->features &= ~NETIF_F_TSO;
-      netdev->features &= ~NETIF_F_TSO6;
-    }
-  }
+  // if (!flags.tso_force) {
+  //   switch (status->link_speed) {
+  //   case SPEED_10:
+  //   case SPEED_100:
+  //     e_info("10/100 speed: disabling TSO\n");
+  //     netdev->features &= ~NETIF_F_TSO;
+  //     netdev->features &= ~NETIF_F_TSO6;
+  //     break;
+  //   case SPEED_1000:
+  //     netdev->features |= NETIF_F_TSO;
+  //     netdev->features |= NETIF_F_TSO6;
+  //     break;
+  //   default:
+  //     /* oops */
+  //     break;
+  //   }
+  //   if (info.mac.kind == e1000_pch_spt) {
+  //     netdev->features &= ~NETIF_F_TSO;
+  //     netdev->features &= ~NETIF_F_TSO6;
+  //   }
+  // }
+
+  netdev->features &= ~NETIF_F_TSO;
+  netdev->features &= ~NETIF_F_TSO6;
 
   /* Set user-changeable features (subset of all device features) */
   netdev->hw_features = netdev->features;
