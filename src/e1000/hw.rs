@@ -30,6 +30,7 @@ where
     pub(crate) mmio: usize,
     pub(crate) flash: Option<usize>,
     pub(crate) phy: PhyInfo,
+    pub(crate) phy_regs: PhyRegs,
     pub(crate) fc: FcInfo,
     pub(crate) mac: MacInfo,
     pub(crate) nvm: NvmInfo,
@@ -222,9 +223,9 @@ pub enum PhyType {
     Igp3,
     Ife,
     Bm,
-    I2578,
-    I2577,
-    I2579,
+    T82578,
+    T82577,
+    T82579,
     I217,
 }
 impl Default for PhyType {
@@ -277,6 +278,19 @@ impl PhyInfo {
         }
     }
 }
+#[derive(Default, Debug, Clone)]
+#[repr(C)]
+pub(crate) struct PhyRegs {
+    pub(crate) bmcr: u16,      // Basic Mode Control Register
+    pub(crate) bmsr: u16,      // Basic Mode Status Register
+    pub(crate) advertise: u16, // Auto-Negotiation Advertisement
+    pub(crate) lpa: u16,       // Link Partner Ability Register
+    pub(crate) expansion: u16, // Auto-Negotiation Expansion Register
+    pub(crate) ctrl1000: u16,  // 1000BASE-T Control Register
+    pub(crate) stat1000: u16,  // 1000BASE-T Status Register
+    pub(crate) estatus: u16,   // Extended Status Register
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[repr(u16)]
 pub(crate) enum BusWidth {

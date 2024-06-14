@@ -332,14 +332,13 @@ where
         for _ in 0..max {
             let desc = &mut self.rx_ring.as_mut()[index];
             if (desc.status & RXD_STAT_DD as u8) == 0 {
-                self.ew32(RDT(0), index as u32 );
+                self.ew32(RDT(0), index as u32);
                 break;
             }
             desc.status = 0;
             let len = desc.length as usize;
             info!("rx index: {}, len: {}", index, len);
-            let mbuf =
-                unsafe { &*slice_from_raw_parts(self.rx_ring.mbufs[index] as *mut u8, len) };
+            let mbuf = unsafe { &*slice_from_raw_parts(self.rx_ring.mbufs[index] as *mut u8, len) };
             let mut data = Vec::try_with_capacity(len).unwrap();
             for b in mbuf {
                 data.try_push(*b).unwrap();
@@ -745,8 +744,27 @@ where
 
         self.power_up_phy()?;
         self.configure()?;
+        self.hw.as_mut().mac.get_link_status = true;
 
         info!("e1000_init has been completed");
+
+        self.after_link_up()?;
+
+        fence_r();
+        let mac_status = self.er32(STATUS);
+        let phy_status = self.e1e_rphy(MII_BMSR)?;
+        let phy_1000t_status = self.e1e_rphy(MII_STAT1000)?;
+        let phy_ext_status = self.e1e_rphy(MII_ESTATUS)?;
+
+        info!(
+            "Status:\n
+    MAC Status            <{:#X}>\n
+    PHY Status            <{:#X}>\n
+    PHY 1000BASE-T Status <{:#X}>\n
+    PHYU Extended Status  <{:#X}>",
+            mac_status, phy_status, phy_1000t_status, phy_ext_status
+        );
+
         Ok(())
     }
 
@@ -998,8 +1016,6 @@ where
         self.ew32(CTRL_EXT, ctrl_ext);
         self.e1e_flush();
     }
-
-
 
     pub fn irq_handle_msix_tx(&mut self) {
         self.hw.as_mut().status.total_tx_bytes = 0;
@@ -1335,40 +1351,61 @@ where
         );
     }
 
-    // fn check_for_copper_link(&mut self) -> Result {
-    //     if self.hw.as_ref().mac.get_link_status {
-    //         return Ok(());
-    //     }
+    fn has_link(&mut self) -> bool {
+        let mut link_active = false;
 
-    //     self.hw.as_mut().mac.get_link_status = false;
+        match self.hw.as_ref().phy.media_type {
+            MediaType::media_type_copper => {
+                if self.hw.as_ref().mac.get_link_status {
+                    let _ = self.check_for_copper_link();
+                    link_active = !self.hw.as_ref().mac.get_link_status;
+                } else {
+                    link_active = true;
+                }
+            }
+            _ => todo!(),
+        }
 
-    //     let link = self.phy_has_link_generic(1, 0)?;
-    //     if !link {
-    //         return Ok(());
-    //     }
+        link_active
+    }
 
-    //     self.hw.as_mut().mac.get_link_status = true;
-    // }
+    fn check_for_copper_link(&mut self) -> Result {
+        if self.hw.as_ref().mac.get_link_status {
+            return Ok(());
+        }
+        self.hw.as_mut().mac.get_link_status = false;
 
-    // fn phy_has_link_generic(&mut self, iterations: u32, usec_interval: u32) -> Result<bool> {
-    //     let mut success = false;
+        let link = self.phy_has_link_generic(1, 0)?;
+        if !link {
+            return Ok(());
+        }
+        self.hw.as_mut().mac.get_link_status = true;
 
-    //     for i in 0..iterations {
-    //         if self.e1e_rphy(MII_BMSR).is_err() {
-    //             self.kernel().delay(usec_interval * 1000);
-    //         }
+        Ok(())
+    }
 
-    //         let phy_status = self.e1e_rphy(MII_BMSR)?;
-    //         if phy_status & BMSR_LSTATUS != 0 {
-    //             success = true;
-    //             break;
-    //         }
+    fn phy_has_link_generic(&mut self, iterations: u32, usec_interval: u32) -> Result<bool> {
+        let mut success = false;
 
-    //         self.kernel().delay(usec_interval * 1000);
-    //     }
+        for i in 0..iterations {
+            if self.e1e_rphy(MII_BMSR).is_err() {
+                self.udelay(usec_interval);
+            }
 
-    //     success
-    // }
+            let phy_status = self.e1e_rphy(MII_BMSR)?;
+            if phy_status & BMSR_LSTATUS != 0 {
+                success = true;
+                break;
+            }
+
+            self.udelay(usec_interval);
+        }
+        Ok(success)
+    }
+
+    fn udelay(&self, val: u32) {
+        self.kernel().delay(val as u64 * 1000);
+    }
 
     fn e1e_rphy(&mut self, offset: u32) -> Result<u16> {
         self.read_phy_reg_mdic(offset)
@@ -1491,13 +1528,122 @@ where
         Ok(())
     }
 
-    pub fn task_watchdog(&mut self) {
+    fn after_link_up(&mut self) -> Result {
+        let mut tries = 0;
+        let dmoff_exit_timeout = 100;
+        /* Checking if MAC is in DMoff state*/
+        if (self.er32(FWSM) & ICH_FWSM_FW_VALID) > 0 {
+            let mut pcim_state = self.er32(STATUS);
+            while (pcim_state & STATUS_PCIM_STATE) > 0 {
+                tries += 1;
+                if (tries == dmoff_exit_timeout) {
+                    error!("Error in exiting dmoff");
+                    break;
+                }
+                self.udelay(10000);
+                pcim_state = self.er32(STATUS);
+
+                /* Checking if MAC exited DMoff state */
+                if (pcim_state & STATUS_PCIM_STATE) == 0 {
+                    self.phy_hw_reset();
+                }
+            }
+        }
+
+        self.phy_read_status()?;
+        self.get_speed_and_duplex_copper();
+
+        Ok(())
+    }
+
+    /**
+     *  e1000e_check_downshift - Checks whether a downshift in speed occurred
+     *  @hw: pointer to the HW structure
+     *
+     *  Success returns 0, Failure returns 1
+     *
+     *  A downshift is detected by querying the PHY link health.
+     **/
+    fn e1000e_check_downshift(&mut self) -> Result {
+        let mut offset = 0;
+        let mut mask = 0u16;
+
+        match self.hw.as_ref().phy.kind {
+            PhyType::M88 | PhyType::Gg82563 | PhyType::Bm | PhyType::T82578 => {
+                offset = M88E1000_PHY_SPEC_STATUS;
+                mask = M88E1000_PSSR_DOWNSHIFT;
+            }
+            PhyType::Igp2 | PhyType::Igp3 => {
+                offset = IGP01E1000_PHY_LINK_HEALTH;
+                mask = IGP01E1000_PLHR_SS_DOWNGRADE;
+            }
+            _ => {
+                self.hw.as_mut().phy.speed_downgraded = false;
+                return Ok(());
+            }
+        }
+
+        let phy_data = self.e1e_rphy(offset)?;
+
+        self.hw.as_mut().phy.speed_downgraded = (phy_data & mask) != 0;
+
+        return Ok(());
+    }
+
+    fn phy_hw_reset(&mut self) {}
+
+    fn phy_read_status(&mut self) -> Result {
+        let mut hw = self.hw.clone();
+        let mut hw = hw.as_mut();
+        let phy = &mut hw.phy_regs;
+
+        if self.er32(STATUS) & STATUS_LU > 0
+            && self.hw.as_ref().phy.media_type == MediaType::media_type_copper
+        {
+            info!("phy read status");
+            phy.bmcr = self.e1e_rphy(MII_BMCR)?;
+            phy.bmsr = self.e1e_rphy(MII_BMSR)?;
+            phy.advertise = self.e1e_rphy(MII_ADVERTISE)?;
+            phy.lpa = self.e1e_rphy(MII_LPA)?;
+            phy.expansion = self.e1e_rphy(MII_EXPANSION)?;
+            phy.ctrl1000 = self.e1e_rphy(MII_CTRL1000)?;
+            phy.stat1000 = self.e1e_rphy(MII_STAT1000)?;
+            phy.estatus = self.e1e_rphy(MII_ESTATUS)?;
+        } else {
+            /* Do not read PHY registers if link is not up
+             * Set values to typical power-on defaults
+             */
+            phy.bmcr = (BMCR_SPEED1000 | BMCR_ANENABLE | BMCR_FULLDPLX);
+            phy.bmsr = (BMSR_100FULL
+                | BMSR_100HALF
+                | BMSR_10FULL
+                | BMSR_10HALF
+                | BMSR_ESTATEN
+                | BMSR_ANEGCAPABLE
+                | BMSR_ERCAP);
+            phy.advertise =
+                (ADVERTISE_PAUSE_ASYM | ADVERTISE_PAUSE_CAP | ADVERTISE_ALL | ADVERTISE_CSMA);
+            phy.lpa = 0;
+            phy.expansion = EXPANSION_ENABLENPAGE;
+            phy.ctrl1000 = ADVERTISE_1000FULL;
+            phy.stat1000 = 0;
+            phy.estatus = (ESTATUS_1000_TFULL | ESTATUS_1000_THALF);
+        }
+
+        Ok(())
+    }
+
+    pub fn task_watchdog(&mut self) -> Result {
+        // let link = self.has_link();
+
         /* Cause software interrupt to ensure Rx ring is cleaned */
         if (self.hw.as_ref().status.msix_vec_num > 0) {
             self.ew32(ICS, self.rx_ring.ims_val);
         } else {
             self.ew32(ICS, ICS_RXDMT0);
         }
+
+        Ok(())
     }
 }
 

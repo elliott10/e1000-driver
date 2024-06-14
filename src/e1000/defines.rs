@@ -305,22 +305,20 @@ pub(crate) const TXD_STAT_EC: u32 = 0x00000002; /* Excess Collisions */
 pub(crate) const TXD_STAT_LC: u32 = 0x00000004; /* Late Collisions */
 pub(crate) const TXD_STAT_TU: u32 = 0x00000008; /* Transmit underrun */
 
-
-pub(crate) const RXD_STAT_DD: u32 = 0x01;     // Descriptor Done
-pub(crate) const RXD_STAT_EOP: u32 = 0x02;     // End of Packet
-pub(crate) const RXD_STAT_IXSM: u32 = 0x04;    // Ignore checksum
-pub(crate) const RXD_STAT_VP: u32 = 0x08;      // IEEE VLAN Packet
-pub(crate) const RXD_STAT_UDPCS: u32 = 0x10;   // UDP checksum calculated
-pub(crate) const RXD_STAT_TCPCS: u32 = 0x20;   // TCP checksum calculated
-pub(crate) const RXD_ERR_CE: u32 = 0x01;       // CRC Error
-pub(crate) const RXD_ERR_SE: u32 = 0x02;       // Symbol Error
-pub(crate) const RXD_ERR_SEQ: u32 = 0x04;      // Sequence Error
-pub(crate) const RXD_ERR_CXE: u32 = 0x10;      // Carrier Extension Error
-pub(crate) const RXD_ERR_TCPE: u32 = 0x20;     // TCP/UDP Checksum Error
-pub(crate) const RXD_ERR_IPE: u32 = 0x40;      // IP Checksum Error
-pub(crate) const RXD_ERR_RXE: u32 = 0x80;      // Rx Data Error
+pub(crate) const RXD_STAT_DD: u32 = 0x01; // Descriptor Done
+pub(crate) const RXD_STAT_EOP: u32 = 0x02; // End of Packet
+pub(crate) const RXD_STAT_IXSM: u32 = 0x04; // Ignore checksum
+pub(crate) const RXD_STAT_VP: u32 = 0x08; // IEEE VLAN Packet
+pub(crate) const RXD_STAT_UDPCS: u32 = 0x10; // UDP checksum calculated
+pub(crate) const RXD_STAT_TCPCS: u32 = 0x20; // TCP checksum calculated
+pub(crate) const RXD_ERR_CE: u32 = 0x01; // CRC Error
+pub(crate) const RXD_ERR_SE: u32 = 0x02; // Symbol Error
+pub(crate) const RXD_ERR_SEQ: u32 = 0x04; // Sequence Error
+pub(crate) const RXD_ERR_CXE: u32 = 0x10; // Carrier Extension Error
+pub(crate) const RXD_ERR_TCPE: u32 = 0x20; // TCP/UDP Checksum Error
+pub(crate) const RXD_ERR_IPE: u32 = 0x40; // IP Checksum Error
+pub(crate) const RXD_ERR_RXE: u32 = 0x80; // Rx Data Error
 pub(crate) const RXD_SPC_VLAN_MASK: u32 = 0x0FFF; // VLAN ID is in lower 12 bits
-
 
 // 注意重复的定义，根据实际用途可能需要调整或去除重复项
 // TXD_CMD_TCP, TXD_CMD_IP, TXD_CMD_TSE 与之前的 E1000_TXD_CMD_EOP, E1000_TXD_CMD_IFCS, E1000_TXD_CMD_IC 重复
@@ -386,9 +384,6 @@ pub(crate) const RCTL_DPF: u32 = 0x00400000; // Discard Pause Frames
 pub(crate) const RCTL_PMCF: u32 = 0x00800000; // Pass MAC Control Frames
 pub(crate) const RCTL_BSEX: u32 = 0x02000000; // Buffer Size Extension
 pub(crate) const RCTL_SECRC: u32 = 0x04000000; // Strip Ethernet CRC
-
-
-
 
 pub(crate) const MASTER_DISABLE_TIMEOUT: usize = 800; // Number of 100 microseconds we wait for PCI Express master disable
 pub(crate) const PHY_CFG_TIMEOUT: usize = 100; // Number of milliseconds we wait for PHY configuration done after MAC reset
@@ -486,14 +481,14 @@ pub(crate) const MII_BMCR: u32 = 0x00; // Basic mode control register
 pub(crate) const MII_BMSR: u32 = 0x01; // Basic mode status register
 pub(crate) const MII_PHYSID1: u8 = 0x02; // PHYS ID 1
 pub(crate) const MII_PHYSID2: u8 = 0x03; // PHYS ID 2
-pub(crate) const MII_ADVERTISE: u8 = 0x04; // Advertisement control register
-pub(crate) const MII_LPA: u8 = 0x05; // Link partner ability register
-pub(crate) const MII_EXPANSION: u8 = 0x06; // Expansion register
-pub(crate) const MII_CTRL1000: u8 = 0x09; // 1000BASE-T control
-pub(crate) const MII_STAT1000: u8 = 0x0a; // 1000BASE-T status
+pub(crate) const MII_ADVERTISE: u32 = 0x04; // Advertisement control register
+pub(crate) const MII_LPA: u32 = 0x05; // Link partner ability register
+pub(crate) const MII_EXPANSION: u32 = 0x06; // Expansion register
+pub(crate) const MII_CTRL1000: u32 = 0x09; // 1000BASE-T control
+pub(crate) const MII_STAT1000: u32 = 0x0a; // 1000BASE-T status
 pub(crate) const MII_MMD_CTRL: u8 = 0x0d; // MMD Access Control Register
 pub(crate) const MII_MMD_DATA: u8 = 0x0e; // MMD Access Data Register
-pub(crate) const MII_ESTATUS: u8 = 0x0f; // Extended Status
+pub(crate) const MII_ESTATUS: u32 = 0x0f; // Extended Status
 pub(crate) const MII_DCOUNTER: u8 = 0x12; // Disconnect counter
 pub(crate) const MII_FCSCOUNTER: u8 = 0x13; // False carrier counter
 pub(crate) const MII_NWAYTEST: u8 = 0x14; // N-way auto-neg test register
@@ -524,12 +519,94 @@ pub(crate) const MANC2H: usize = 0x05860; // Management Control To Host - RW
 pub(crate) const HALF_DUPLEX: u16 = 1;
 pub(crate) const FULL_DUPLEX: u16 = 2;
 
-pub(crate) const ICS_LSC: u32 = ICR_LSC;       // Link Status Change
-pub(crate) const ICS_RXSEQ: u32 = ICR_RXSEQ;   // Rx sequence error
+pub(crate) const ICS_LSC: u32 = ICR_LSC; // Link Status Change
+pub(crate) const ICS_RXSEQ: u32 = ICR_RXSEQ; // Rx sequence error
 pub(crate) const ICS_RXDMT0: u32 = ICR_RXDMT0; // Rx desc min. threshold
-pub(crate) const ICS_OTHER: u32 = ICR_OTHER;   // Other Interrupt
+pub(crate) const ICS_OTHER: u32 = ICR_OTHER; // Other Interrupt
 
 pub(crate) const IVAR_INT_ALLOC_VALID: u32 = 0x8;
+
+pub(crate) const ICH_FWSM_FW_VALID: u32 = 0x00008000; // FW established a valid mode
+pub(crate) const ICH_FWSM_PCIM2PCI: u32 = 0x01000000; // ME PCIm-to-PCI active
+pub(crate) const ICH_FWSM_PCIM2PCI_COUNT: u32 = 2000; // Timeout count for PCIm-to-PCI state
+
+pub(crate) const STATUS_PCIM_STATE: u32 = 0x40000000; // PCIm function state
+
+pub(crate) const BMSR_ERCAP: u16 = 0x0001; // Extended register capability
+pub(crate) const BMSR_JCD: u16 = 0x0002; // Jabber detected
+pub(crate) const BMSR_LSTATUS: u16 = 0x0004; // Link status
+pub(crate) const BMSR_ANEGCAPABLE: u16 = 0x0008; // Able to do auto-negotiation
+pub(crate) const BMSR_RFAULT: u16 = 0x0010; // Remote fault detected
+pub(crate) const BMSR_ANEGCOMPLETE: u16 = 0x0020; // Auto-negotiation complete
+pub(crate) const BMSR_RESV: u16 = 0x00c0; // Unused...
+pub(crate) const BMSR_ESTATEN: u16 = 0x0100; // Extended Status in R15
+pub(crate) const BMSR_100HALF2: u16 = 0x0200; // Can do 100BASE-T2 HDX
+pub(crate) const BMSR_100FULL2: u16 = 0x0400; // Can do 100BASE-T2 FDX
+pub(crate) const BMSR_10HALF: u16 = 0x0800; // Can do 10mbps, half-duplex
+pub(crate) const BMSR_10FULL: u16 = 0x1000; // Can do 10mbps, full-duplex
+pub(crate) const BMSR_100HALF: u16 = 0x2000; // Can do 100mbps, half-duplex
+pub(crate) const BMSR_100FULL: u16 = 0x4000; // Can do 100mbps, full-duplex
+pub(crate) const BMSR_100BASE4: u16 = 0x8000; // Can do 100mbps, 4k packets
+
+pub(crate) const ADVERTISE_SLCT: u16 = 0x001f; // Selector bits
+pub(crate) const ADVERTISE_CSMA: u16 = 0x0001; // Only selector supported
+pub(crate) const ADVERTISE_10HALF: u16 = 0x0020; // Try for 10mbps half-duplex
+pub(crate) const ADVERTISE_1000XFULL: u16 = 0x0020; // Try for 1000BASE-X full-duplex
+pub(crate) const ADVERTISE_10FULL: u16 = 0x0040; // Try for 10mbps full-duplex
+pub(crate) const ADVERTISE_1000XHALF: u16 = 0x0040; // Try for 1000BASE-X half-duplex
+pub(crate) const ADVERTISE_100HALF: u16 = 0x0080; // Try for 100mbps half-duplex
+pub(crate) const ADVERTISE_1000XPAUSE: u16 = 0x0080; // Try for 1000BASE-X pause
+pub(crate) const ADVERTISE_100FULL: u16 = 0x0100; // Try for 100mbps full-duplex
+pub(crate) const ADVERTISE_1000XPSE_ASYM: u16 = 0x0100; // Try for 1000BASE-X asym pause
+pub(crate) const ADVERTISE_100BASE4: u16 = 0x0200; // Try for 100mbps 4k packets
+pub(crate) const ADVERTISE_PAUSE_CAP: u16 = 0x0400; // Try for pause
+pub(crate) const ADVERTISE_PAUSE_ASYM: u16 = 0x0800; // Try for asymetric pause
+pub(crate) const ADVERTISE_RESV: u16 = 0x1000; // Unused...
+pub(crate) const ADVERTISE_RFAULT: u16 = 0x2000; // Say we can detect faults
+pub(crate) const ADVERTISE_LPACK: u16 = 0x4000; // Ack link partners response
+pub(crate) const ADVERTISE_NPAGE: u16 = 0x8000; // Next page bit
+
+pub(crate) const ADVERTISE_FULL: u16 = ADVERTISE_100FULL | ADVERTISE_10FULL | ADVERTISE_CSMA;
+pub(crate) const ADVERTISE_ALL: u16 =
+    ADVERTISE_10HALF | ADVERTISE_10FULL | ADVERTISE_100HALF | ADVERTISE_100FULL;
+
+pub(crate) const EXPANSION_NWAY: u16 = 0x0001; // Can do N-way auto-negotiation
+pub(crate) const EXPANSION_LCWP: u16 = 0x0002; // Got new RX page code word
+pub(crate) const EXPANSION_ENABLENPAGE: u16 = 0x0004; // Enables npage words
+pub(crate) const EXPANSION_NPCAPABLE: u16 = 0x0008; // Link partner supports npage
+pub(crate) const EXPANSION_MFAULTS: u16 = 0x0010; // Multiple faults detected
+pub(crate) const EXPANSION_RESV: u16 = 0xffe0; // Unused...
+
+pub(crate) const ESTATUS_1000_XFULL: u16 = 0x8000; // Can do 1000BaseX Full
+pub(crate) const ESTATUS_1000_XHALF: u16 = 0x4000; // Can do 1000BaseX Half
+pub(crate) const ESTATUS_1000_TFULL: u16 = 0x2000; // Can do 1000BT Full
+pub(crate) const ESTATUS_1000_THALF: u16 = 0x1000; // Can do 1000BT Half
+
+pub(crate) const ADVERTISE_1000FULL: u16 = 0x0200; // Advertise 1000BASE-T full duplex
+pub(crate) const ADVERTISE_1000HALF: u16 = 0x0100; // Advertise 1000BASE-T half duplex
+pub(crate) const CTL1000_PREFER_MASTER: u16 = 0x0400; // Prefer to operate as master
+pub(crate) const CTL1000_AS_MASTER: u16 = 0x0800; // Operate as master
+pub(crate) const CTL1000_ENABLE_MASTER: u16 = 0x1000; // Enable master/slave functionality
+
+pub(crate) const M88E1000_PHY_SPEC_CTRL: u8 = 0x10; // PHY Specific Control Register
+pub(crate) const M88E1000_PHY_SPEC_STATUS: u32 = 0x11; // PHY Specific Status Register
+pub(crate) const M88E1000_EXT_PHY_SPEC_CTRL: u8 = 0x14; // Extended PHY Specific Control Register
+
+pub(crate) const M88E1000_PSSR_REV_POLARITY: u16 = 0x0002; // 1 indicates polarity reversed
+pub(crate) const M88E1000_PSSR_DOWNSHIFT: u16 = 0x0020; // 1 indicates downshifted
+pub(crate) const M88E1000_PSSR_MDIX: u16 = 0x0040; // 1 for MDIX, 0 for MDI
+
+pub(crate) const IGP01E1000_PHY_PORT_CONFIG: u8 = 0x10; // Port Configuration Register
+pub(crate) const IGP01E1000_PHY_PORT_STATUS: u8 = 0x11; // Status Register
+pub(crate) const IGP01E1000_PHY_PORT_CTRL: u8 = 0x12; // Control Register
+pub(crate) const IGP01E1000_PHY_LINK_HEALTH: u32 = 0x13; // PHY Link Health Register
+pub(crate) const IGP02E1000_PHY_POWER_MGMT: u8 = 0x19; // Power Management Register
+pub(crate) const IGP01E1000_PHY_PAGE_SELECT: u8 = 0x1F; // Page Select Register
+pub(crate) const BM_PHY_PAGE_SELECT: u8 = 22; // Page Select for BM (Base Management)
+pub(crate) const IGP_PAGE_SHIFT: u8 = 5; // Shift amount for IGP page addressing
+pub(crate) const PHY_REG_MASK: u8 = 0x1F; // Mask to get the register address within a page
+
+pub(crate) const IGP01E1000_PLHR_SS_DOWNGRADE: u16 = 0x8000; // Signal Speed Downgrade in PHY Link Health Register
 
 use core::arch::asm;
 
@@ -579,7 +656,6 @@ pub(crate) fn MDEF(n: usize) -> usize {
     0x05890 + (4 * n)
 }
 
-
 pub(crate) const ADVERTISE_10_HALF: u16 = 0x0001;
 pub(crate) const ADVERTISE_10_FULL: u16 = 0x0002;
 pub(crate) const ADVERTISE_100_HALF: u16 = 0x0004;
@@ -588,18 +664,16 @@ pub(crate) const ADVERTISE_100_FULL: u16 = 0x0008;
 // pub(crate) const ADVERTISE_1000_HALF: u32 = 0x0010;
 pub(crate) const ADVERTISE_1000_FULL: u16 = 0x0020;
 
-pub(crate) const E1000_ALL_SPEED_DUPLEX: u16 = 
-    ADVERTISE_10_HALF | ADVERTISE_10_FULL | ADVERTISE_100_HALF | ADVERTISE_100_FULL | ADVERTISE_1000_FULL;
-pub(crate) const E1000_ALL_NOT_GIG: u16 = 
+pub(crate) const E1000_ALL_SPEED_DUPLEX: u16 = ADVERTISE_10_HALF
+    | ADVERTISE_10_FULL
+    | ADVERTISE_100_HALF
+    | ADVERTISE_100_FULL
+    | ADVERTISE_1000_FULL;
+pub(crate) const E1000_ALL_NOT_GIG: u16 =
     ADVERTISE_10_HALF | ADVERTISE_10_FULL | ADVERTISE_100_HALF | ADVERTISE_100_FULL;
-pub(crate) const E1000_ALL_100_SPEED: u16 = 
-    ADVERTISE_100_HALF | ADVERTISE_100_FULL;
-pub(crate) const E1000_ALL_10_SPEED: u16 = 
-    ADVERTISE_10_HALF | ADVERTISE_10_FULL;
-pub(crate) const E1000_ALL_HALF_DUPLEX: u16 = 
-    ADVERTISE_10_HALF | ADVERTISE_100_HALF;
+pub(crate) const E1000_ALL_100_SPEED: u16 = ADVERTISE_100_HALF | ADVERTISE_100_FULL;
+pub(crate) const E1000_ALL_10_SPEED: u16 = ADVERTISE_10_HALF | ADVERTISE_10_FULL;
+pub(crate) const E1000_ALL_HALF_DUPLEX: u16 = ADVERTISE_10_HALF | ADVERTISE_100_HALF;
 
 pub(crate) const AUTONEG_ADVERTISE_SPEED_DEFAULT: u16 = E1000_ALL_SPEED_DUPLEX;
 
-
-pub(crate) const BMSR_LSTATUS: u16 = 0x0004; // Link status
