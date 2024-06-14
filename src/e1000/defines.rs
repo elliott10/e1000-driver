@@ -588,7 +588,7 @@ pub(crate) const CTL1000_PREFER_MASTER: u16 = 0x0400; // Prefer to operate as ma
 pub(crate) const CTL1000_AS_MASTER: u16 = 0x0800; // Operate as master
 pub(crate) const CTL1000_ENABLE_MASTER: u16 = 0x1000; // Enable master/slave functionality
 
-pub(crate) const M88E1000_PHY_SPEC_CTRL: u8 = 0x10; // PHY Specific Control Register
+pub(crate) const M88E1000_PHY_SPEC_CTRL: u32 = 0x10; // PHY Specific Control Register
 pub(crate) const M88E1000_PHY_SPEC_STATUS: u32 = 0x11; // PHY Specific Status Register
 pub(crate) const M88E1000_EXT_PHY_SPEC_CTRL: u8 = 0x14; // Extended PHY Specific Control Register
 
@@ -607,6 +607,8 @@ pub(crate) const IGP_PAGE_SHIFT: u8 = 5; // Shift amount for IGP page addressing
 pub(crate) const PHY_REG_MASK: u8 = 0x1F; // Mask to get the register address within a page
 
 pub(crate) const IGP01E1000_PLHR_SS_DOWNGRADE: u16 = 0x8000; // Signal Speed Downgrade in PHY Link Health Register
+
+pub(crate) const M88E1000_PSCR_AUTO_X_MODE: u16 = 0x0060; // Bitmask for Auto MDI/MDI-X mode
 
 use core::arch::asm;
 

@@ -920,8 +920,7 @@ where
         self.set_fc_watermarks()
     }
 
-
-    fn setup_physical_interface(&mut self)->Result{
+    fn setup_physical_interface(&mut self) -> Result {
         match self.dev_spec {
             DevSpec::E82571(_) => self.setup_copper_link_82571(),
             DevSpec::E80003es2lan => todo!(),
@@ -929,8 +928,123 @@ where
         }
     }
 
+    fn setup_copper_link_82571(&mut self) -> Result {
+        let mut ctrl = self.er32(CTRL);
+        ctrl |= CTRL_SLU;
+        ctrl &= !(CTRL_FRCSPD | CTRL_FRCDPX);
+        self.ew32(CTRL, ctrl);
 
-    fn setup_copper_link_82571(&mut self)->Result{
+        self.copper_link_setup_m88()?;
+
+        self.force_speed_1000()?;
+
+        let link = self.phy_has_link_generic(10, 10)?;
+
+        if link {
+            info!("Valid link established!!!\n");
+            self.config_collision_dist_generic();
+            self.config_fc_after_link_up();
+        } else {
+            info!("Unable to establish link!!!\n");
+        }
+
+        Ok(())
+    }
+
+    fn config_fc_after_link_up(&mut self) -> Result {
+        
+        self.get_speed_and_duplex_copper();
+        self.force_mac_fc()?;
+    
+        Ok(())
+    }
+
+    fn force_mac_fc(&mut self) -> Result {
+        let mut ctrl = self.er32(CTRL);
+
+        /* Because we didn't get link via the internal auto-negotiation
+         * mechanism (we either forced link or we got link via PHY
+         * auto-neg), we have to manually enable/disable transmit an
+         * receive flow control.
+         *
+         * The "Case" statement below enables/disable flow control
+         * according to the "hw->fc.current_mode" parameter.
+         *
+         * The possible values of the "fc" parameter are:
+         *      0:  Flow control is completely disabled
+         *      1:  Rx flow control is enabled (we can receive pause
+         *          frames but not send pause frames).
+         *      2:  Tx flow control is enabled (we can send pause frames
+         *          but we do not receive pause frames).
+         *      3:  Both Rx and Tx flow control (symmetric) is enabled.
+         *  other:  No other values should be possible at this point.
+         */
+        let mode = self.hw.as_ref().fc.current_mode;
+        info!("hw->fc.current_mode = {:?}\n", mode);
+
+        match mode {
+            FcMode::None => ctrl &= (!(CTRL_TFCE | CTRL_RFCE)),
+            FcMode::RxPause => {
+                ctrl &= !CTRL_TFCE;
+                ctrl |= CTRL_RFCE;
+            }
+            FcMode::TxPause => {
+                ctrl &= !CTRL_RFCE;
+                ctrl |= CTRL_TFCE;
+            }
+            FcMode::Full => ctrl |= (CTRL_TFCE | CTRL_RFCE),
+            FcMode::Default => {
+                error!("Flow control param set incorrectly");
+                return Err(Error::Config("Flow control param set incorrectly"));
+            }
+        }
+
+        self.ew32(CTRL, ctrl);
+
+        return Ok(());
+    }
+
+    fn force_speed_1000(&mut self) -> Result {
+        /* Clear Auto-Crossover to force MDI manually.  M88E1000 requires MDI
+         * forced whenever speed and duplex are forced.
+         */
+        let mut phy_data = self.e1e_rphy(M88E1000_PHY_SPEC_CTRL)?;
+
+        phy_data &= !M88E1000_PSCR_AUTO_X_MODE;
+        self.e1e_wphy(M88E1000_PHY_SPEC_CTRL, phy_data)?;
+
+        let mut phy_ctrl = self.e1e_rphy(MII_BMCR)?;
+        /* Force speed/duplex on the mac */
+        let mut ctrl = self.er32(CTRL);
+
+        ctrl |= (CTRL_FRCSPD | CTRL_FRCDPX);
+        ctrl &= !CTRL_SPD_SEL;
+
+        /* Disable Auto Speed Detection */
+        ctrl &= !CTRL_ASDE;
+
+        /* Disable autoneg on the phy */
+        phy_ctrl &= !BMCR_ANENABLE;
+
+        ctrl |= CTRL_FD;
+        phy_ctrl |= BMCR_FULLDPLX;
+
+        ctrl |= CTRL_SPD_100;
+        phy_ctrl |= BMCR_SPEED100;
+        phy_ctrl &= !BMCR_SPEED1000;
+
+        self.ew32(CTRL, ctrl);
+
+        self.e1e_wphy(MII_BMCR, phy_ctrl)
+    }
+
+    fn copper_link_setup_m88(&mut self) -> Result {
+        // let mut phy_data = self.e1e_rphy(M88E1000_PHY_SPEC_CTRL)?;
+
+        // if self.hw.as_ref().phy.kind != PhyType::Bm{
+        //     phy_data |= M88E1000_PHY_SPEC_CTRL;
+        // }
+
         Ok(())
     }
 
@@ -1524,6 +1638,10 @@ where
 
     fn e1e_rphy(&mut self, offset: u32) -> Result<u16> {
         self.read_phy_reg_mdic(offset)
+    }
+
+    fn e1e_wphy(&mut self, offset: u32, value: u16) -> Result {
+        self.write_phy_reg_mdic(offset, value)
     }
 
     pub fn get_stats64(&mut self) -> E1000HWStats {

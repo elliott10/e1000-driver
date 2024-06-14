@@ -721,6 +721,12 @@ where
             hw.status.max_hw_frame_size = board.max_hw_frame_size;
             hw.status.pba = board.pba;
 
+            /* Initialize link parameters. User can change them with ethtool */
+            hw.mac.autoneg = true;
+            hw.fc.requested_mode = FcMode::Default;
+            hw.fc.current_mode = FcMode::Default;
+            hw.phy.autoneg_advertised = 0x2f;
+
             Self(NonNull::new_unchecked(ptr))
         }
     }
