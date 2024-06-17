@@ -126,7 +126,6 @@ where
         self.hw.as_mut().write_protect_nvm();
     }
 
-
     pub fn set_flags(&mut self, flags: Flags) {
         self.hw.as_mut().flags = flags;
     }
@@ -332,26 +331,20 @@ where
 
     pub fn clean_rx(&mut self, max: u32) -> Vec<RcvPkt> {
         let mut out = Vec::new();
-        let head = self.er32(RDH(0)) as usize;
-        let mut index = self.er32(RDT(0)) as usize;
+        let mut index = self.rx_ring.next_to_clean;
 
         for _ in 0..max {
-            index = (index + 1) % RX_RING_SIZE;
-            info!("clean_rx: max {}, index: {}, head {}", max, index, head);
-
-            let status = self.rx_ring.as_mut()[index].status_error;
+            let len = self.rx_ring.as_mut()[index].length as usize;
             let addr = self.rx_ring.as_mut()[index].addr;
-            info!("rx status {}, addr {:#X}", status, addr);
+            let status = self.rx_ring.as_mut()[index].status_error;
+            info!("rx status {}, addr {:#X}, len {}", status, addr, len);
 
             if (status & RXD_STAT_DD) == 0 {
                 break;
             }
-
-            self.ew32(RDT(0), index as u32);
+            self.rx_ring.next_to_clean = (index + 1) % RX_RING_SIZE;
 
             let desc = &mut self.rx_ring.as_mut()[index];
-            desc.status_error = 0;
-            let len = desc.length as usize;
             info!("rx index: {}, len: {}", index, len);
             let mbuf = unsafe { &*slice_from_raw_parts(self.rx_ring.mbufs[index] as *mut u8, len) };
             let mut data = Vec::try_with_capacity(len).unwrap();
@@ -359,9 +352,11 @@ where
                 data.try_push(*b).unwrap();
             }
 
-            out.try_push(RcvPkt { data }).unwrap();
-
+            self.e1e_flush();
             fence_w();
+            self.ew32(RDT(0), index as u32);
+            out.try_push(RcvPkt { data }).unwrap();
+            index = (index + 1) % RX_RING_SIZE;
         }
 
         out
