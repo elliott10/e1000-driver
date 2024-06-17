@@ -88,7 +88,6 @@ where
         info!("Init begin ...");
         self.check_opention();
         self.read_mac_addr_generic();
-        self.init_rings();
         self.get_variants()?;
         self.dev_spec.get_bus_info(self.hw.clone().as_mut());
         self.hw.as_mut().phy.autoneg_wait_to_complete = false;
@@ -127,7 +126,6 @@ where
         self.hw.as_mut().write_protect_nvm();
     }
 
-    fn init_rings(&self) {}
 
     pub fn set_flags(&mut self, flags: Flags) {
         self.hw.as_mut().flags = flags;
@@ -334,14 +332,24 @@ where
 
     pub fn clean_rx(&mut self, max: u32) -> Vec<RcvPkt> {
         let mut out = Vec::new();
-        let mut index = self.rx_ring.next_to_clean % RX_RING_SIZE;
+        let head = self.er32(RDH(0)) as usize;
+        let mut index = self.er32(RDT(0)) as usize;
+
         for _ in 0..max {
-            let desc = &mut self.rx_ring.as_mut()[index];
-            if (desc.status_error & RXD_STAT_DD ) == 0 {
-                self.ew32(RDT(0), index as u32);
+            index = (index + 1) % RX_RING_SIZE;
+            info!("clean_rx: max {}, index: {}, head {}", max, index, head);
+
+            let status = self.rx_ring.as_mut()[index].status_error;
+            let addr = self.rx_ring.as_mut()[index].addr;
+            info!("rx status {}, addr {:#X}", status, addr);
+
+            if (status & RXD_STAT_DD) == 0 {
                 break;
             }
-            
+
+            self.ew32(RDT(0), index as u32);
+
+            let desc = &mut self.rx_ring.as_mut()[index];
             desc.status_error = 0;
             let len = desc.length as usize;
             info!("rx index: {}, len: {}", index, len);
@@ -354,8 +362,6 @@ where
             out.try_push(RcvPkt { data }).unwrap();
 
             fence_w();
-
-            index = (index + 1) % RX_RING_SIZE;
         }
 
         out
@@ -834,7 +840,6 @@ where
         self.configure_tx();
         self.setup_rctl();
         self.configure_rx();
-        // self.setup_tctl();
 
         Ok(())
     }
@@ -851,6 +856,18 @@ where
     //     drop(sp);
     //     Ok(())
     // }
+    fn enable_receives(&mut self) {
+        info!("enable rx");
+        let rctl = self.er32(RCTL);
+        self.ew32(RCTL, rctl | RCTL_EN);
+        self.hw.as_mut().flags.restart_now = false;
+    }
+    fn enable_transmits(&mut self) {
+        info!("enable tx");
+        let mut tctl = self.er32(TCTL);
+        tctl |= TCTL_EN;
+        self.ew32(TCTL, tctl);
+    }
 
     fn set_rx_mode(&mut self) {
         /* Check for Promiscuous and All Multicast modes */
@@ -1637,6 +1654,7 @@ where
         //TODO
 
         let rdlen = self.rx_ring.data_len();
+        info!("rx_dlen {}", rdlen);
         let mut hw2 = self.hw.clone();
         let hw = hw2.as_mut();
         /* disable receives while setting up the descriptors */
@@ -1684,7 +1702,8 @@ where
         self.ew32(RDBAH(0), (rdba >> 32) as u32);
         self.ew32(RDLEN(0), rdlen as u32);
         self.ew32(RDH(0), 0);
-        self.ew32(RDT(0), 0);
+        self.ew32(RDT(0), self.rx_ring.size as u32 - 1);
+        self.rx_ring.next_to_clean = 0;
         // rx_ring->head = adapter->hw.hw_addr + E1000_RDH(0);
         // rx_ring->tail = adapter->hw.hw_addr + E1000_RDT(0);
 
@@ -1695,12 +1714,12 @@ where
         // 	writel(0, rx_ring->tail);
 
         /* Enable Receive Checksum Offload for TCP and UDP */
-        // rxcsum = self.er32(RXCSUM);
-        // if (adapter->netdev->features & NETIF_F_RXCSUM)
-        // 	rxcsum |= E1000_RXCSUM_TUOFL;
-        // else
-        // 	rxcsum &= ~E1000_RXCSUM_TUOFL;
-        // self.ew32(RXCSUM, rxcsum);
+        let mut rxcsum = self.er32(RXCSUM);
+        rxcsum &= !RXCSUM_IPOFLD;
+        rxcsum &= !RXCSUM_TUOFL;
+        self.ew32(RXCSUM, rxcsum);
+
+        self.ew32(RCTL, rctl);
     }
     fn setup_tctl(&mut self) {
         let mut hw2 = self.hw.clone();
@@ -1751,7 +1770,10 @@ where
         rctl &= !RCTL_SZ_4096;
         rctl |= RCTL_BSEX;
 
-        match hw.status.rx_buffer_len {
+        // let rx_buffer_len = hw.status.rx_buffer_len ;
+        let rx_buffer_len = 2048;
+
+        match rx_buffer_len {
             2048 | _ => {
                 // For 2048 or any other default/fallback case, disable BSEX and set 2048 size
                 rctl |= RCTL_SZ_2048;
@@ -1772,6 +1794,8 @@ where
         let mut rfctl = self.er32(RFCTL);
         rfctl |= RFCTL_EXTEN;
         self.ew32(RFCTL, rfctl);
+
+        self.ew32(RCTL, rctl);
 
         hw.flags.restart_now = false;
     }
@@ -2091,13 +2115,11 @@ where
             tarc0 &= !BIT(21);
             self.ew32(TARC(0), tarc0);
         }
-
+        self.enable_receives();
         /* enable transmits in the hardware, need to do this
          * after setting TARC(0)
          */
-        let mut tctl = self.er32(TCTL);
-        tctl |= TCTL_EN;
-        self.ew32(TCTL, tctl);
+        self.enable_transmits();
 
         self.print_status();
 

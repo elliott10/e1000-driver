@@ -992,9 +992,12 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent) {
   struct E1000Status *status = e1000r_status(e1000);
 
   /* Set initial default active device features */
-  netdev->features = (NETIF_F_SG | NETIF_F_HW_VLAN_CTAG_RX |
-                      NETIF_F_HW_VLAN_CTAG_TX | NETIF_F_TSO | NETIF_F_TSO6 |
-                      NETIF_F_RXHASH | NETIF_F_RXCSUM | NETIF_F_HW_CSUM);
+  netdev->features = (NETIF_F_SG | NETIF_F_HW_CSUM);
+
+  // netdev->features = (NETIF_F_SG | NETIF_F_HW_VLAN_CTAG_RX |
+  //                     NETIF_F_HW_VLAN_CTAG_TX | NETIF_F_TSO | NETIF_F_TSO6 |
+  //                     NETIF_F_RXHASH | NETIF_F_RXCSUM | NETIF_F_HW_CSUM);
+
   /* disable TSO for pcie and 10/100 speeds to avoid
    * some hardware issues and for i219 to fix transfer
    * speed being capped at 60%

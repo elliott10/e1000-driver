@@ -82,7 +82,7 @@ where
 
         for i in 0..self.size {
             ring[i].set_status(0);
-            ring[i].set_addr(mbufs_dma);
+            ring[i].set_addr(mbufs_dma.to_le());
             self.buff_info.try_push(BuffInfo::default()).unwrap();
             mbufs.try_push(mbufs_vaddr).unwrap();
             mbufs_dma += MBUF_SIZE as u64;
