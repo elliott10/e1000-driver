@@ -136,11 +136,6 @@ pub trait TransDesc: Default + Clone {
     fn set_addr(&mut self, addr: u64);
 }
 
-
-
-
-
-
 // #[derive(Debug, Default, Clone)]
 // #[repr(C, align(16))]
 // pub struct TxDesc {
@@ -173,21 +168,22 @@ impl TransDesc for TxDesc {
 
 impl TxDesc {}
 
-/// [E1000 3.2.3]
-/// The dma descriptor for receiving
+/// Receive Descriptor - Extended
 #[derive(Debug, Default, Clone)]
-#[repr(C, align(16))]
+#[repr(C)]
 pub struct RxDesc {
-    pub addr: u64,   /* Address of the descriptor's data buffer */
+    pub addr: u64, /* Address of the descriptor's data buffer */
+    pub rsvd: u64,
+    pub mrq: u32,
+    pub ip_id: u16,
+    pub csum: u16,
+    pub status_error: u32,
     pub length: u16, /* Length of data DMAed into data buffer */
-    pub csum: u16,   /* Packet checksum */
-    pub status: u8,  /* Descriptor status */
-    pub errors: u8,  /* Descriptor Errors */
-    pub special: u16,
+    pub vlan: u16,
 }
 impl TransDesc for RxDesc {
     fn set_status(&mut self, status: u32) {
-        self.status = status as u8;
+        self.status_error = status;
     }
 
     fn set_addr(&mut self, addr: u64) {

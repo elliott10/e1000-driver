@@ -337,11 +337,12 @@ where
         let mut index = self.rx_ring.next_to_clean % RX_RING_SIZE;
         for _ in 0..max {
             let desc = &mut self.rx_ring.as_mut()[index];
-            if (desc.status & RXD_STAT_DD as u8) == 0 {
+            if (desc.status_error & RXD_STAT_DD ) == 0 {
                 self.ew32(RDT(0), index as u32);
                 break;
             }
-            desc.status = 0;
+            
+            desc.status_error = 0;
             let len = desc.length as usize;
             info!("rx index: {}, len: {}", index, len);
             let mbuf = unsafe { &*slice_from_raw_parts(self.rx_ring.mbufs[index] as *mut u8, len) };
