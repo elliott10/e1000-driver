@@ -336,10 +336,9 @@ where
         for _ in 0..max {
             let len = self.rx_ring.as_mut()[index].length as usize;
             let addr = self.rx_ring.as_mut()[index].addr;
-            let status = self.rx_ring.as_mut()[index].status_error;
-            info!("rx status {}, addr {:#X}, len {}", status, addr, len);
+            let status = self.rx_ring.as_mut()[index].status;
 
-            if (status & RXD_STAT_DD) == 0 {
+            if (status & RXD_STAT_DD as u8) == 0 {
                 break;
             }
             self.rx_ring.next_to_clean = (index + 1) % RX_RING_SIZE;
@@ -1786,9 +1785,9 @@ where
         }
 
         // Read RFCTL register, enable extended status, and write back
-        let mut rfctl = self.er32(RFCTL);
-        rfctl |= RFCTL_EXTEN;
-        self.ew32(RFCTL, rfctl);
+        // let mut rfctl = self.er32(RFCTL);
+        // rfctl |= RFCTL_EXTEN;
+        // self.ew32(RFCTL, rfctl);
 
         self.ew32(RCTL, rctl);
 

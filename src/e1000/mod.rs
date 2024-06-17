@@ -17,7 +17,7 @@ use core::{
     u16,
 };
 pub use hw::{E1000HWStats, MacInfo, MacType, MediaType, PhyInfo, PhyType};
-pub use ring::{RxDesc, TxDesc};
+pub use ring::{RxDescExt, TxDesc};
 const PAGE_SIZE: usize = 4096;
 
 pub trait KernelFunc: Send + Sync + Clone {

@@ -171,7 +171,7 @@ impl TxDesc {}
 /// Receive Descriptor - Extended
 #[derive(Debug, Default, Clone)]
 #[repr(C)]
-pub struct RxDesc {
+pub struct RxDescExt {
     pub addr: u64, /* Address of the descriptor's data buffer */
     pub rsvd: u64,
     pub mrq: u32,
@@ -181,7 +181,7 @@ pub struct RxDesc {
     pub length: u16, /* Length of data DMAed into data buffer */
     pub vlan: u16,
 }
-impl TransDesc for RxDesc {
+impl TransDesc for RxDescExt {
     fn set_status(&mut self, status: u32) {
         self.status_error = status;
     }
@@ -190,6 +190,30 @@ impl TransDesc for RxDesc {
         self.addr = addr;
     }
 }
+
+/// Receive Descriptor
+#[derive(Debug, Default, Clone)]
+#[repr(C)]
+pub struct RxDesc {
+    pub addr: u64, /* Address of the descriptor's data buffer */
+    pub length: u16, /* Length of data DMAed into data buffer */
+    pub csum: u16,
+    pub status: u8,
+    pub error: u8, /* Length of data DMAed into data buffer */
+    pub special: u16,
+}
+impl TransDesc for RxDesc {
+    fn set_status(&mut self, status: u32) {
+        self.status = status as u8;
+    }
+
+    fn set_addr(&mut self, addr: u64) {
+        self.addr = addr;
+    }
+}
+
+
+
 
 #[derive(Default)]
 pub(crate) struct BuffInfo {
