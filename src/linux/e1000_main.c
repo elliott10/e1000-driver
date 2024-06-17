@@ -1,10 +1,8 @@
 #include "asm-generic/int-ll64.h"
 #include "e1000.h"
-#include "linux/cleanup.h"
 #include "linux/etherdevice.h"
 #include "linux/gfp_types.h"
 #include "linux/irqreturn.h"
-#include "linux/mroute.h"
 #include "linux/printk.h"
 #include "linux/refcount.h"
 #include "linux/skbuff.h"
@@ -262,7 +260,10 @@ static void e1000_remove(struct pci_dev *pdev) {
 }
 static int __maybe_unused e1000_suspend(struct device *dev) { return 0; }
 
-static int __maybe_unused e1000_resume(struct device *dev) { return 0; }
+static int __maybe_unused e1000_resume(struct device *dev) {
+  pr_info("e1000_resume");
+  return 0;
+}
 
 static void e1000_shutdown(struct pci_dev *pdev) {}
 

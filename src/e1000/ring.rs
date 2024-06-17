@@ -132,56 +132,38 @@ where
 }
 
 pub trait TransDesc: Default + Clone {
-    fn set_status(&mut self, status: u8);
+    fn set_status(&mut self, status: u32);
     fn set_addr(&mut self, addr: u64);
 }
 
-/// [E1000 3.3.3]
-/// The dma descriptor for transmitting
-// #[derive(Debug, Default, Clone)]
-// #[repr(C, align(16))]
-// pub struct TxLower {
-//     pub data: u32,
-//     pub length: u16,
-//     pub cso: u8,
-//     pub cmd: u8,
-// }
-// /// [E1000 3.3.3]
-// /// The dma descriptor for transmitting
-// #[derive(Debug, Default, Clone)]
-// #[repr(C, align(16))]
-// pub struct TxUpper {
-//     pub data: u8,
-//     pub status: u8,
-//     pub css: u8,
-//     pub special: u16,
-// }
 
-// /// [E1000 3.3.3]
-// /// The dma descriptor for transmitting
+
+
+
+
 // #[derive(Debug, Default, Clone)]
 // #[repr(C, align(16))]
 // pub struct TxDesc {
 //     pub addr: u64,
-//     pub lower: TxLower,
-//     pub upper: TxUpper,
+//     pub length: u16,
+//     pub cso: u8,
+//     pub cmd: u8,
+//     pub status: u8,
+//     pub css: u8,
+//     pub special: u16,
 // }
-
 #[derive(Debug, Default, Clone)]
-#[repr(C, align(16))]
+#[repr(C)]
 pub struct TxDesc {
     pub addr: u64,
-    pub length: u16,
-    pub cso: u8,
-    pub cmd: u8,
+    pub lower: u32,
     pub status: u8,
     pub css: u8,
     pub special: u16,
 }
-
 impl TransDesc for TxDesc {
-    fn set_status(&mut self, status: u8) {
-        self.status = status;
+    fn set_status(&mut self, status: u32) {
+        self.status = status as u8;
     }
 
     fn set_addr(&mut self, addr: u64) {
@@ -204,8 +186,8 @@ pub struct RxDesc {
     pub special: u16,
 }
 impl TransDesc for RxDesc {
-    fn set_status(&mut self, status: u8) {
-        self.status = status;
+    fn set_status(&mut self, status: u32) {
+        self.status = status as u8;
     }
 
     fn set_addr(&mut self, addr: u64) {

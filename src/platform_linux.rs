@@ -142,7 +142,7 @@ extern "C" fn e1000r_new(config: E1000Config) -> usize {
         cb_pci_read_config_word: config.cb_pci_read_config_word,
         cb_on_xmit_completed: config.cb_on_xmit_completed,
     };
-
+    
     let e1000 = match E1000::new(kfun, config.device_id) {
         Ok(o) => o,
         Err(_) => return 0,

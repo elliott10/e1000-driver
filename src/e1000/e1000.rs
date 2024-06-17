@@ -304,10 +304,17 @@ where
             let n = self.tx_ring.one_copy_data_from(i, src);
             let mut tx_desc = &mut self.tx_ring.as_mut()[i];
 
-            tx_desc.length = n as u16;
-            // tx_desc.cmd = (TXD_CMD_RS | TXD_CMD_EOP | TXD_CMD_IFCS) as u8;
-            tx_desc.cmd = (TXD_CMD_RS | TXD_CMD_IDE | TXD_CMD_EOP | TXD_CMD_IFCS) as u8;
+            let mut txd_lower = 0;
+
+            tx_desc.lower = (TXD_CMD_EOP | TXD_CMD_IFCS | TXD_CMD_RS | src.len() as u32).to_le();
             tx_desc.status = 0;
+
+            fence_w();
+
+            // tx_desc.length = n as u16;
+            // // tx_desc.cmd = (TXD_CMD_RS | TXD_CMD_EOP | TXD_CMD_IFCS) as u8;
+            // tx_desc.cmd = (TXD_CMD_RS | TXD_CMD_IDE | TXD_CMD_EOP | TXD_CMD_IFCS) as u8;
+            // tx_desc.status = 0;
 
             count += 1;
             i += 1;
@@ -1605,8 +1612,10 @@ where
         let mut i = self.tx_ring.next_to_clean;
         let mut desc = &self.tx_ring.as_ref()[i];
         while (desc.status & (TXD_STAT_DD as u8)) != 0 {
+            info!("tx ok");
+
             pkts += 1;
-            bytes += desc.length as u32;
+            bytes += desc.lower & 0xffff;
 
             fence_r();
 
