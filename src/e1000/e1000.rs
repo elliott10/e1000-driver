@@ -3,7 +3,7 @@ use super::hw::{self, DevSpec, Hw, HwRc, MacType};
 use super::regs::*;
 use super::ring::*;
 use crate::err::{Error, Result};
-use crate::hw::FcMode;
+use crate::hw::{FcMode, MsType};
 use crate::phy::*;
 use crate::*;
 use core::alloc::Layout;
@@ -954,7 +954,7 @@ where
         match self.dev_spec {
             DevSpec::E82571(_) => self.setup_link_82571(),
             DevSpec::E80003es2lan => todo!(),
-            DevSpec::Ich8lan(_) => todo!(),
+            DevSpec::Ich8lan(_) => self.setup_link_ich8lan(),
         }
     }
 
@@ -1010,8 +1010,19 @@ where
         match self.dev_spec {
             DevSpec::E82571(_) => self.setup_copper_link_82571(),
             DevSpec::E80003es2lan => todo!(),
-            DevSpec::Ich8lan(_) => todo!(),
+            DevSpec::Ich8lan(_) => self.setup_copper_link_pch_lpt(),
         }
+    }
+
+    fn setup_copper_link_pch_lpt(&mut self) -> Result {
+        let mut ctrl = self.er32(CTRL);
+        ctrl |= CTRL_SLU;
+        ctrl &= !(CTRL_FRCSPD | CTRL_FRCDPX);
+        self.ew32(CTRL, ctrl);
+
+        self.copper_link_setup_82577()?;
+
+        self.setup_copper_link()
     }
 
     fn setup_copper_link_82571(&mut self) -> Result {
@@ -1388,6 +1399,73 @@ where
         // }
 
         Ok(())
+    }
+
+    fn copper_link_setup_82577(&mut self) -> Result {
+        /* Enable CRS on Tx. This must be set for half-duplex operation. */
+        let mut phy_data = self.e1e_rphy(I82577_CFG_REG)?;
+
+        phy_data |= I82577_CFG_ASSERT_CRS_ON_TX;
+
+        /* Enable downshift */
+        phy_data |= I82577_CFG_ENABLE_DOWNSHIFT;
+
+        self.e1e_wphy(I82577_CFG_REG, phy_data)?;
+
+        /* Set MDI/MDIX mode */
+        phy_data = self.e1e_rphy(I82577_PHY_CTRL_2)?;
+        phy_data &= !I82577_PHY_CTRL2_MDIX_CFG_MASK;
+        /* Options:
+         *   0 - Auto (default)
+         *   1 - MDI mode
+         *   2 - MDI-X mode
+         */
+        match self.hw.as_ref().phy.mdix {
+            1 => {}
+            2 => {
+                phy_data |= I82577_PHY_CTRL2_MANUAL_MDIX;
+            }
+            _ => {
+                phy_data |= I82577_PHY_CTRL2_AUTO_MDI_MDIX;
+            }
+        }
+        self.e1e_wphy(I82577_PHY_CTRL_2, phy_data)?;
+
+        self.set_master_slave_mode()
+    }
+
+    /**
+     *  e1000_set_master_slave_mode - Setup PHY for Master/slave mode
+     *  @hw: pointer to the HW structure
+     *
+     *  Sets up Master/slave mode
+     **/
+    fn set_master_slave_mode(&mut self) -> Result {
+        /* Resolve Master/Slave mode */
+        let mut phy_data = self.e1e_rphy(MII_CTRL1000)?;
+
+        /* load defaults for future use */
+        self.hw.as_mut().phy.original_ms_type = if (phy_data & CTL1000_ENABLE_MASTER) > 0 {
+            if (phy_data & CTL1000_AS_MASTER) > 0 {
+                MsType::ForceMaster
+            } else {
+                MsType::ForceSlave
+            }
+        } else {
+            MsType::Auto
+        };
+
+        match self.hw.as_ref().phy.ms_type {
+            MsType::HwDefault => {}
+            MsType::ForceMaster => phy_data |= (CTL1000_ENABLE_MASTER | CTL1000_AS_MASTER),
+            MsType::ForceSlave => {
+                phy_data |= CTL1000_ENABLE_MASTER;
+                phy_data &= !(CTL1000_AS_MASTER);
+            }
+            MsType::Auto => phy_data &= !CTL1000_ENABLE_MASTER,
+        }
+
+        return self.e1e_wphy(MII_CTRL1000, phy_data);
     }
 
     fn set_fc_watermarks(&mut self) -> Result {
