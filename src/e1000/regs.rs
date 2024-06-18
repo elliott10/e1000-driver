@@ -78,6 +78,8 @@ pub(crate) const IOSFPC: usize = 0x00F28; // TX corrupted data register
 pub(crate) const RDTR: usize = 0x02820; // Rx Delay Timer - Read-Write
 pub(crate) const RADV: usize = 0x0282C; // Rx Interrupt Absolute Delay Timer - Read-Write
 
+pub(crate) const PBECCSTS: usize = 0x0100C; /* Packet Buffer ECC Status - RW */
+
 pub(crate) fn TARC(n: usize) -> usize {
     0x03840 + (n * 0x100)
 }
@@ -153,3 +155,17 @@ pub(crate) const SWSM2: usize = 0x05B58; // Driver-only software semaphore
 
 pub(crate) const FCRTL: usize = 0x02160; // Flow Control Receive Threshold Low Register - Read/Write
 pub(crate) const FCRTH: usize = 0x02168; // Flow Control Receive Threshold High Register - Read/Write
+
+pub(crate) const FFLT_DBG: usize = 0x05F04; // Debug Register
+
+pub(crate) const TORL: usize = 0x040C0; // Total Octets Rx Low - Read/clear
+pub(crate) const TORH: usize = 0x040C4; // Total Octets Rx High - Read/clear
+pub(crate) const TOTL: usize = 0x040C8; // Total Octets Tx Low - Read/clear
+pub(crate) const TOTH: usize = 0x040CC; // Total Octets Tx High - Read/clear
+
+pub(crate) const MGTPRC: usize = 0x040B4; // Management Packets Rx Count - Read/clear
+pub(crate) const MGTPDC: usize = 0x040B8; // Management Packets Dropped Count - Read/clear
+pub(crate) const MGTPTC: usize = 0x040BC; // Management Packets Tx Count - Read/clear
+
+pub(crate) const IAC: usize = 0x04100; // Interrupt Assertion Count
+pub(crate) const ICRXOC: usize = 0x04124; // Interrupt Cause Receiver Overrun Count

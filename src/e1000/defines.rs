@@ -617,6 +617,7 @@ pub(crate) const ADVERTISED_Asym_Pause: u16 = 1 << 14;
 
 pub(crate) const RXCSUM_IPOFLD: u32 = 0x00000100; /* TCP / UDP checksum offload */
 pub(crate) const RXCSUM_TUOFL: u32 = 0x00000200; /* TCP / UDP checksum offload */
+pub(crate) const PBECCSTS_ECC_ENABLE: u32 = 0x00010000;
 
 use core::arch::asm;
 
@@ -694,3 +695,19 @@ pub(crate) const SWSM2_LOCK: u32 = 0x00000002; // Bitmask for secondary driver s
 pub(crate) const FLOW_CONTROL_ADDRESS_LOW: u32 = 0x00C28001; // Lower part of the flow control address
 pub(crate) const FLOW_CONTROL_ADDRESS_HIGH: u32 = 0x00000100; // Higher part of the flow control address
 pub(crate) const FLOW_CONTROL_TYPE: u32 = 0x8808; // EtherType for flow control packets (802.3x PAUSE frame)
+
+pub(crate) const GCR_RXD_NO_SNOOP: u32 = 0x00000001;
+pub(crate) const GCR_RXDSCW_NO_SNOOP: u32 = 0x00000002;
+pub(crate) const GCR_RXDSCR_NO_SNOOP: u32 = 0x00000004;
+pub(crate) const GCR_TXD_NO_SNOOP: u32 = 0x00000008;
+pub(crate) const GCR_TXDSCW_NO_SNOOP: u32 = 0x00000010;
+pub(crate) const GCR_TXDSCR_NO_SNOOP: u32 = 0x00000020;
+
+pub(crate) const PCIE_NO_SNOOP_ALL: u32 = GCR_RXD_NO_SNOOP
+    | GCR_RXDSCW_NO_SNOOP
+    | GCR_RXDSCR_NO_SNOOP
+    | GCR_TXD_NO_SNOOP
+    | GCR_TXDSCW_NO_SNOOP
+    | GCR_TXDSCR_NO_SNOOP;
+
+pub(crate) const FFLT_DBG_DONT_GATE_WAKE_DMA_CLK: u32 = 0x1000;

@@ -665,6 +665,51 @@ where
     }
 
     /**
+     *  e1000e_clear_hw_cntrs_base - Clear base hardware counters
+     *  @hw: pointer to the HW structure
+     *
+     *  Clears the base hardware counters by reading the counter registers.
+     **/
+    pub(crate) fn clear_hw_cntrs_base(&self) {
+        self.er32(CRCERRS);
+        self.er32(SYMERRS);
+        self.er32(MPC);
+        self.er32(SCC);
+        self.er32(ECOL);
+        self.er32(MCC);
+        self.er32(LATECOL);
+        self.er32(COLC);
+        self.er32(DC);
+        self.er32(SEC);
+        self.er32(RLEC);
+        self.er32(XONRXC);
+        self.er32(XONTXC);
+        self.er32(XOFFRXC);
+        self.er32(XOFFTXC);
+        self.er32(FCRUC);
+        self.er32(GPRC);
+        self.er32(BPRC);
+        self.er32(MPRC);
+        self.er32(GPTC);
+        self.er32(GORCL);
+        self.er32(GORCH);
+        self.er32(GOTCL);
+        self.er32(GOTCH);
+        self.er32(RNBC);
+        self.er32(RUC);
+        self.er32(RFC);
+        self.er32(ROC);
+        self.er32(RJC);
+        self.er32(TORL);
+        self.er32(TORH);
+        self.er32(TOTL);
+        self.er32(TOTH);
+        self.er32(TPR);
+        self.er32(TPT);
+        self.er32(MPTC);
+        self.er32(BPTC);
+    }
+    /**
      * e1000_power_up_phy_copper - Restore copper link in case of PHY power down
      * @hw: pointer to the HW structure
      *
@@ -837,7 +882,7 @@ impl DevSpec {
         match self {
             DevSpec::E82571(i) => i.init_hw(hw),
             DevSpec::E80003es2lan => todo!(),
-            DevSpec::Ich8lan(i) => todo!(),
+            DevSpec::Ich8lan(i) => i.init_hw(hw),
         }
     }
 }
