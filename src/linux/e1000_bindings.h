@@ -278,6 +278,8 @@ struct e1000r_info_all e1000r_get_info_all(size_t ptr);
 
 int32_t e1000r_init(size_t ptr);
 
+bool e1000r_irq_clean_tx(size_t ptr);
+
 void e1000r_irq_disable(size_t ptr);
 
 void e1000r_irq_enable(size_t ptr);

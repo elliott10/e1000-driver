@@ -125,7 +125,7 @@ impl BoardType {
                 mac: MacType::e1000_82574,
                 flags: Flags {
                     has_hw_vlan_filter: true,
-                    has_msix: true,
+                    // has_msix: true,
                     has_jumbo_frames: true,
                     has_wol: true,
                     has_hw_timestamp: true,

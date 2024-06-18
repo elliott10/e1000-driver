@@ -31,7 +31,7 @@
 #include <net/checksum.h>
 #include <net/ip6_checksum.h>
 
-char e1000_driver_name[] = "e1000e";
+char e1000_driver_name[] = "e1000_rs";
 
 #define DEFAULT_MSG_ENABLE (NETIF_MSG_DRV | NETIF_MSG_PROBE | NETIF_MSG_LINK)
 static int debug = -1;
@@ -154,9 +154,20 @@ static irqreturn_t e1000_msix_other(int __always_unused irq, void *data) {
  **/
 static irqreturn_t e1000_intr_msi(int __always_unused irq, void *data) {
   struct net_device *netdev = data;
+  struct e1000_adapter *adapter = netdev_priv(netdev);
   size_t e1000 = e1000e_get_e1000(netdev);
+  struct E1000Status *status = e1000r_status(e1000);
   if (e1000r_irq_handle(e1000, irq)) {
     return IRQ_NONE;
+  }
+  mod_timer(&adapter->watchdog_timer, jiffies + 1);
+
+  if (napi_schedule_prep(&adapter->napi)) {
+    status->total_tx_bytes = 0;
+    status->total_tx_packets = 0;
+    status->total_rx_bytes = 0;
+    status->total_rx_packets = 0;
+    __napi_schedule(&adapter->napi);
   }
   return IRQ_HANDLED;
 }
@@ -619,9 +630,15 @@ static int e1000e_poll(struct napi_struct *napi, int budget) {
   struct e1000_adapter *adapter =
       container_of(napi, struct e1000_adapter, napi);
 
+  bool tx_cleand = false;
+
+  if (!adapter->msix_entries) {
+    tx_cleand = e1000r_irq_clean_tx(adapter->ptr);
+  }
+
   int work_done = e1000r_clear_rx(adapter->ptr, budget, cb_on_rcv_pkt, adapter);
 
-  if (work_done == budget)
+  if (!tx_cleand || work_done == budget)
     return budget;
 
   /* Exit the polling mode, but don't re-enable interrupts if stack might

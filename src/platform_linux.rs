@@ -142,7 +142,7 @@ extern "C" fn e1000r_new(config: E1000Config) -> usize {
         cb_pci_read_config_word: config.cb_pci_read_config_word,
         cb_on_xmit_completed: config.cb_on_xmit_completed,
     };
-    
+
     let e1000 = match E1000::new(kfun, config.device_id) {
         Ok(o) => o,
         Err(_) => return 0,
@@ -219,6 +219,14 @@ unsafe extern "C" fn e1000r_irq_handle_msix_tx(ptr: usize, irq: i32) -> i32 {
     dev.dev.irq_handle_msix_tx();
     0
 }
+
+#[no_mangle]
+unsafe extern "C" fn e1000r_irq_clean_tx(ptr: usize) -> bool {
+    let dev = dev_mut(ptr);
+
+    dev.dev.clean_tx_irq()
+}
+
 #[no_mangle]
 unsafe extern "C" fn e1000r_set_flags(ptr: usize, flags: Flags) {
     let dev = dev_mut(ptr);

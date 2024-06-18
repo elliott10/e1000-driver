@@ -1739,7 +1739,7 @@ where
         Ok(())
     }
 
-    fn clean_tx_irq(&mut self) -> bool {
+    pub fn clean_tx_irq(&mut self) -> bool {
         let mut pkts = 0;
         let mut bytes = 0;
 
