@@ -1095,6 +1095,50 @@ where
         Ok(())
     }
 
+    fn setup_link_ich8lan(&mut self) -> Result {
+        let mut hw = self.hw.clone();
+        let hw = hw.as_mut();
+
+        /* ICH parts do not have a word in the NVM to determine
+         * the default flow control setting, so we explicitly
+         * set it to full.
+         */
+        if (hw.fc.requested_mode == FcMode::Default) {
+            /* Workaround h/w hang when Tx flow control enabled */
+            if (hw.mac.kind == MacType::e1000_pchlan) {
+                hw.fc.requested_mode = FcMode::RxPause;
+            } else {
+                hw.fc.requested_mode = FcMode::Full;
+            }
+        }
+
+        /* Save off the requested flow control mode for use later.  Depending
+         * on the link partner's capabilities, we may or may not use this mode.
+         */
+        hw.fc.current_mode = hw.fc.requested_mode;
+
+        info!(
+            "After fix-ups FlowControl is now = {:?}",
+            hw.fc.current_mode
+        );
+
+        /* Continue to configure the copper link. */
+        self.setup_physical_interface()?;
+
+        self.ew32(FCTTV, hw.fc.pause_time as u32);
+        if ((hw.phy.kind == PhyType::T82578)
+            || (hw.phy.kind == PhyType::T82579)
+            || (hw.phy.kind == PhyType::I217)
+            || (hw.phy.kind == PhyType::T82577))
+        {
+            self.ew32(FCRTV_PCH, hw.fc.refresh_time as u32);
+
+            self.e1e_wphy(PHY_REG(BM_PORT_CTRL_PAGE, 27), hw.fc.pause_time)?;
+        }
+
+        return self.set_fc_watermarks();
+    }
+
     /**
      *  e1000_wait_autoneg - Wait for auto-neg completion
      *  @hw: pointer to the HW structure

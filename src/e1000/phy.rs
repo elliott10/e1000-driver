@@ -1,5 +1,4 @@
-pub(crate) const MAX_PHY_REG_ADDRESS: u32 = 0x1F; // 5 bit address bus (0-0x1F)
-                                                  // IGP01E1000 Specific Registers
+// IGP01E1000 Specific Registers
 pub(crate) const PHY_PORT_CONFIG: u16 = 0x10; // Port Config
 pub(crate) const PHY_PORT_STATUS: u16 = 0x11; // Status
 pub(crate) const PHY_PORT_CTRL: u16 = 0x12; // Control
@@ -11,11 +10,11 @@ pub(crate) const IGP_PAGE_SHIFT: u32 = 5;
 pub(crate) const PHY_REG_MASK: u16 = 0x1F;
 
 // BM/HV Specific Registers
-pub(crate) const BM_PORT_CTRL_PAGE: u16 = 769;
+pub(crate) const BM_PORT_CTRL_PAGE: u32 = 769;
 pub(crate) const BM_WUC_PAGE: u16 = 800;
 pub(crate) const BM_WUC_ADDRESS_OPCODE: u8 = 0x11;
 pub(crate) const BM_WUC_DATA_OPCODE: u8 = 0x12;
-pub(crate) const BM_WUC_ENABLE_PAGE: u16 = BM_PORT_CTRL_PAGE;
+pub(crate) const BM_WUC_ENABLE_PAGE: u32 = BM_PORT_CTRL_PAGE;
 pub(crate) const BM_WUC_ENABLE_REG: u16 = 17;
 
 // MDI Control

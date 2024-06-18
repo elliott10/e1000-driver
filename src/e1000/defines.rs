@@ -711,3 +711,4 @@ pub(crate) const PCIE_NO_SNOOP_ALL: u32 = GCR_RXD_NO_SNOOP
     | GCR_TXDSCR_NO_SNOOP;
 
 pub(crate) const FFLT_DBG_DONT_GATE_WAKE_DMA_CLK: u32 = 0x1000;
+

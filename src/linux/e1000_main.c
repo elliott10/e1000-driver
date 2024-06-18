@@ -40,7 +40,7 @@ MODULE_PARM_DESC(debug, "Debug level (0=none,...,16=all)");
 
 static char e1000_rs_driver_string[] =
     "Intel(R) PRO/1000 Network Driver (Rust)";
-static const char e1000_rs_copyright[] = "Copyright (c) 1999-2006 QCL";
+static const char e1000_rs_copyright[] = "Copyright (c) 2023-2024 QCL";
 
 static int e1000_init_module(void);
 static void e1000_exit_module(void);
