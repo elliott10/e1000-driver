@@ -54,6 +54,38 @@ const HSFSTS_FLCDONE: u16 = 1;
 
 const HSFCTL_FLCGO: u16 = 1;
 const HSFCTL_FLCYCLE_SHIFT: u16 = 1;
+const HSFCTL_FLDBCOUNT_SHIFT: u16 = 8;
+
+const ICH_CYCLE_READ: u16 = 0;
+const ICH_CYCLE_WRITE: u16 = 2;
+const ICH_CYCLE_ERASE: u16 = 3;
+const ICH_NVM_SIG_WORD: usize = 0x13;
+const ICH_NVM_SIG_MASK: u16 = 0xC000;
+const ICH_NVM_VALID_SIG_MASK: u8 = 0xC0;
+const ICH_NVM_SIG_VALUE: u8 = 0x80;
+struct FlashCtrl {
+    value: u16,
+}
+
+impl FlashCtrl {
+    fn set_count(&mut self, count: usize) {
+        let c = (count & 0b11) as u16;
+        self.value &= !(0b11 << HSFCTL_FLDBCOUNT_SHIFT);
+        self.value |= c << HSFCTL_FLDBCOUNT_SHIFT;
+    }
+
+    fn set_cycle(&mut self, cycle: u16) {
+        let c = cycle & 0b11;
+
+        self.value &= !(0b11 << HSFCTL_FLCYCLE_SHIFT);
+        self.value |= c << HSFCTL_FLCYCLE_SHIFT;
+    }
+}
+impl From<u16> for FlashCtrl {
+    fn from(value: u16) -> Self {
+        Self { value }
+    }
+}
 
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct ShadowRam {
@@ -434,6 +466,25 @@ impl DevSpecIch8lan {
 
         let mut data: Vec<u16> = Vec::try_with_capacity(words as usize)?;
 
+        let res = self.valid_nvm_bank_detect(hw);
+        let bank = match res {
+            Ok(bank) => bank,
+            Err(_) => 0,
+        };
+
+        let mut act_offset = if (bank) > 0 {
+            hw.nvm.flash_bank_size
+        } else {
+            0
+        };
+        act_offset += offset as u32;
+
+        for i in 0..words {
+            let offset = act_offset as usize + i as usize;
+            let word = self.read_flash_word(hw, offset)?;
+            data.try_push(word);
+        }
+
         Ok(data)
     }
 
@@ -550,5 +601,200 @@ impl DevSpecIch8lan {
         }
 
         return Err(Error::Nvm("timeout"));
+    }
+
+    /**
+     *  e1000_read_flash_data32_ich8lan - Read dword from NVM
+     *  @hw: pointer to the HW structure
+     *  @offset: The offset (in bytes) of the dword to read.
+     *  @data: Pointer to the dword to store the value read.
+     *
+     *  Reads a byte or word from the NVM using the flash access registers.
+     **/
+    pub(crate) fn read_flash_data32<K: KernelFunc>(
+        &self,
+        hw: &mut Hw<K>,
+        offset: usize,
+    ) -> Result<u32> {
+        if (offset as u32 > ICH_FLASH_LINEAR_ADDR_MASK || hw.mac.kind < MacType::e1000_pch_spt) {
+            return Err(Error::Nvm("not support"));
+        }
+        let flash_linear_addr =
+            ((ICH_FLASH_LINEAR_ADDR_MASK & offset as u32) + hw.nvm.flash_base_addr);
+
+        for _ in 0..ICH_FLASH_CYCLE_REPEAT_COUNT {
+            hw.kernel.delay(1000);
+            /* Steps */
+            self.flash_cycle_init(hw)?;
+            /* In SPT, This register is in Lan memory space, not flash.
+             * Therefore, only 32 bit access is supported
+             */
+            let mut hsflctl: FlashCtrl = ((hw.er32flash(ICH_FLASH_HSFSTS)? >> 16) as u16).into();
+
+            /* 0b/1b corresponds to 1 or 2 byte size, respectively. */
+            hsflctl.set_count(size_of::<u32>() - 1);
+            hsflctl.set_cycle(ICH_CYCLE_READ);
+            /* In SPT, This register is in Lan memory space, not flash.
+             * Therefore, only 32 bit access is supported
+             */
+            hw.ew32flash(ICH_FLASH_HSFSTS, (hsflctl.value as u32) << 16);
+            hw.ew32flash(ICH_FLASH_FADDR, flash_linear_addr);
+
+            let r = self.flash_cycle(hw, ICH_FLASH_READ_COMMAND_TIMEOUT);
+
+            /* Check if FCERR is set to 1, if set to 1, clear it
+             * and try the whole sequence a few more times, else
+             * read in (shift in) the Flash Data0, the order is
+             * least significant byte first msb to lsb
+             */
+            if (r.is_ok()) {
+                return hw.er32flash(ICH_FLASH_FDATA0);
+            } else {
+                /* If we've gotten here, then things are probably
+                 * completely hosed, but if the error condition is
+                 * detected, it won't hurt to give it another try...
+                 * ICH_FLASH_CYCLE_REPEAT_COUNT times.
+                 */
+                let hsfsts = hw.er16flash(ICH_FLASH_HSFSTS)?;
+                if (hsfsts & HSFSTS_FLCERR) > 0 {
+                    /* Repeat for some time before giving up. */
+                    continue;
+                } else if (hsfsts & HSFSTS_FLCDONE) == 0 {
+                    error!("Timeout error - flash cycle did not complete.");
+                    break;
+                }
+            }
+        }
+
+        return Err(Error::Nvm("timeout"));
+    }
+
+    /**
+     *  e1000_read_flash_dword_ich8lan - Read dword from flash
+     *  @hw: pointer to the HW structure
+     *  @offset: offset to data location
+     *  @data: pointer to the location for storing the data
+     *
+     *  Reads the flash dword at offset into data.  Offset is converted
+     *  to bytes before read.
+     **/
+    pub(crate) fn read_flash_dword<K: KernelFunc>(
+        &self,
+        hw: &mut Hw<K>,
+        mut offset: usize,
+    ) -> Result<u32> {
+        /* Must convert word offset into bytes. */
+        offset <<= 1;
+        return self.read_flash_data32(hw, offset);
+    }
+
+    pub(crate) fn valid_nvm_bank_detect<K: KernelFunc>(&self, hw: &mut Hw<K>) -> Result<u32> {
+        let bank1_offset = hw.nvm.flash_bank_size as usize;
+        let act_offset = ICH_NVM_SIG_WORD;
+
+        let mut bank = 0;
+
+        /* Check bank 0 */
+        let mut nvm_dword = self.read_flash_dword(hw, act_offset)?;
+
+        let mut sig_byte = ((nvm_dword & 0xFF00) >> 8) as u8;
+        if (sig_byte & ICH_NVM_VALID_SIG_MASK) == ICH_NVM_SIG_VALUE {
+            return Ok(bank);
+        }
+
+        /* Check bank 1 */
+        nvm_dword = self.read_flash_dword(hw, act_offset + bank1_offset)?;
+
+        sig_byte = ((nvm_dword & 0xFF00) >> 8) as u8;
+        if ((sig_byte & ICH_NVM_VALID_SIG_MASK) == ICH_NVM_SIG_VALUE) {
+            bank = 1;
+            return Ok(bank);
+        }
+
+        error!("ERROR: No valid NVM bank present");
+        return Err(Error::Nvm("ERROR: No valid NVM bank present"));
+    }
+
+    /**
+     *  e1000_read_flash_data32_ich8lan - Read dword from NVM
+     *  @hw: pointer to the HW structure
+     *  @offset: The offset (in bytes) of the dword to read.
+     *  @data: Pointer to the dword to store the value read.
+     *
+     *  Reads a byte or word from the NVM using the flash access registers.
+     **/
+    pub(crate) fn read_flash_data<K: KernelFunc>(
+        &self,
+        hw: &mut Hw<K>,
+        offset: usize,
+        size: u8,
+    ) -> Result<u16> {
+        if (size < 1 || size > 2 || offset > ICH_FLASH_LINEAR_ADDR_MASK as usize) {
+            return Err(Error::Nvm("size or offset out of range"));
+        }
+
+        let flash_linear_addr =
+            ((ICH_FLASH_LINEAR_ADDR_MASK & offset as u32) + hw.nvm.flash_base_addr);
+
+        for _ in 0..ICH_FLASH_CYCLE_REPEAT_COUNT {
+            hw.kernel.delay(1000);
+            /* Steps */
+            self.flash_cycle_init(hw)?;
+            /* In SPT, This register is in Lan memory space, not flash.
+             * Therefore, only 32 bit access is supported
+             */
+            let mut hsflctl: FlashCtrl = hw.er16flash(ICH_FLASH_HSFSTS)?.into();
+
+            /* 0b/1b corresponds to 1 or 2 byte size, respectively. */
+            hsflctl.set_count(size as usize - 1);
+            hsflctl.set_cycle(ICH_CYCLE_READ);
+            /* In SPT, This register is in Lan memory space, not flash.
+             * Therefore, only 32 bit access is supported
+             */
+            hw.ew16flash(ICH_FLASH_HSFSTS, hsflctl.value);
+            hw.ew32flash(ICH_FLASH_FADDR, flash_linear_addr);
+
+            let r = self.flash_cycle(hw, ICH_FLASH_READ_COMMAND_TIMEOUT);
+
+            /* Check if FCERR is set to 1, if set to 1, clear it
+             * and try the whole sequence a few more times, else
+             * read in (shift in) the Flash Data0, the order is
+             * least significant byte first msb to lsb
+             */
+            if (r.is_ok()) {
+                let flash_data = hw.er32flash(ICH_FLASH_FDATA0)?;
+                if size == 1 {
+                    return Ok((flash_data & 0x000000FF) as u16);
+                } else if size == 2 {
+                    return Ok((flash_data & 0x0000FFFF) as u16);
+                }
+            } else {
+                /* If we've gotten here, then things are probably
+                 * completely hosed, but if the error condition is
+                 * detected, it won't hurt to give it another try...
+                 * ICH_FLASH_CYCLE_REPEAT_COUNT times.
+                 */
+                let hsfsts = hw.er16flash(ICH_FLASH_HSFSTS)?;
+                if (hsfsts & HSFSTS_FLCERR) > 0 {
+                    /* Repeat for some time before giving up. */
+                    continue;
+                } else if (hsfsts & HSFSTS_FLCDONE) == 0 {
+                    error!("Timeout error - flash cycle did not complete.");
+                    break;
+                }
+            }
+        }
+
+        return Err(Error::Nvm("timeout"));
+    }
+
+    pub(crate) fn read_flash_word<K: KernelFunc>(
+        &self,
+        hw: &mut Hw<K>,
+        mut offset: usize,
+    ) -> Result<u16> {
+        /* Must convert word offset into bytes. */
+        offset <<= 1;
+        return self.read_flash_data(hw, offset, 2);
     }
 }
