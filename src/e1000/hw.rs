@@ -427,6 +427,48 @@ where
         self.er32(STATUS);
     }
 
+    pub(crate) fn er16flash(&self, reg: usize) -> Result<u16> {
+        match self.flash {
+            None => {
+                error!("flash not set");
+                Err(Error::Nvm("flash not set"))
+            }
+            Some(flash) => unsafe { Ok(((flash + reg) as *const u16).read_volatile()) },
+        }
+    }
+    pub(crate) fn er32flash(&self, reg: usize) -> Result<u32> {
+        match self.flash {
+            None => {
+                error!("flash not set");
+                Err(Error::Nvm("flash not set"))
+            }
+            Some(flash) => unsafe { Ok(((flash + reg) as *const u32).read_volatile()) },
+        }
+    }
+    pub(crate) fn ew16flash(&self, reg: usize, val: u16) -> Result {
+        match self.flash {
+            None => {
+                error!("flash not set");
+                Err(Error::Nvm("flash not set"))
+            }
+            Some(flash) => unsafe {
+                ((flash + reg) as *mut u16).write_volatile(val);
+                Ok(())
+            },
+        }
+    }
+    pub(crate) fn ew32flash(&self, reg: usize, val: u32) -> Result {
+        match self.flash {
+            None => {
+                error!("flash not set");
+                Err(Error::Nvm("flash not set"))
+            }
+            Some(flash) => unsafe {
+                ((flash + reg) as *mut u32).write_volatile(val);
+                Ok(())
+            },
+        }
+    }
     pub(crate) fn ral(&self, index: usize) -> usize {
         RA + index * 8
     }
@@ -866,7 +908,7 @@ impl DevSpec {
         match self {
             DevSpec::E82571(i) => i.read_nvm(hw, offset, words),
             DevSpec::E80003es2lan => todo!(),
-            DevSpec::Ich8lan(i) => todo!(),
+            DevSpec::Ich8lan(i) => i.read_nvm(hw, offset, words),
         }
     }
 
@@ -874,7 +916,7 @@ impl DevSpec {
         match self {
             DevSpec::E82571(i) => i.reset_hw(hw),
             DevSpec::E80003es2lan => todo!(),
-            DevSpec::Ich8lan(i) => todo!(),
+            DevSpec::Ich8lan(i) => i.reset_hw(hw),
         }
     }
 
