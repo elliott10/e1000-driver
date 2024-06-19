@@ -858,7 +858,10 @@ where
         self.er32(BPTC);
     }
     pub(crate) fn e1e_rphy(&mut self, offset: u32) -> Result<u16> {
-        self.read_phy_reg_mdic(offset)
+        match self.variant {
+            BoardVariant::B82571 => self.read_phy_reg_mdic(offset),
+            BoardVariant::Ich8lan => self.read_phy_reg_hv(offset),
+        }
     }
     fn read_phy_reg_mdic(&mut self, offset: u32) -> Result<u16> {
         if (offset > MAX_PHY_REG_ADDRESS) {
@@ -911,8 +914,129 @@ where
     }
 
     pub(crate) fn e1e_wphy(&mut self, offset: u32, value: u16) -> Result {
-        self.write_phy_reg_mdic(offset, value)
+        match self.variant {
+            BoardVariant::B82571 => self.write_phy_reg_mdic(offset, value),
+            BoardVariant::Ich8lan => self.write_phy_reg_hv(offset, value),
+        }
     }
+
+    /**
+     *  e1000_get_phy_addr_for_hv_page - Get PHY address based on page
+     *  @page: page to be accessed
+     **/
+    fn get_phy_addr_for_hv_page(&mut self, page: u16) -> u32 {
+        let mut phy_addr = 2;
+
+        if (page >= HV_INTC_FC_PAGE_START) {
+            phy_addr = 1;
+        }
+
+        return phy_addr;
+    }
+
+    fn read_phy_reg_hv(&mut self, offset: u32) -> Result<u16> {
+        let mut page = BM_PHY_REG_PAGE(offset);
+        let reg = BM_PHY_REG_NUM(offset);
+        let phy_addr = self.get_phy_addr_for_hv_page(page);
+        self.phy.addr = phy_addr;
+
+        if page == BM_WUC_PAGE {
+            error!("read_phy_reg_hv: BM_WUC_PAGE");
+            return todo!();
+        }
+        if page > 0 && page < HV_INTC_FC_PAGE_START {
+            error!("read_phy_reg_hv: HV_INTC_FC_PAGE_START");
+            return todo!();
+        }
+
+        if (page == HV_INTC_FC_PAGE_START) {
+            page = 0;
+        }
+
+        if reg > MAX_PHY_MULTI_PAGE_REG {
+            /* Page is shifted left, PHY expects (page x 32) */
+            let res = self.set_page_igp((page << IGP_PAGE_SHIFT));
+            self.phy.addr = phy_addr;
+
+            res?;
+        }
+
+        info!(
+            "reading PHY page {} (or {:#X} shifted) reg {:#X}",
+            page,
+            page << IGP_PAGE_SHIFT,
+            reg
+        );
+
+        self.read_phy_reg_mdic(MAX_PHY_REG_ADDRESS & reg as u32)
+    }
+    fn write_phy_reg_hv(&mut self, offset: u32, value: u16) -> Result {
+        let mut page = BM_PHY_REG_PAGE(offset);
+        let reg = BM_PHY_REG_NUM(offset);
+        let phy_addr = self.get_phy_addr_for_hv_page(page);
+        self.phy.addr = phy_addr;
+
+        if page == BM_WUC_PAGE {
+            error!("read_phy_reg_hv: BM_WUC_PAGE");
+            return todo!();
+        }
+        if page > 0 && page < HV_INTC_FC_PAGE_START {
+            error!("read_phy_reg_hv: HV_INTC_FC_PAGE_START");
+            return todo!();
+        }
+
+        if (page == HV_INTC_FC_PAGE_START) {
+            page = 0;
+        }
+
+        if reg > MAX_PHY_MULTI_PAGE_REG {
+            /* Page is shifted left, PHY expects (page x 32) */
+            let res = self.set_page_igp((page << IGP_PAGE_SHIFT));
+            self.phy.addr = phy_addr;
+
+            res?;
+        }
+
+        info!(
+            "writing PHY page {} (or {:#X} shifted) reg {:#X}",
+            page,
+            page << IGP_PAGE_SHIFT,
+            reg
+        );
+
+        self.write_phy_reg_mdic(MAX_PHY_REG_ADDRESS & reg as u32, value)
+    }
+
+    /**
+     *  e1000_set_page_igp - Set page as on IGP-like PHY(s)
+     *  @hw: pointer to the HW structure
+     *  @page: page to set (shifted left when necessary)
+     *
+     *  Sets PHY page required for PHY register access.  Assumes semaphore is
+     *  already acquired.  Note, this function sets phy.addr to 1 so the caller
+     *  must set it appropriately (if necessary) after this function returns.
+     **/
+    fn set_page_igp(&mut self, page: u16) -> Result {
+        info!("Setting page {:#X}", page);
+
+        self.phy.addr = 1;
+
+        self.write_phy_reg_mdic(IGP01E1000_PHY_PAGE_SELECT, page)
+    }
+
+    fn write_phy_reg_igp(&mut self, offset: u32, value: u16) -> Result {
+        if (offset as u16 > MAX_PHY_MULTI_PAGE_REG) {
+            self.write_phy_reg_mdic(IGP01E1000_PHY_PAGE_SELECT, offset as u16)?;
+        }
+        self.write_phy_reg_mdic(MAX_PHY_REG_ADDRESS & offset, value)
+    }
+    fn read_phy_reg_igp(&mut self, offset: u32) -> Result<u16> {
+        if (offset as u16 > MAX_PHY_MULTI_PAGE_REG) {
+            self.write_phy_reg_mdic(IGP01E1000_PHY_PAGE_SELECT, offset as u16)?;
+        }
+        self.read_phy_reg_mdic(MAX_PHY_REG_ADDRESS & offset)
+    }
+
     fn write_phy_reg_mdic(&mut self, offset: u32, value: u16) -> Result {
         if (offset > MAX_PHY_REG_ADDRESS) {
             error!("PHY Address {} is out of range", offset);

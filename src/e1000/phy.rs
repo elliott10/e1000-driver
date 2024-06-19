@@ -1,4 +1,6 @@
-use super::regs::PHY_REG;
+#![allow(non_snake_case)]
+
+use super::regs::*;
 
 // IGP01E1000 Specific Registers
 pub(crate) const PHY_PORT_CONFIG: u16 = 0x10; // Port Config
@@ -8,7 +10,6 @@ pub(crate) const PHY_LINK_HEALTH: u16 = 0x13; // PHY Link Health
 pub(crate) const PHY_POWER_MGMT_IGP02: u16 = 0x19; // Power Management
 pub(crate) const PHY_PAGE_SELECT_IGP01: u16 = 0x1F; // Page Select
 pub(crate) const BM_PHY_PAGE_SELECT: u16 = 22; // Page Select for BM
-pub(crate) const IGP_PAGE_SHIFT: u32 = 5;
 pub(crate) const PHY_REG_MASK: u16 = 0x1F;
 
 // BM/HV Specific Registers
@@ -30,7 +31,7 @@ pub(crate) const MDIC_ERROR: u32 = 0x40000000;
 
 
 
-pub(crate) const HV_INTC_FC_PAGE_START: u32 = 768;
+pub(crate) const HV_INTC_FC_PAGE_START: u16 = 768;
 pub(crate) const I82578_ADDR_REG: u32 = 29;
 pub(crate) const I82577_ADDR_REG: u32 = 16;
 pub(crate) const I82577_CFG_REG: u32 = 22;
@@ -68,3 +69,25 @@ pub(crate) const BM_WUC_ME_WU_BIT: u16 = 1 << 5;
 
 
 pub(crate) const BM_PORT_GEN_CFG: u32 = PHY_REG(BM_PORT_CTRL_PAGE, 17);
+
+
+
+pub(crate) const PHY_UPPER_SHIFT: u32 = 21;
+
+pub(crate) fn BM_PHY_REG(page: u16, reg: u16) -> u32 {
+    // Combine page and register using bitwise operations
+    ((reg as u32 & MAX_PHY_REG_ADDRESS) as u32)
+    | (((page & 0xFFFF) as u32) << PHY_PAGE_SHIFT)
+    | (((reg as u32 & !MAX_PHY_REG_ADDRESS) as u32) << (PHY_UPPER_SHIFT - PHY_PAGE_SHIFT))
+}
+
+pub(crate) fn BM_PHY_REG_PAGE(offset: u32) -> u16 {
+    // Extract the page from the given offset
+    ((offset >> PHY_PAGE_SHIFT) as u16) & 0xFFFF
+}
+
+pub(crate) fn BM_PHY_REG_NUM(offset: u32) -> u16 {
+    // Extract the register number from the given offset
+    ((offset & MAX_PHY_REG_ADDRESS as u32) as u16)
+    | (((offset >> (PHY_UPPER_SHIFT - PHY_PAGE_SHIFT)) & !MAX_PHY_REG_ADDRESS as u32) as u16)
+}

@@ -603,9 +603,9 @@ pub(crate) const IGP01E1000_PHY_PORT_STATUS: u8 = 0x11; // Status Register
 pub(crate) const IGP01E1000_PHY_PORT_CTRL: u8 = 0x12; // Control Register
 pub(crate) const IGP01E1000_PHY_LINK_HEALTH: u32 = 0x13; // PHY Link Health Register
 pub(crate) const IGP02E1000_PHY_POWER_MGMT: u8 = 0x19; // Power Management Register
-pub(crate) const IGP01E1000_PHY_PAGE_SELECT: u8 = 0x1F; // Page Select Register
+pub(crate) const IGP01E1000_PHY_PAGE_SELECT: u32 = 0x1F; // Page Select Register
 pub(crate) const BM_PHY_PAGE_SELECT: u8 = 22; // Page Select for BM (Base Management)
-pub(crate) const IGP_PAGE_SHIFT: u8 = 5; // Shift amount for IGP page addressing
+pub(crate) const IGP_PAGE_SHIFT: u16 = 5; // Shift amount for IGP page addressing
 pub(crate) const PHY_REG_MASK: u8 = 0x1F; // Mask to get the register address within a page
 
 pub(crate) const IGP01E1000_PLHR_SS_DOWNGRADE: u16 = 0x8000; // Signal Speed Downgrade in PHY Link Health Register
@@ -731,6 +731,6 @@ pub(crate) const I217_E_PHY_ID: u32 = 0x015400A0;
 
 
 pub(crate) const PHY_REVISION_MASK: u32 = 0xFFFFFFF0;
-pub(crate) const MAX_PHY_MULTI_PAGE_REG: u8 = 0xF;
+pub(crate) const MAX_PHY_MULTI_PAGE_REG: u16 = 0xF;
 
 pub(crate) const KABGTXD_BGSQLBIAS: u32 = 0x00050000; // Band Gap SQL BIAS
