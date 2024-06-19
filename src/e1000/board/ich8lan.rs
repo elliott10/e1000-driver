@@ -10,6 +10,7 @@ use crate::KernelFunc;
 use crate::MacType;
 use crate::MediaType;
 use crate::PhyInfo;
+use crate::PhyType;
 use crate::E1000;
 use alloc::vec::Vec;
 use core::mem::size_of;
@@ -122,6 +123,7 @@ impl DevSpecIch8lan {
         info!("Ich8lan init");
         self.init_mac_params(hw)?;
         self.init_nvm_params(hw)?;
+        self.init_phy_params(hw)?;
         Ok(())
     }
 
@@ -181,6 +183,48 @@ impl DevSpecIch8lan {
 
         Ok(())
     }
+
+    fn init_phy_params<K: KernelFunc>(&mut self, hw: &mut Hw<K>) -> Result {
+        if (hw.phy.media_type != MediaType::media_type_copper) {
+            hw.phy.kind = PhyType::None;
+            return Ok(());
+        }
+
+        hw.phy.addr = 1;
+        hw.phy.reset_delay_us = 100;
+
+        hw.determine_phy_address()?;
+
+        hw.phy.id = 0;
+
+        for _ in 0..100 {
+            hw.get_phy_id()?;
+            if hw.get_phy_type_from_id(hw.phy.id) != PhyType::Unknown {
+                break;
+            }
+        }
+
+        match hw.phy.id {
+            IGP03E1000_E_PHY_ID => {
+                hw.phy.kind = PhyType::Igp3;
+                hw.phy.autoneg_mask = AUTONEG_ADVERTISE_SPEED_DEFAULT;
+            }
+            IFE_E_PHY_ID | IFE_PLUS_E_PHY_ID | IFE_C_E_PHY_ID => {
+                hw.phy.kind = PhyType::Ife;
+                hw.phy.autoneg_mask = E1000_ALL_NOT_GIG;
+            }
+            BME1000_E_PHY_ID => {
+                hw.phy.kind = PhyType::Bm;
+                hw.phy.autoneg_mask = AUTONEG_ADVERTISE_SPEED_DEFAULT;
+            }
+            _ => {
+                return Err(Error::Unknown("Phy id err"));
+            }
+        }
+
+        Ok(())
+    }
+
     /**
      *  e1000e_set_kmrn_lock_loss_workaround_ich8lan - Set Kumeran workaround state
      *  @hw: pointer to the HW structure

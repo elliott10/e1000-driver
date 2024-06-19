@@ -214,15 +214,16 @@ where
                 "1000"
             }
         );
-        let pba = self.read_pba_string_generic().unwrap();
-        let p = if pba.len() > 0 {
-            let s = CStr::from_bytes_until_nul(&pba).unwrap();
-            s.to_str().unwrap()
-        } else {
-            "unknown"
-        };
+        info!("MAC: {:?}, PHY: {:?}", mac_kind, phy_kind);
+        // let pba = self.read_pba_string_generic().unwrap();
+        // let p = if pba.len() > 0 {
+        //     let s = CStr::from_bytes_until_nul(&pba).unwrap();
+        //     s.to_str().unwrap()
+        // } else {
+        //     "unknown"
+        // };
 
-        info!("MAC: {:?}, PHY: {:?}, PBA No: {}", mac_kind, phy_kind, p);
+        // info!("MAC: {:?}, PHY: {:?}, PBA No: {}", mac_kind, phy_kind, p);
     }
 
     fn read_pba_string_generic(&mut self) -> Result<[u8; PBANUM_LENGTH]> {
@@ -977,7 +978,7 @@ where
         let hw = hw.as_mut();
 
         if hw.fc.requested_mode == FcMode::Default {
-            return self.set_default_fc_generic();
+            // return self.set_default_fc_generic();
         }
         /* Save off the requested flow control mode for use later.  Depending
          * on the link partner's capabilities, we may or may not use this mode.
@@ -1693,7 +1694,6 @@ where
             return Ok(());
         }
 
-        info!("intr {}!", irq);
         let mut hw = self.hw.clone();
         let hw = hw.as_mut();
 

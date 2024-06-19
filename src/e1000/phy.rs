@@ -56,3 +56,5 @@ pub(crate) const I82577_PHY_CTRL2_MDIX_CFG_MASK: u16 = 0x0600;
 // I82577 PHY Diagnostics Status
 pub(crate) const I82577_DSTATUS_CABLE_LENGTH: u16 = 0x03FC;
 pub(crate) const I82577_DSTATUS_CABLE_LENGTH_SHIFT: u8 = 2;
+
+pub(crate) const MAX_PHY_ADDR: u32 = 8;

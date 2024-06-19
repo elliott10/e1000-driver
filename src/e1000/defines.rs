@@ -479,8 +479,8 @@ pub(crate) const GEN_POLL_TIMEOUT: usize = 640;
 // Generic MII registers
 pub(crate) const MII_BMCR: u32 = 0x00; // Basic mode control register
 pub(crate) const MII_BMSR: u32 = 0x01; // Basic mode status register
-pub(crate) const MII_PHYSID1: u8 = 0x02; // PHYS ID 1
-pub(crate) const MII_PHYSID2: u8 = 0x03; // PHYS ID 2
+pub(crate) const MII_PHYSID1: u32 = 0x02; // PHYS ID 1
+pub(crate) const MII_PHYSID2: u32 = 0x03; // PHYS ID 2
 pub(crate) const MII_ADVERTISE: u32 = 0x04; // Advertisement control register
 pub(crate) const MII_LPA: u32 = 0x05; // Link partner ability register
 pub(crate) const MII_EXPANSION: u32 = 0x06; // Expansion register
@@ -712,3 +712,23 @@ pub(crate) const PCIE_NO_SNOOP_ALL: u32 = GCR_RXD_NO_SNOOP
 
 pub(crate) const FFLT_DBG_DONT_GATE_WAKE_DMA_CLK: u32 = 0x1000;
 
+pub(crate) const M88E1000_E_PHY_ID: u32 = 0x01410C50;
+pub(crate) const M88E1000_I_PHY_ID: u32 = 0x01410C30;
+pub(crate) const M88E1011_I_PHY_ID: u32 = 0x01410C20;
+pub(crate) const IGP01E1000_I_PHY_ID: u32 = 0x02A80380;
+pub(crate) const M88E1111_I_PHY_ID: u32 = 0x01410CC0;
+pub(crate) const GG82563_E_PHY_ID: u32 = 0x01410CA0;
+pub(crate) const IGP03E1000_E_PHY_ID: u32 = 0x02A80390;
+pub(crate) const IFE_E_PHY_ID: u32 = 0x02A80330;
+pub(crate) const IFE_PLUS_E_PHY_ID: u32 = 0x02A80320;
+pub(crate) const IFE_C_E_PHY_ID: u32 = 0x02A80310;
+pub(crate) const BME1000_E_PHY_ID: u32 = 0x01410CB0;
+pub(crate) const BME1000_E_PHY_ID_R2: u32 = 0x01410CB1;
+pub(crate) const I82577_E_PHY_ID: u32 = 0x01540050;
+pub(crate) const I82578_E_PHY_ID: u32 = 0x004DD040;
+pub(crate) const I82579_E_PHY_ID: u32 = 0x01540090;
+pub(crate) const I217_E_PHY_ID: u32 = 0x015400A0;
+
+
+pub(crate) const PHY_REVISION_MASK: u32 = 0xFFFFFFF0;
+pub(crate) const MAX_PHY_MULTI_PAGE_REG: u8 = 0xF;

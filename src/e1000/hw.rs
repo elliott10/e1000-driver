@@ -1,5 +1,6 @@
 use b82571::DevSpec82571;
 use defines::*;
+use phy::*;
 
 use super::ich8lan::DevSpecIch8lan;
 use super::regs::*;
@@ -705,7 +706,110 @@ where
             }
         }
     }
+    /**
+     *  e1000e_get_phy_id - Retrieve the PHY ID and revision
+     *  @hw: pointer to the HW structure
+     *
+     *  Reads the PHY registers and stores the PHY ID and possibly the PHY
+     *  revision in the hardware structure.
+     **/
+    pub(crate) fn get_phy_id(&mut self) -> Result {
+        for _ in 0..2 {
+            let mut phy_id: u16 = self.e1e_rphy(MII_PHYSID1)?;
+            self.phy.id = (phy_id as u32) << 16;
+            self.kernel.delay(20_000);
+            phy_id = self.e1e_rphy(MII_PHYSID2)?;
 
+            self.phy.id |= (phy_id as u32 & PHY_REVISION_MASK);
+            self.phy.revision = (phy_id as u32 & !PHY_REVISION_MASK);
+
+            if (self.phy.id != 0 && self.phy.id != PHY_REVISION_MASK) {
+                return Ok(());
+            }
+        }
+
+        return Ok(());
+    }
+
+    /**
+     *  get_phy_type_from_id - Get PHY type from id
+     *  @phy_id: phy_id read from the phy
+     *
+     *  Returns the phy type from the id.
+     **/
+    pub(crate) fn get_phy_type_from_id(&self, phy_id: u32) -> PhyType {
+        let mut phy_type = PhyType::Unknown;
+
+        match phy_id {
+            M88E1000_I_PHY_ID | M88E1000_E_PHY_ID | M88E1111_I_PHY_ID | M88E1011_I_PHY_ID => {
+                phy_type = PhyType::M88;
+            }
+            IGP01E1000_I_PHY_ID => {
+                /* IGP 1 & 2 share this */
+                phy_type = PhyType::Igp2;
+            }
+            GG82563_E_PHY_ID => {
+                phy_type = PhyType::Gg82563;
+            }
+            IGP03E1000_E_PHY_ID => {
+                phy_type = PhyType::Igp3;
+            }
+            IFE_E_PHY_ID | IFE_PLUS_E_PHY_ID | IFE_C_E_PHY_ID => {
+                phy_type = PhyType::Ife;
+            }
+            BME1000_E_PHY_ID | BME1000_E_PHY_ID_R2 => {
+                phy_type = PhyType::Bm;
+            }
+            I82578_E_PHY_ID => {
+                phy_type = PhyType::T82578;
+            }
+            I82577_E_PHY_ID => {
+                phy_type = PhyType::T82577;
+            }
+            I82579_E_PHY_ID => {
+                phy_type = PhyType::T82579;
+            }
+            I217_E_PHY_ID => {
+                phy_type = PhyType::I217;
+            }
+            _ => {
+                phy_type = PhyType::Unknown;
+            }
+        }
+        return phy_type;
+    }
+    /**
+     *  e1000e_determine_phy_address - Determines PHY address.
+     *  @hw: pointer to the HW structure
+     *
+     *  This uses a trial and error method to loop through possible PHY
+     *  addresses. It tests each by reading the PHY ID registers and
+     *  checking for a match.
+     **/
+    pub(crate) fn determine_phy_address(&mut self) -> Result {
+        let mut phy_type = PhyType::Unknown;
+        self.phy.id = 0;
+
+        for phy_addr in 0..MAX_PHY_ADDR {
+            self.phy.addr = phy_addr;
+
+            for _ in 0..10 {
+                self.get_phy_id();
+                phy_type = self.get_phy_type_from_id(self.phy.id);
+
+                /* If phy_type is valid, break - we found our
+                 * PHY address
+                 */
+                if (phy_type != PhyType::Unknown) {
+                    return Ok(());
+                }
+
+                self.kernel.delay(1000_000);
+            }
+        }
+
+        return Err(Error::Unknown("Phy type error"));
+    }
     /**
      *  e1000e_clear_hw_cntrs_base - Clear base hardware counters
      *  @hw: pointer to the HW structure
@@ -751,6 +855,59 @@ where
         self.er32(MPTC);
         self.er32(BPTC);
     }
+    fn e1e_rphy(&mut self, offset: u32) -> Result<u16> {
+        self.read_phy_reg_mdic(offset)
+    }
+    fn read_phy_reg_mdic(&mut self, offset: u32) -> Result<u16> {
+        if (offset > MAX_PHY_REG_ADDRESS) {
+            error!("PHY Address {} is out of range", offset);
+            return Err(Error::Unknown("PHY Address"));
+        }
+        /* Set up Op-code, Phy Address, and register offset in the MDI
+         * Control register.  The MAC will take care of interfacing with the
+         * PHY to retrieve the desired data.
+         */
+        let mut mdic =
+            ((offset << MDIC_REG_SHIFT) | (self.phy.addr << MDIC_PHY_SHIFT) | (MDIC_OP_READ));
+
+        self.ew32(MDIC, mdic);
+
+        for _ in 0..GEN_POLL_TIMEOUT {
+            self.kernel.delay(50_000);
+            mdic = self.er32(MDIC);
+            if (mdic & MDIC_READY) > 0 {
+                break;
+            }
+        }
+
+        if (mdic & MDIC_READY) == 0 {
+            error!("MDI Read PHY Reg Address {} did not complete", offset);
+            return Err(Error::Unknown("PHY"));
+        }
+        if (mdic & MDIC_ERROR) > 0 {
+            error!("MDI Read PHY Reg Address {} Error", offset);
+            return Err(Error::Unknown("PHY"));
+        }
+        if (((mdic & MDIC_REG_MASK) >> MDIC_REG_SHIFT) != offset) {
+            error!(
+                "MDI Read offset error - requested {}, returned {}",
+                offset,
+                (mdic & MDIC_REG_MASK) >> MDIC_REG_SHIFT,
+            );
+
+            return Err(Error::Unknown("PHY"));
+        }
+
+        /* Allow some time after each MDIC transaction to avoid
+         * reading duplicate data in the next MDIC transaction.
+         */
+        if (self.mac.kind == MacType::e1000_pch2lan) {
+            self.kernel.delay(100_000);
+        }
+
+        Ok(mdic as u16)
+    }
+
     /**
      * e1000_power_up_phy_copper - Restore copper link in case of PHY power down
      * @hw: pointer to the HW structure

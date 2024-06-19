@@ -31,7 +31,7 @@
 #include <net/checksum.h>
 #include <net/ip6_checksum.h>
 
-char e1000_driver_name[] = "e1000e";
+char e1000_driver_name[] = "e1000_rs";
 
 #define DEFAULT_MSG_ENABLE (NETIF_MSG_DRV | NETIF_MSG_PROBE | NETIF_MSG_LINK)
 static int debug = -1;
