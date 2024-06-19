@@ -125,7 +125,7 @@ impl DevSpecIch8lan {
         self.init_mac_params(hw)?;
         self.init_nvm_params(hw)?;
         self.init_phy_params(hw)?;
-        info!("Phy params ok, phy {:?}", hw.phy.kind);
+        info!("Phy params ok, phy {:?}, address {}", hw.phy.kind, hw.phy.addr);
         Ok(())
     }
 

@@ -910,6 +910,63 @@ where
         Ok(mdic as u16)
     }
 
+    pub(crate) fn e1e_wphy(&mut self, offset: u32, value: u16) -> Result {
+        self.write_phy_reg_mdic(offset, value)
+    }
+    fn write_phy_reg_mdic(&mut self, offset: u32, value: u16) -> Result {
+        if (offset > MAX_PHY_REG_ADDRESS) {
+            error!("PHY Address {} is out of range", offset);
+            return Err(Error::Unknown("PHY Address"));
+        }
+        /* Set up Op-code, Phy Address, and register offset in the MDI
+         * Control register.  The MAC will take care of interfacing with the
+         * PHY to retrieve the desired data.
+         */
+        let mut mdic =
+            ((offset << MDIC_REG_SHIFT) | (self.phy.addr << MDIC_PHY_SHIFT) | (MDIC_OP_WRITE));
+
+        self.ew32(MDIC, mdic);
+
+        for _ in 0..GEN_POLL_TIMEOUT {
+            self.udelay(50);
+            mdic = self.er32(MDIC);
+            if (mdic & MDIC_READY) > 0 {
+                break;
+            }
+        }
+
+        if (mdic & MDIC_READY) == 0 {
+            error!("MDI Read PHY Reg Address {} did not complete", offset);
+            return Err(Error::Unknown("PHY"));
+        }
+        if (mdic & MDIC_ERROR) > 0 {
+            error!("MDI Read PHY Reg Address {} Error", offset);
+            return Err(Error::Unknown("PHY"));
+        }
+        if (((mdic & MDIC_REG_MASK) >> MDIC_REG_SHIFT) != offset) {
+            error!(
+                "MDI Read offset error - requested {}, returned {}",
+                offset,
+                (mdic & MDIC_REG_MASK) >> MDIC_REG_SHIFT,
+            );
+
+            return Err(Error::Unknown("PHY"));
+        }
+
+        /* Allow some time after each MDIC transaction to avoid
+         * reading duplicate data in the next MDIC transaction.
+         */
+        if (self.mac.kind == MacType::e1000_pch2lan) {
+            self.udelay(100);
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn udelay(&self, val: u32) {
+        self.kernel.delay(val as u64 * 1000);
+    }
+
     /**
      * e1000_power_up_phy_copper - Restore copper link in case of PHY power down
      * @hw: pointer to the HW structure

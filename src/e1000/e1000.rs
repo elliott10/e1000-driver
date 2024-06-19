@@ -287,7 +287,7 @@ where
     }
 
     pub fn xmit(&mut self, config: E1000XmitConfig, packet: &[u8]) -> Result<u32> {
-        info!("transmit {}", packet.len());
+        // info!("transmit {}", packet.len());
 
         let tdh = self.er32(TDH(0));
         let mut i = self.er32(TDT(0)) as usize;
@@ -345,7 +345,8 @@ where
             self.rx_ring.next_to_clean = (index + 1) % RX_RING_SIZE;
 
             let desc = &mut self.rx_ring.as_mut()[index];
-            info!("rx index: {}, len: {}", index, len);
+            // info!("rx index: {}, len: {}", index, len);
+
             let mbuf = unsafe { &*slice_from_raw_parts(self.rx_ring.mbufs[index] as *mut u8, len) };
             let mut data = Vec::try_with_capacity(len).unwrap();
             for b in mbuf {
@@ -942,7 +943,7 @@ where
     }
 
     fn power_up_phy(&mut self) -> Result {
-        let mut mii = self.read_phy_reg_mdic(MII_BMCR)?;
+        let mut mii = self.e1e_rphy(MII_BMCR)?;
         mii &= !BMCR_PDOWN;
         self.write_phy_reg_mdic(MII_BMCR, mii)?;
 
@@ -1746,7 +1747,7 @@ where
         let mut i = self.tx_ring.next_to_clean;
         let mut desc = &self.tx_ring.as_ref()[i];
         while (desc.status & (TXD_STAT_DD as u8)) != 0 {
-            info!("tx ok");
+            // info!("tx ok");
 
             pkts += 1;
             bytes += desc.lower & 0xffff;
@@ -2070,7 +2071,7 @@ where
     }
 
     fn e1e_wphy(&mut self, offset: u32, value: u16) -> Result {
-        self.write_phy_reg_mdic(offset, value)
+        self.hw.as_mut().e1e_wphy(offset, value)
     }
 
     pub fn get_stats64(&mut self) -> E1000HWStats {
