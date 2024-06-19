@@ -1,3 +1,5 @@
+use super::regs::PHY_REG;
+
 // IGP01E1000 Specific Registers
 pub(crate) const PHY_PORT_CONFIG: u16 = 0x10; // Port Config
 pub(crate) const PHY_PORT_STATUS: u16 = 0x11; // Status
@@ -58,3 +60,11 @@ pub(crate) const I82577_DSTATUS_CABLE_LENGTH: u16 = 0x03FC;
 pub(crate) const I82577_DSTATUS_CABLE_LENGTH_SHIFT: u8 = 2;
 
 pub(crate) const MAX_PHY_ADDR: u32 = 8;
+
+
+pub(crate) const BM_WUC_ENABLE_BIT: u16 = 1 << 2;
+pub(crate) const BM_WUC_HOST_WU_BIT: u16 = 1 << 4;
+pub(crate) const BM_WUC_ME_WU_BIT: u16 = 1 << 5;
+
+
+pub(crate) const BM_PORT_GEN_CFG: u32 = PHY_REG(BM_PORT_CTRL_PAGE, 17);

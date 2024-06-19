@@ -6,6 +6,7 @@ use super::NvmType;
 use super::{DevSpecParam, Hw};
 use crate::defines::*;
 use crate::err::*;
+use crate::phy::*;
 use crate::BoardVariant;
 use crate::KernelFunc;
 use crate::MacType;
@@ -40,6 +41,10 @@ pub(crate) const ICH_FLASH_PR0: usize = 0x0074; // Protected Range Register 0
 pub(crate) const ICH_FLASH_READ_COMMAND_TIMEOUT: u32 = 10000000;
 pub(crate) const ICH_FLASH_WRITE_COMMAND_TIMEOUT: u32 = 10000000;
 pub(crate) const ICH_FLASH_ERASE_COMMAND_TIMEOUT: u32 = 10000000;
+
+pub(crate) const ICH_FWSM_RSPCIPHY: u32 = 0x00000040; // Reset PHY on PCI Reset
+
+const ICH8_LAN_INIT_TIMEOUT: usize = 1500;
 
 // Mask for linear address in flash operations.
 pub(crate) const ICH_FLASH_LINEAR_ADDR_MASK: u32 = 0x00FFFFFF;
@@ -125,7 +130,10 @@ impl DevSpecIch8lan {
         self.init_mac_params(hw)?;
         self.init_nvm_params(hw)?;
         self.init_phy_params(hw)?;
-        info!("Phy params ok, phy {:?}, address {}", hw.phy.kind, hw.phy.addr);
+        info!(
+            "Phy params ok, phy {:?}, address {}",
+            hw.phy.kind, hw.phy.addr
+        );
         Ok(())
     }
 
@@ -147,7 +155,7 @@ impl DevSpecIch8lan {
 
         // // TODO led
 
-        if hw.mac.kind > MacType::e1000_pch_lpt {
+        if hw.mac.kind >= MacType::e1000_pch_lpt {
             hw.mac.rar_entry_count = E1000_PCH_LPT_RAR_ENTRIES;
         }
 
@@ -375,7 +383,26 @@ impl DevSpecIch8lan {
         hw.er32(IAC);
         hw.er32(ICRXOC);
     }
+    /**
+     *  e1000_check_reset_block_ich8lan - Check if PHY reset is blocked
+     *  @hw: pointer to the HW structure
+     *
+     *  Checks if firmware is blocking the reset of the PHY.
+     *  This is a function pointer entry point only called by
+     *  reset routines.
+     **/
+    fn check_reset_block<K: KernelFunc>(&self, hw: &mut Hw<K>) -> Result {
+        for _ in 0..30 {
+            let blocked = (hw.er32(FWSM) & ICH_FWSM_RSPCIPHY) == 0;
 
+            if !blocked {
+                return Ok(());
+            }
+            hw.udelay(10000);
+        }
+
+        Err(Error::Unknown("PHY RESET BLOCKED"))
+    }
     pub(crate) fn reset_hw<K: KernelFunc>(&self, hw: &mut Hw<K>) -> Result {
         let mut res = hw.disable_pcie_master();
         if res.is_err() {
@@ -421,7 +448,9 @@ impl DevSpecIch8lan {
         // 	 * time to make sure the interface between MAC and the
         // 	 * external PHY is reset.
         // 	 */
-        ctrl |= CTRL_PHY_RST;
+        if self.check_reset_block(hw).is_ok() {
+            ctrl |= CTRL_PHY_RST;
+        }
 
         // 	/* Gate automatic PHY configuration by hardware on
         // 	 * non-managed 82579
@@ -448,16 +477,12 @@ impl DevSpecIch8lan {
         // if (!ret_val)
         // 	clear_bit(__E1000_ACCESS_SHARED_RESOURCE, &hw->adapter->state);
 
-        // if (ctrl & E1000_CTRL_PHY_RST) {
-        // 	ret_val = hw->phy.ops.get_cfg_done(hw);
-        // 	if (ret_val)
-        // 		return ret_val;
-
-        // 	ret_val = e1000_post_phy_reset_ich8lan(hw);
-        // 	if (ret_val)
-        // 		return ret_val;
-        // }
-
+        if (ctrl & CTRL_PHY_RST) > 0 {
+            info!("Phy reset");
+            self.get_cfg_done(hw)?;
+            self.post_phy_reset(hw)?;
+            info!("Phy reset ok");
+        }
         // /* For PCH, this write will make sure that any noise
         //  * will be detected as a CRC error and be dropped rather than show up
         //  * as a bad packet to the DMA engine.
@@ -471,6 +496,107 @@ impl DevSpecIch8lan {
         let mut reg = hw.er32(KABGTXD);
         reg |= KABGTXD_BGSQLBIAS;
         hw.ew32(KABGTXD, reg);
+
+        Ok(())
+    }
+    /**
+     *  e1000_post_phy_reset_ich8lan - Perform steps required after a PHY reset
+     *  @hw: pointer to the HW structure
+     **/
+    fn post_phy_reset<K: KernelFunc>(&self, hw: &mut Hw<K>) -> Result {
+        info!("post phy reset");
+
+        /* Allow time for h/w to get to quiescent state after reset */
+        hw.udelay(10000);
+
+        /* Perform any necessary post-reset workarounds */
+
+        /* Clear the host wakeup bit after lcd reset */
+        if (hw.mac.kind >= MacType::e1000_pchlan) {
+            let mut reg = hw.e1e_rphy(BM_PORT_GEN_CFG)?;
+            reg &= !BM_WUC_HOST_WU_BIT;
+            hw.e1e_wphy(BM_PORT_GEN_CFG, reg)?;
+        }
+
+        /* Configure the LCD with the extended configuration region in NVM */
+        // ret_val = e1000_sw_lcd_config_ich8lan(hw);
+        // if (ret_val)
+        // 	return ret_val;
+
+        /* Configure the LCD with the OEM bits in NVM */
+        // ret_val = e1000_oem_bits_config_ich8lan(hw, true);
+
+        Ok(())
+    }
+    /**
+     *  e1000_lan_init_done_ich8lan - Check for PHY config completion
+     *  @hw: pointer to the HW structure
+     *
+     *  Check the appropriate indication the MAC has finished configuring the
+     *  PHY after a software reset.
+     **/
+    fn lan_init_done<K: KernelFunc>(&self, hw: &mut Hw<K>) {
+        /* Wait for basic configuration completes before proceeding */
+        for _ in 0..ICH8_LAN_INIT_TIMEOUT {
+            let mut data = hw.er32(STATUS);
+            data &= STATUS_LAN_INIT_DONE;
+            hw.udelay(100);
+
+            if data > 0 {
+                /* Clear the Init Done bit for the next init event */
+                data = hw.er32(STATUS);
+                data &= !STATUS_LAN_INIT_DONE;
+                hw.ew32(STATUS, data);
+                return;
+            }
+        }
+        /* If basic configuration is incomplete before the above loop
+         * count reaches 0, loading the configuration from NVM will
+         * leave the PHY in a bad state possibly resulting in no link.
+         */
+
+        error!("LAN_INIT_DONE not set, increase timeout");
+    }
+
+    /**
+     *  e1000_get_cfg_done_ich8lan - Read config done bit after Full or PHY reset
+     *  @hw: pointer to the HW structure
+     *
+     *  Read appropriate register for the config done bit for completion status
+     *  and configure the PHY through s/w for EEPROM-less parts.
+     *
+     *  NOTE: some silicon which is EEPROM-less will fail trying to read the
+     *  config done bit, so only an error is logged and continues.  If we were
+     *  to return with error, EEPROM-less silicon would not be able to be reset
+     *  or change link.
+     **/
+    fn get_cfg_done<K: KernelFunc>(&self, hw: &mut Hw<K>) -> Result {
+        hw.udelay(20000);
+
+        /* Wait for indication from h/w that it has completed basic config */
+        if (hw.mac.kind >= MacType::e1000_ich10lan) {
+            self.lan_init_done(hw);
+        }
+
+        info!("Clear PHY Reset Asserted bit");
+        /* Clear PHY Reset Asserted bit */
+        let mut status = hw.er32(STATUS);
+        if (status & STATUS_PHYRA) > 0 {
+            hw.ew32(STATUS, status & !STATUS_PHYRA);
+        } else {
+            warn!("PHY Reset Asserted not set - needs delay");
+        }
+
+        /* If EEPROM is not marked present, init the IGP 3 PHY manually */
+        if (hw.mac.kind <= MacType::e1000_ich9lan) {
+            // if (!(er32(EECD) & EECD_PRES) &&
+            // (hw->phy.type == e1000_phy_igp_3)) {
+            // e1000e_phy_init_script_igp3(hw);
+            // }
+            error!("hw.mac.kind <= MacType:: e1000_ich9lan");
+        } else {
+            self.valid_nvm_bank_detect(hw)?;
+        }
 
         Ok(())
     }
@@ -710,6 +836,8 @@ impl DevSpecIch8lan {
     }
 
     pub(crate) fn valid_nvm_bank_detect<K: KernelFunc>(&self, hw: &mut Hw<K>) -> Result<u32> {
+        info!("valid_nvm_bank_detect");
+
         let bank1_offset = hw.nvm.flash_bank_size as usize;
         let act_offset = ICH_NVM_SIG_WORD;
 

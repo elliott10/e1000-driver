@@ -175,7 +175,7 @@ pub(crate) const FCRTV_PCH: usize = 0x05F40; // PCH Flow Control Refresh Timer V
 pub(crate) const PHY_PAGE_SHIFT: u32 = 5;
 pub(crate) const MAX_PHY_REG_ADDRESS: u32 = 0x1F; // Assuming this is the maximum register address
 
-pub(crate) fn PHY_REG(page: u32, reg: u32) -> u32 {
+pub(crate) const  fn PHY_REG(page: u32, reg: u32) -> u32 {
     // Use bitwise shift and AND operation to combine page and register
     (page << PHY_PAGE_SHIFT) | (reg & MAX_PHY_REG_ADDRESS)
 }

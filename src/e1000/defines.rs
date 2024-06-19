@@ -282,7 +282,7 @@ pub fn RXDCTL(n: usize) -> usize {
     }
 }
 
-pub fn BIT(n: usize) -> u32 {
+pub(crate) const fn BIT(n: usize) -> u32 {
     (1 << n) as u32
 }
 
