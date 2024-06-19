@@ -732,3 +732,5 @@ pub(crate) const I217_E_PHY_ID: u32 = 0x015400A0;
 
 pub(crate) const PHY_REVISION_MASK: u32 = 0xFFFFFFF0;
 pub(crate) const MAX_PHY_MULTI_PAGE_REG: u8 = 0xF;
+
+pub(crate) const KABGTXD_BGSQLBIAS: u32 = 0x00050000; // Band Gap SQL BIAS

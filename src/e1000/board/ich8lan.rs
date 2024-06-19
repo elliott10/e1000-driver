@@ -1,4 +1,5 @@
 use super::super::regs::*;
+use super::BusWidth;
 use super::DevSpec;
 use super::NvmInfo;
 use super::NvmType;
@@ -124,6 +125,7 @@ impl DevSpecIch8lan {
         self.init_mac_params(hw)?;
         self.init_nvm_params(hw)?;
         self.init_phy_params(hw)?;
+        info!("Phy params ok, phy {:?}", hw.phy.kind);
         Ok(())
     }
 
@@ -192,35 +194,9 @@ impl DevSpecIch8lan {
 
         hw.phy.addr = 1;
         hw.phy.reset_delay_us = 100;
+        hw.phy.autoneg_mask = AUTONEG_ADVERTISE_SPEED_DEFAULT;
 
         hw.determine_phy_address()?;
-
-        hw.phy.id = 0;
-
-        for _ in 0..100 {
-            hw.get_phy_id()?;
-            if hw.get_phy_type_from_id(hw.phy.id) != PhyType::Unknown {
-                break;
-            }
-        }
-
-        match hw.phy.id {
-            IGP03E1000_E_PHY_ID => {
-                hw.phy.kind = PhyType::Igp3;
-                hw.phy.autoneg_mask = AUTONEG_ADVERTISE_SPEED_DEFAULT;
-            }
-            IFE_E_PHY_ID | IFE_PLUS_E_PHY_ID | IFE_C_E_PHY_ID => {
-                hw.phy.kind = PhyType::Ife;
-                hw.phy.autoneg_mask = E1000_ALL_NOT_GIG;
-            }
-            BME1000_E_PHY_ID => {
-                hw.phy.kind = PhyType::Bm;
-                hw.phy.autoneg_mask = AUTONEG_ADVERTISE_SPEED_DEFAULT;
-            }
-            _ => {
-                return Err(Error::Unknown("Phy id err"));
-            }
-        }
 
         Ok(())
     }
@@ -405,7 +381,7 @@ impl DevSpecIch8lan {
         if res.is_err() {
             error!("PCI-E Master disable polling has failed.");
         }
-        debug!("Masking off all interrupts");
+        info!("Masking off all interrupts");
 
         hw.ew32(IMC, 0xffffffff);
 
@@ -438,14 +414,14 @@ impl DevSpecIch8lan {
         // 			self.nvm_k1_enabled = false;}
         // 	}
 
-        //  let mut	ctrl =hw. er32(CTRL);
+        let mut ctrl = hw.er32(CTRL);
 
         // if (!hw->phy.ops.check_reset_block(hw)) {
         // 	/* Full-chip reset requires MAC and PHY reset at the same
         // 	 * time to make sure the interface between MAC and the
         // 	 * external PHY is reset.
         // 	 */
-        // 	ctrl |= E1000_CTRL_PHY_RST;
+        ctrl |= CTRL_PHY_RST;
 
         // 	/* Gate automatic PHY configuration by hardware on
         // 	 * non-managed 82579
@@ -455,10 +431,11 @@ impl DevSpecIch8lan {
         // 		e1000_gate_hw_phy_config_ich8lan(hw, true);
         // }
         // ret_val = e1000_acquire_swflag_ich8lan(hw);
-        // e_dbg("Issuing a global reset to ich8lan\n");
-        // ew32(CTRL, (ctrl | E1000_CTRL_RST));
-        // /* cannot issue a flush here because it hangs the hardware */
-        // msleep(20);
+        info!("Issuing a global reset to ich8lan");
+        hw.ew32(CTRL, (ctrl | CTRL_RST));
+        /* cannot issue a flush here because it hangs the hardware */
+
+        hw.kernel.delay(20_000);
 
         // /* Set Phy Config Counter to 50msec */
         // if (hw->mac.type == e1000_pch2lan) {
@@ -488,12 +465,12 @@ impl DevSpecIch8lan {
         // if (hw->mac.type == e1000_pchlan)
         // 	ew32(CRC_OFFSET, 0x65656565);
 
-        // ew32(IMC, 0xffffffff);
-        // er32(ICR);
+        hw.ew32(IMC, 0xffffffff);
+        hw.er32(ICR);
 
-        // reg = er32(KABGTXD);
-        // reg |= E1000_KABGTXD_BGSQLBIAS;
-        // ew32(KABGTXD, reg);
+        let mut reg = hw.er32(KABGTXD);
+        reg |= KABGTXD_BGSQLBIAS;
+        hw.ew32(KABGTXD, reg);
 
         Ok(())
     }
@@ -840,5 +817,21 @@ impl DevSpecIch8lan {
         /* Must convert word offset into bytes. */
         offset <<= 1;
         return self.read_flash_data(hw, offset, 2);
+    }
+
+    pub(crate) fn get_bus_info<K: KernelFunc>(&mut self, hw: &mut Hw<K>) -> Result {
+        let bus_info = hw.kernel.pcie_info();
+        hw.bus.width = unsafe { *(&bus_info.bus_link_width as *const u16 as *const BusWidth) };
+
+        /* ICH devices are "PCI Express"-ish.  They have
+         * a configuration space, but do not contain
+         * PCI Express Capability registers, so bus width
+         * must be hardcoded.
+         */
+        if hw.bus.width == BusWidth::Unknown {
+            hw.bus.width = BusWidth::PcieX1;
+        }
+
+        Ok(())
     }
 }

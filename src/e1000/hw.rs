@@ -787,6 +787,7 @@ where
      *  checking for a match.
      **/
     pub(crate) fn determine_phy_address(&mut self) -> Result {
+        info!("Determining PHY address");
         let mut phy_type = PhyType::Unknown;
         self.phy.id = 0;
 
@@ -801,6 +802,7 @@ where
                  * PHY address
                  */
                 if (phy_type != PhyType::Unknown) {
+                    self.phy.kind = phy_type;
                     return Ok(());
                 }
 
@@ -855,7 +857,7 @@ where
         self.er32(MPTC);
         self.er32(BPTC);
     }
-    fn e1e_rphy(&mut self, offset: u32) -> Result<u16> {
+    pub(crate) fn e1e_rphy(&mut self, offset: u32) -> Result<u16> {
         self.read_phy_reg_mdic(offset)
     }
     fn read_phy_reg_mdic(&mut self, offset: u32) -> Result<u16> {
@@ -1070,6 +1072,7 @@ impl DevSpec {
     }
 
     pub(crate) fn reset_hw<K: KernelFunc>(&self, hw: &mut Hw<K>) -> Result {
+        info!("reset hw");
         match self {
             DevSpec::E82571(i) => i.reset_hw(hw),
             DevSpec::E80003es2lan => todo!(),

@@ -2066,7 +2066,7 @@ where
     }
 
     fn e1e_rphy(&mut self, offset: u32) -> Result<u16> {
-        self.read_phy_reg_mdic(offset)
+        self.hw.as_mut().e1e_rphy(offset)
     }
 
     fn e1e_wphy(&mut self, offset: u32, value: u16) -> Result {

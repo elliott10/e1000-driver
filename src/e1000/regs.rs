@@ -179,3 +179,6 @@ pub(crate) fn PHY_REG(page: u32, reg: u32) -> u32 {
     // Use bitwise shift and AND operation to combine page and register
     (page << PHY_PAGE_SHIFT) | (reg & MAX_PHY_REG_ADDRESS)
 }
+
+
+pub(crate) const KABGTXD: usize = 0x03004; // AFE Band Gap Transmit Ref Data
