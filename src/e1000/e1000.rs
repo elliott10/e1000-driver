@@ -90,6 +90,9 @@ where
         self.check_opention();
         self.read_mac_addr_generic();
         self.get_variants()?;
+
+        self.print_status();
+
         self.dev_spec.get_bus_info(self.hw.clone().as_mut());
         self.hw.as_mut().phy.autoneg_wait_to_complete = false;
         self.hw.as_mut().phy.copper_options();
@@ -99,12 +102,12 @@ where
 
         let mut binding = self.hw.clone();
         let hw2 = binding.as_mut();
-        // self.dev_spec.reset_hw(hw2);
-        // self.print_status();
-        // self.reset();
-
+        self.dev_spec.reset_hw(hw2);
         self.print_status();
-        self.simple_reset();
+        self.reset();
+
+        // self.print_status();
+        // self.simple_reset();
 
         self.print_status();
 
@@ -980,6 +983,9 @@ where
         self.print_status();
 
         let mut mii = self.e1e_rphy(MII_BMCR)?;
+
+        info!("mmi: {:#X}", mii);
+
         mii &= !BMCR_PDOWN;
         self.e1e_wphy(MII_BMCR, mii)?;
         info!("power up phy");

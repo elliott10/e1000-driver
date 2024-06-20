@@ -878,7 +878,7 @@ where
         self.ew32(MDIC, mdic);
 
         for _ in 0..GEN_POLL_TIMEOUT {
-            self.kernel.delay(50_000);
+            self.udelay(50);
             mdic = self.er32(MDIC);
             if (mdic & MDIC_READY) > 0 {
                 break;
@@ -921,7 +921,7 @@ where
     }
 
     /**
-     *  e1000_get_phy_addr_for_hv_page - Get PHY address based on page
+     *  get_phy_addr_for_hv_page - Get PHY address based on page
      *  @page: page to be accessed
      **/
     fn get_phy_addr_for_hv_page(&mut self, page: u16) -> u32 {
@@ -962,7 +962,8 @@ where
         }
 
         info!(
-            "reading PHY page {} (or {:#X} shifted) reg {:#X}",
+            "reading PHY addr {} page {} (or {:#X} shifted) reg {:#X}",
+            self.phy.addr,
             page,
             page << IGP_PAGE_SHIFT,
             reg
@@ -998,7 +999,8 @@ where
         }
 
         info!(
-            "writing PHY page {} (or {:#X} shifted) reg {:#X}",
+            "writing PHY addr {} page {} (or {:#X} shifted) reg {:#X}",
+            self.phy.addr,
             page,
             page << IGP_PAGE_SHIFT,
             reg
@@ -1112,6 +1114,9 @@ where
         // mii_reg &= ~BMCR_PDOWN;
         // e1e_wphy(hw, MII_BMCR, mii_reg);
     }
+
+
+
 }
 
 #[derive(Clone)]

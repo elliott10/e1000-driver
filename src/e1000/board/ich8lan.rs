@@ -70,6 +70,10 @@ const ICH_NVM_SIG_WORD: usize = 0x13;
 const ICH_NVM_SIG_MASK: u16 = 0xC000;
 const ICH_NVM_VALID_SIG_MASK: u8 = 0xC0;
 const ICH_NVM_SIG_VALUE: u8 = 0x80;
+
+const FEXTNVM3_PHY_CFG_COUNTER_MASK: u32 = 0x0C000000;
+const FEXTNVM3_PHY_CFG_COUNTER_50MSEC: u32 = 0x08000000;
+
 struct FlashCtrl {
     value: u16,
 }
@@ -101,6 +105,14 @@ pub(crate) struct ShadowRam {
 }
 const E1000_ICH8_SHADOW_RAM_WORDS: usize = 2048;
 
+/* I218 PHY Ultra Low Power (ULP) states */
+#[derive(Debug)]
+pub(crate) enum UlpState {
+    Unknown,
+    Off,
+    On,
+}
+
 #[derive(Debug)]
 pub(crate) struct DevSpecIch8lan {
     pub(crate) kmrn_lock_loss_workaround_enabled: bool,
@@ -108,7 +120,7 @@ pub(crate) struct DevSpecIch8lan {
     pub(crate) nvm_k1_enabled: bool,
     pub(crate) eee_disable: bool,
     pub(crate) eee_lp_ability: u16,
-    // pub ulp_state: E1000UlpState,
+    pub ulp_state: UlpState,
 }
 
 impl Default for DevSpecIch8lan {
@@ -124,6 +136,7 @@ impl Default for DevSpecIch8lan {
             nvm_k1_enabled: Default::default(),
             eee_disable: Default::default(),
             eee_lp_ability: Default::default(),
+            ulp_state: UlpState::Unknown,
         }
     }
 }
@@ -213,10 +226,222 @@ impl DevSpecIch8lan {
         hw.phy.addr = 1;
         hw.phy.reset_delay_us = 100;
         hw.phy.autoneg_mask = AUTONEG_ADVERTISE_SPEED_DEFAULT;
+        hw.phy.id = 0;
 
-        hw.determine_phy_address()?;
+        self.init_phy_workarounds(hw)?;
+
+        self.set_mdio_slow_mode_hv(hw)?;
+
+        hw.get_phy_id()?;
+
+        hw.phy.kind = hw.get_phy_type_from_id(hw.phy.id);
 
         Ok(())
+    }
+
+
+
+    fn init_phy_workarounds<K: KernelFunc>(&mut self, hw: &mut Hw<K>) -> Result {
+        let fwsm = hw.er32(FWSM);
+
+        self.gate_hw_phy_config(hw, true);
+
+        self.ulp_state = UlpState::Unknown;
+
+        if !self.phy_is_accessible(hw) {
+            info!("PHY access is disabled");
+            let mut mac_reg = hw.er32(CTRL_EXT);
+            mac_reg |= CTRL_EXT_FORCE_SMBUS;
+            hw.ew32(CTRL_EXT, mac_reg);
+
+            hw.udelay(50_000);
+
+            if !self.phy_is_accessible(hw) {
+                if self.check_reset_block(hw).is_err() {
+                    error!("Required LANPHYPC toggle blocked by ME");
+                    return Err(Error::Unknown("Required LANPHYPC toggle blocked by ME"));
+                }
+                self.toggle_lanphypc_pch_lpt(hw);
+
+                if !self.phy_is_accessible(hw) {
+                    error!("LANPHYPC toggle failed");
+                    return Err(Error::Unknown("LANPHYPC toggle failed"));
+                }
+            }
+        }
+
+        self.phy_hw_reset_generic(hw)?;
+
+        if self.check_reset_block(hw).is_err() {
+            error!("ME blocked access to PHY after reset");
+            return Err(Error::Unknown("check_reset_block failed"));
+        }
+
+        Ok(())
+    }
+    fn toggle_lanphypc_pch_lpt<K: KernelFunc>(&mut self, hw: &mut Hw<K>) {
+        /* Set Phy Config Counter to 50msec */
+        let mut mac_reg = hw.er32(FEXTNVM3);
+        mac_reg &= !FEXTNVM3_PHY_CFG_COUNTER_MASK;
+        mac_reg |= FEXTNVM3_PHY_CFG_COUNTER_50MSEC;
+        hw.ew32(FEXTNVM3, mac_reg);
+
+        /* Toggle LANPHYPC Value bit */
+        mac_reg = hw.er32(CTRL);
+        mac_reg |= CTRL_LANPHYPC_OVERRIDE;
+        mac_reg &= !CTRL_LANPHYPC_VALUE;
+        hw.ew32(CTRL, mac_reg);
+        hw.e1e_flush();
+        hw.udelay(20);
+        mac_reg &= !CTRL_LANPHYPC_OVERRIDE;
+        hw.ew32(CTRL, mac_reg);
+        hw.e1e_flush();
+
+        if (hw.mac.kind < MacType::e1000_pch_lpt) {
+            hw.udelay(50_000);
+        } else {
+            for _ in 0..20 {
+                hw.udelay(5000);
+                if hw.er32(CTRL_EXT) & CTRL_EXT_LPCD > 0 {
+                    break;
+                }
+            }
+
+            hw.udelay(30_000);
+        }
+    }
+
+    /**
+     *  e1000_set_mdio_slow_mode_hv - Set slow MDIO access mode
+     *  @hw:   pointer to the HW structure
+     **/
+    fn set_mdio_slow_mode_hv<K: KernelFunc>(&mut self, hw: &mut Hw<K>) -> Result {
+        let mut data = hw.e1e_rphy(HV_KMRN_MODE_CTRL)?;
+
+        data |= HV_KMRN_MDIO_SLOW;
+
+        hw.e1e_wphy(HV_KMRN_MODE_CTRL, data)
+    }
+
+    fn phy_hw_reset_generic<K: KernelFunc>(&mut self, hw: &mut Hw<K>) -> Result {
+        if self.check_reset_block(hw).is_err() {
+            return Ok(());
+        }
+        info!("PHY reset");
+
+        let mut ctrl = hw.er32(CTRL);
+        hw.ew32(CTRL, ctrl | CTRL_PHY_RST);
+        hw.e1e_flush();
+
+        hw.udelay(hw.phy.reset_delay_us);
+
+        hw.ew32(CTRL, ctrl);
+        hw.e1e_flush();
+
+        hw.udelay(300);
+
+        return self.get_cfg_done(hw);
+    }
+
+    /**
+     *  e1000_phy_is_accessible_pchlan - Check if able to access PHY registers
+     *  @hw: pointer to the HW structure
+     *
+     *  Test access to the PHY registers by reading the PHY ID registers.  If
+     *  the PHY ID is already known (e.g. resume path) compare it with known ID,
+     *  otherwise assume the read PHY ID is correct if it is valid.
+     *
+     *  Assumes the sw/fw/hw semaphore is already acquired.
+     **/
+    fn phy_is_accessible<K: KernelFunc>(&mut self, hw: &mut Hw<K>) -> bool {
+        let mut phy_id = 0;
+        let mut phy_reg = 0;
+
+        for _ in 0..2 {
+            phy_reg = if let Ok(phy_reg) = hw.e1e_rphy(MII_PHYSID1) {
+                if phy_reg == 0xFFFF {
+                    return continue;
+                }
+                phy_reg
+            } else {
+                return continue;
+            };
+
+            phy_id = (phy_reg as u32) << 16;
+
+            phy_reg = if let Ok(phy_reg) = hw.e1e_rphy(MII_PHYSID2) {
+                if phy_reg == 0xFFFF {
+                    return continue;
+                }
+                phy_reg
+            } else {
+                return continue;
+            };
+            phy_id |= (phy_reg as u32 & PHY_REVISION_MASK);
+            break;
+        }
+
+        let mut skip = false;
+
+        if hw.phy.id > 0 {
+            if (hw.phy.id == phy_id) {
+                skip = true;
+            }
+        } else if phy_id > 0 {
+            hw.phy.id = phy_id;
+            hw.phy.revision = (phy_reg as u32 & !PHY_REVISION_MASK);
+            skip = true;
+        }
+
+        if !skip {
+            /* In case the PHY needs to be in mdio slow mode,
+             * set slow mode and try to get the PHY id again.
+             */
+            // if (hw.mac.kind < MacType::e1000_pch_lpt) {
+            // 	ret_val = e1000_set_mdio_slow_mode_hv(hw);
+            // 	if (!ret_val)
+            // 		ret_val = e1000e_get_phy_id(hw);
+            // }
+            return false;
+        }
+
+        if (hw.mac.kind >= MacType::e1000_pch_lpt) {
+            /* Only unforce SMBus if ME is not active */
+            if hw.er32(FWSM) & ICH_FWSM_FW_VALID == 0 {
+                /* Unforce SMBus mode in PHY */
+                phy_reg = match hw.e1e_rphy(CV_SMB_CTRL) {
+                    Ok(d) => d,
+                    Err(_) => return false,
+                };
+                phy_reg &= !CV_SMB_CTRL_FORCE_SMBUS;
+                if hw.e1e_wphy(CV_SMB_CTRL, phy_reg).is_err() {
+                    return false;
+                };
+
+                /* Unforce SMBus mode in MAC */
+                let mut mac_reg = hw.er32(CTRL_EXT);
+                mac_reg &= !CTRL_EXT_FORCE_SMBUS;
+                hw.ew32(CTRL_EXT, mac_reg);
+            }
+        }
+
+        return true;
+    }
+
+    fn gate_hw_phy_config<K: KernelFunc>(&mut self, hw: &mut Hw<K>, gate: bool) {
+        if (hw.mac.kind < MacType:: e1000_pch2lan) {
+            return;
+        }
+
+        let mut extcnf_ctrl = hw.er32(EXTCNF_CTRL);
+
+        if (gate) {
+            extcnf_ctrl |= EXTCNF_CTRL_GATE_PHY_CFG;
+        } else {
+            extcnf_ctrl &= !EXTCNF_CTRL_GATE_PHY_CFG;
+        }
+
+        hw.ew32(EXTCNF_CTRL, extcnf_ctrl);
     }
 
     /**
@@ -427,29 +652,7 @@ impl DevSpecIch8lan {
         hw.ew32(TCTL, TCTL_PSP);
         hw.e1e_flush();
 
-        hw.kernel.delay(10000_000);
-
-        //TODO
-        //     /* Workaround for ICH8 bit corruption issue in FIFO memory */
-        // if (hw.mac.kind ==MacType:: e1000_ich8lan) {
-        // 	/* Set Tx and Rx buffer allocation to 8k apiece. */
-        // 	hw.ew32(PBA, PBA_8K);
-        // 	/* Set Packet Buffer Size to 16k. */
-        // 	hw.ew32(PBS, PBS_16K);
-        // }
-
-        // 	if (hw.mac.kind == MacType:: e1000_pchlan) {
-        // 		/* Save the NVM K1 bit setting */
-        // 		ret_val = self.read_nvm(hw, NVM_K1_CONFIG, 1, &kum_cfg);
-        // 		if (ret_val)
-        // 			return ret_val;
-
-        // 		if (kum_cfg & NVM_K1_ENABLE){
-        // 			self.nvm_k1_enabled = true;
-        //         }
-        // 		else{
-        // 			self.nvm_k1_enabled = false;}
-        // 	}
+        hw.udelay(10000);
 
         let mut ctrl = hw.er32(CTRL);
 
@@ -474,23 +677,12 @@ impl DevSpecIch8lan {
         hw.ew32(CTRL, (ctrl | CTRL_RST));
         /* cannot issue a flush here because it hangs the hardware */
 
-        hw.kernel.delay(20_000);
-
-        // /* Set Phy Config Counter to 50msec */
-        // if (hw->mac.type == e1000_pch2lan) {
-        // 	reg = er32(FEXTNVM3);
-        // 	reg &= ~E1000_FEXTNVM3_PHY_CFG_COUNTER_MASK;
-        // 	reg |= E1000_FEXTNVM3_PHY_CFG_COUNTER_50MSEC;
-        // 	ew32(FEXTNVM3, reg);
-        // }
-
-        // if (!ret_val)
-        // 	clear_bit(__E1000_ACCESS_SHARED_RESOURCE, &hw->adapter->state);
+        hw.udelay(20_000);
 
         if (ctrl & CTRL_PHY_RST) > 0 {
             info!("Phy reset");
             self.get_cfg_done(hw)?;
-            self.post_phy_reset(hw)?;
+            // self.post_phy_reset(hw)?;
             info!("Phy reset ok");
         }
         // /* For PCH, this write will make sure that any noise
@@ -515,6 +707,11 @@ impl DevSpecIch8lan {
      **/
     fn post_phy_reset<K: KernelFunc>(&self, hw: &mut Hw<K>) -> Result {
         info!("post phy reset");
+
+        if self.check_reset_block(hw).is_err() {
+            info!("reset block");
+            return Ok(());
+        }
 
         /* Allow time for h/w to get to quiescent state after reset */
         hw.udelay(10000);

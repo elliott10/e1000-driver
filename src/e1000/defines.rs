@@ -734,3 +734,15 @@ pub(crate) const PHY_REVISION_MASK: u32 = 0xFFFFFFF0;
 pub(crate) const MAX_PHY_MULTI_PAGE_REG: u16 = 0xF;
 
 pub(crate) const KABGTXD_BGSQLBIAS: u32 = 0x00050000; // Band Gap SQL BIAS
+
+
+pub(crate) const EXTCNF_CTRL_MDIO_SW_OWNERSHIP: u32 = 0x00000020;
+pub(crate) const EXTCNF_CTRL_LCD_WRITE_ENABLE: u32 = 0x00000001;
+pub(crate) const EXTCNF_CTRL_OEM_WRITE_ENABLE: u32 = 0x00000008;
+pub(crate) const EXTCNF_CTRL_SWFLAG: u32 = 0x00000020; // Note: This seems to be a duplicate of MDIO_SW_OWNERSHIP.
+pub(crate) const EXTCNF_CTRL_GATE_PHY_CFG: u32 = 0x00000080;
+pub(crate) const EXTCNF_SIZE_EXT_PCIE_LENGTH_MASK: u32 = 0x00FF0000;
+pub(crate) const EXTCNF_SIZE_EXT_PCIE_LENGTH_SHIFT: u32 = 16;
+pub(crate) const EXTCNF_CTRL_EXT_CNF_POINTER_MASK: u32 = 0x0FFF0000;
+pub(crate) const EXTCNF_CTRL_EXT_CNF_POINTER_SHIFT: u32 = 16;
+

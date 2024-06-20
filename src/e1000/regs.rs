@@ -59,7 +59,7 @@ pub(crate) const STRAP_SMT_FREQ_MASK: u32 = 0x00003000;
 pub(crate) const STRAP_SMT_FREQ_SHIFT: u32 = 12;
 
 pub(crate) const FEXTNVM: u16 = 0x00028; // Future Extended NVM - RW
-pub(crate) const FEXTNVM3: u16 = 0x0003C; // Future Extended NVM 3 - RW
+pub(crate) const FEXTNVM3: usize = 0x0003C; // Future Extended NVM 3 - RW
 pub(crate) const FEXTNVM4: u16 = 0x00024; // Future Extended NVM 4 - RW
 pub(crate) const FEXTNVM5: u16 = 0x00014; // Future Extended NVM 5 - RW
 pub(crate) const FEXTNVM6: u16 = 0x00010; // Future Extended NVM 6 - RW
@@ -182,3 +182,7 @@ pub(crate) const  fn PHY_REG(page: u32, reg: u32) -> u32 {
 
 
 pub(crate) const KABGTXD: usize = 0x03004; // AFE Band Gap Transmit Ref Data
+
+
+pub(crate) const EXTCNF_CTRL: usize = 0x00F00; // Extended Configuration Control
+pub(crate) const EXTCNF_SIZE: usize = 0x00F08; // Extended Configuration Size
