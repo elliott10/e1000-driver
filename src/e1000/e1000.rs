@@ -341,7 +341,8 @@ where
 
             let mut txd_lower = 0;
 
-            tx_desc.lower = (TXD_CMD_EOP | TXD_CMD_IFCS | TXD_CMD_RS | src.len() as u32).to_le();
+            tx_desc.lower =
+                (TXD_CMD_EOP | TXD_CMD_IFCS | TXD_CMD_RS | (src.len() as u32 & 0xffff)).to_le();
             tx_desc.status = 0;
 
             fence_w();
@@ -379,7 +380,12 @@ where
             if (status & RXD_STAT_DD as u8) == 0 {
                 break;
             }
-            self.rx_ring.next_to_clean = (index + 1) % RX_RING_SIZE;
+            let mut new_index = index + 1;
+            if new_index >= self.rx_ring.size {
+                new_index = 0;
+            }
+
+            self.rx_ring.next_to_clean = new_index;
 
             let desc = &mut self.rx_ring.as_mut()[index];
             // info!("rx index: {}, len: {}", index, len);
@@ -394,7 +400,7 @@ where
             fence_w();
             self.ew32(RDT(0), index as u32);
             out.try_push(RcvPkt { data }).unwrap();
-            index = (index + 1) % RX_RING_SIZE;
+            index = new_index;
         }
 
         out
@@ -437,9 +443,9 @@ where
     }
 
     pub fn reset(&mut self) -> Result {
-        self.get_speed_and_duplex_copper();
         let mut _hw = self.hw.clone();
         let hw = _hw.as_mut();
+        hw.get_speed_and_duplex_copper();
         let mut pba = hw.status.pba;
         let mut tx_space = 0;
         let mut min_tx_space = 0;
@@ -558,7 +564,14 @@ where
             }
         }
 
-        hw.status.tx_fifo_limit = min((hw.er32(PBA) << 10) - 96, 24 << 10);
+        let limit = unsafe {
+            min(
+                ((hw.er32(PBA).wrapping_shr(16)) << 10).wrapping_mul(96),
+                24 << 10,
+            )
+        };
+
+        hw.status.tx_fifo_limit = limit;
 
         info!("fifo limit: {}", hw.status.tx_fifo_limit);
         /* Disable Adaptive Interrupt Moderation if 2 full packets cannot
@@ -863,6 +876,9 @@ where
         self.e1e_flush();
 
         info!("e1000_init has been completed");
+        self.force_speed_1000()?;
+
+        self.power_up_phy()?;
 
         Ok(())
     }
@@ -984,9 +1000,8 @@ where
 
         let mut mii = self.e1e_rphy(MII_BMCR)?;
 
-        info!("mmi: {:#X}", mii);
-
         mii &= !BMCR_PDOWN;
+
         self.e1e_wphy(MII_BMCR, mii)?;
         info!("power up phy");
 
@@ -997,10 +1012,12 @@ where
     }
 
     fn setup_link(&mut self) -> Result {
-        match self.dev_spec {
+        let mut hw = self.hw.clone();
+        let hw = hw.as_mut();
+        match &self.dev_spec {
             DevSpec::E82571(_) => self.setup_link_82571(),
             DevSpec::E80003es2lan => todo!(),
-            DevSpec::Ich8lan(_) => self.setup_link_ich8lan(),
+            DevSpec::Ich8lan(i) => i.setup_link(hw),
         }
     }
 
@@ -1049,14 +1066,17 @@ where
 
         self.ew32(FCTTV, hw.fc.pause_time as u32);
 
-        self.set_fc_watermarks()
+        hw.set_fc_watermarks()
     }
 
     fn setup_physical_interface(&mut self) -> Result {
-        match self.dev_spec {
+        let mut hw = self.hw.clone();
+        let hw = hw.as_mut();
+
+        match &self.dev_spec {
             DevSpec::E82571(_) => self.setup_copper_link_82571(),
             DevSpec::E80003es2lan => todo!(),
-            DevSpec::Ich8lan(_) => self.setup_copper_link_pch_lpt(),
+            DevSpec::Ich8lan(i) => i.setup_copper_link_pch_lpt(hw),
         }
     }
 
@@ -1068,12 +1088,6 @@ where
         self.e1e_flush();
     }
 
-    fn setup_copper_link_pch_lpt(&mut self) -> Result {
-        self.copper_link_setup_82577()?;
-
-        self.setup_copper_link()
-    }
-
     fn setup_copper_link_82571(&mut self) -> Result {
         let mut ctrl = self.er32(CTRL);
         ctrl |= CTRL_SLU;
@@ -1082,334 +1096,30 @@ where
 
         self.copper_link_setup_m88()?;
 
-        self.setup_copper_link()
+        self.hw.as_mut().setup_copper_link()
     }
 
-    fn setup_copper_link(&mut self) -> Result {
-        // if self.hw.as_ref().mac.autoneg {
-        //     self.copper_link_autoneg()?;
-        // }
+    // fn setup_copper_link(&mut self) -> Result {
+    //     if self.hw.as_ref().mac.autoneg {
+    //         self.copper_link_autoneg()?;
+    //     }
 
-        self.force_speed_1000();
+    //     // self.force_speed_1000();
 
-        self.print_status();
+    //     self.print_status();
 
-        let link = self.phy_has_link_generic(10, 10)?;
+    //     let link = self.phy_has_link_generic(10, 10)?;
 
-        if link {
-            info!("Valid link established!!!\n");
-            self.config_collision_dist_generic();
-            self.config_fc_after_link_up();
-        } else {
-            info!("Unable to establish link!!!\n");
-        }
+    //     if link {
+    //         info!("Valid link established!!!\n");
+    //         self.config_collision_dist_generic();
+    //         self.config_fc_after_link_up();
+    //     } else {
+    //         info!("Unable to establish link!!!\n");
+    //     }
 
-        Ok(())
-    }
-
-    fn config_fc_after_link_up(&mut self) -> Result {
-        self.get_speed_and_duplex_copper();
-        self.force_mac_fc()?;
-
-        Ok(())
-    }
-
-    fn copper_link_autoneg(&mut self) -> Result {
-        let mut hw = self.hw.clone();
-        let hw = hw.as_mut();
-
-        /* Perform some bounds checking on the autoneg advertisement
-         * parameter.
-         */
-        hw.phy.autoneg_advertised &= hw.phy.autoneg_mask;
-
-        /* If autoneg_advertised is zero, we assume it was not defaulted
-         * by the calling code so we set to advertise full capability.
-         */
-        if hw.phy.autoneg_advertised == 0 {
-            hw.phy.autoneg_advertised = hw.phy.autoneg_mask;
-        }
-
-        info!("Reconfiguring auto-neg advertisement params");
-        self.phy_setup_autoneg()?;
-
-        info!("Restarting Auto-Neg");
-
-        /* Restart auto-negotiation by setting the Auto Neg Enable bit and
-         * the Auto Neg Restart bit in the PHY control register.
-         */
-        let mut phy_ctrl = self.e1e_rphy(MII_BMCR)?;
-
-        phy_ctrl |= (BMCR_ANENABLE | BMCR_ANRESTART);
-        self.e1e_wphy(MII_BMCR, phy_ctrl)?;
-
-        /* Does the user want to wait for Auto-Neg to complete here, or
-         * check at a later time (for example, callback routine).
-         */
-        if (hw.phy.autoneg_wait_to_complete) {
-            let r = self.wait_autoneg();
-            if r.is_err() {
-                info!("Error while waiting for autoneg to complete");
-                r?;
-            }
-        }
-
-        info!("Auto-Neg Complete");
-        hw.mac.get_link_status = true;
-
-        Ok(())
-    }
-
-    fn setup_link_ich8lan(&mut self) -> Result {
-        let mut hw = self.hw.clone();
-        let hw = hw.as_mut();
-
-        /* ICH parts do not have a word in the NVM to determine
-         * the default flow control setting, so we explicitly
-         * set it to full.
-         */
-        if (hw.fc.requested_mode == FcMode::Default) {
-            /* Workaround h/w hang when Tx flow control enabled */
-            if (hw.mac.kind == MacType::e1000_pchlan) {
-                hw.fc.requested_mode = FcMode::RxPause;
-            } else {
-                hw.fc.requested_mode = FcMode::Full;
-            }
-        }
-
-        /* Save off the requested flow control mode for use later.  Depending
-         * on the link partner's capabilities, we may or may not use this mode.
-         */
-        hw.fc.current_mode = hw.fc.requested_mode;
-
-        info!(
-            "After fix-ups FlowControl is now = {:?}",
-            hw.fc.current_mode
-        );
-
-        /* Continue to configure the copper link. */
-        self.setup_physical_interface()?;
-
-        self.ew32(FCTTV, hw.fc.pause_time as u32);
-        if ((hw.phy.kind == PhyType::T82578)
-            || (hw.phy.kind == PhyType::T82579)
-            || (hw.phy.kind == PhyType::I217)
-            || (hw.phy.kind == PhyType::T82577))
-        {
-            self.ew32(FCRTV_PCH, hw.fc.refresh_time as u32);
-
-            self.e1e_wphy(PHY_REG(BM_PORT_CTRL_PAGE, 27), hw.fc.pause_time)?;
-        }
-
-        return self.set_fc_watermarks();
-    }
-
-    /**
-     *  e1000_wait_autoneg - Wait for auto-neg completion
-     *  @hw: pointer to the HW structure
-     *
-     *  Waits for auto-negotiation to complete or for the auto-negotiation time
-     *  limit to expire, which ever happens first.
-     **/
-    fn wait_autoneg(&mut self) -> Result {
-        /* Break after autoneg completes or PHY_AUTO_NEG_LIMIT expires. */
-        for _ in 0..45 {
-            let mut phy_status = self.e1e_rphy(MII_BMSR)?;
-            phy_status = self.e1e_rphy(MII_BMSR)?;
-
-            if (phy_status & BMSR_ANEGCOMPLETE) > 0 {
-                break;
-            }
-            self.udelay(100 * 1000 * 1000);
-        }
-
-        /* PHY_AUTO_NEG_TIME expiration doesn't guarantee auto-negotiation
-         * has completed.
-         */
-        Ok(())
-    }
-
-    fn phy_setup_autoneg(&mut self) -> Result {
-        let mut hw = self.hw.clone();
-        let phy = &mut hw.as_mut().phy;
-        phy.autoneg_advertised &= phy.autoneg_mask;
-
-        let mut mii_1000t_ctrl_reg = 0;
-
-        /* Read the MII Auto-Neg Advertisement Register (Address 4). */
-        let mut mii_autoneg_adv_reg = self.e1e_rphy(MII_ADVERTISE)?;
-
-        if (phy.autoneg_mask & ADVERTISE_1000_FULL) > 0 {
-            /* Read the MII 1000Base-T Control Register (Address 9). */
-            mii_1000t_ctrl_reg = self.e1e_rphy(MII_CTRL1000)?;
-        }
-
-        /* Need to parse both autoneg_advertised and fc and set up
-         * the appropriate PHY registers.  First we will parse for
-         * autoneg_advertised software override.  Since we can advertise
-         * a plethora of combinations, we need to check each bit
-         * individually.
-         */
-
-        /* First we clear all the 10/100 mb speed bits in the Auto-Neg
-         * Advertisement Register (Address 4) and the 1000 mb speed bits in
-         * the  1000Base-T Control Register (Address 9).
-         */
-        mii_autoneg_adv_reg &=
-            !(ADVERTISE_100FULL | ADVERTISE_100HALF | ADVERTISE_10FULL | ADVERTISE_10HALF);
-        mii_1000t_ctrl_reg &= !(ADVERTISE_1000HALF | ADVERTISE_1000FULL);
-
-        info!("autoneg_advertised {:#X}", phy.autoneg_advertised);
-
-        /* Do we want to advertise 10 Mb Half Duplex? */
-        if (phy.autoneg_advertised & ADVERTISE_10_HALF) > 0 {
-            info!("Advertise 10mb Half duplex\n");
-            mii_autoneg_adv_reg |= ADVERTISE_10HALF;
-        }
-
-        /* Do we want to advertise 10 Mb Full Duplex? */
-        if (phy.autoneg_advertised & ADVERTISE_10_FULL) > 0 {
-            info!("Advertise 10mb Full duplex\n");
-            mii_autoneg_adv_reg |= ADVERTISE_10FULL;
-        }
-
-        /* Do we want to advertise 100 Mb Half Duplex? */
-        if (phy.autoneg_advertised & ADVERTISE_100_HALF) > 0 {
-            info!("Advertise 100mb Half duplex\n");
-            mii_autoneg_adv_reg |= ADVERTISE_100HALF;
-        }
-
-        /* Do we want to advertise 100 Mb Full Duplex? */
-        if (phy.autoneg_advertised & ADVERTISE_100_FULL) > 0 {
-            info!("Advertise 100mb Full duplex\n");
-            mii_autoneg_adv_reg |= ADVERTISE_100FULL;
-        }
-
-        /* We do not allow the Phy to advertise 1000 Mb Half Duplex */
-        if (phy.autoneg_advertised & ADVERTISE_1000_HALF) > 0 {
-            info!("Advertise 1000mb Half duplex request denied!\n");
-        }
-        /* Do we want to advertise 1000 Mb Full Duplex? */
-        if (phy.autoneg_advertised & ADVERTISE_1000_FULL) > 0 {
-            info!("Advertise 1000mb Full duplex\n");
-            mii_1000t_ctrl_reg |= ADVERTISE_1000FULL;
-        }
-
-        /* Check for a software override of the flow control settings, and
-         * setup the PHY advertisement registers accordingly.  If
-         * auto-negotiation is enabled, then software will have to set the
-         * "PAUSE" bits to the correct value in the Auto-Negotiation
-         * Advertisement Register (MII_ADVERTISE) and re-start auto-
-         * negotiation.
-         *
-         * The possible values of the "fc" parameter are:
-         *      0:  Flow control is completely disabled
-         *      1:  Rx flow control is enabled (we can receive pause frames
-         *          but not send pause frames).
-         *      2:  Tx flow control is enabled (we can send pause frames
-         *          but we do not support receiving pause frames).
-         *      3:  Both Rx and Tx flow control (symmetric) are enabled.
-         *  other:  No software override.  The flow control configuration
-         *          in the EEPROM is used.
-         */
-        match self.hw.as_ref().fc.current_mode {
-            FcMode::None => {
-                /* Flow control (Rx & Tx) is completely disabled by a
-                 * software over-ride.
-                 */
-                mii_autoneg_adv_reg &= !(ADVERTISE_PAUSE_ASYM | ADVERTISE_PAUSE_CAP);
-                phy.autoneg_advertised &= !(ADVERTISED_Pause | ADVERTISED_Asym_Pause);
-            }
-            FcMode::RxPause => {
-                /* Rx Flow control is enabled, and Tx Flow control is
-                 * disabled, by a software over-ride.
-                 *
-                 * Since there really isn't a way to advertise that we are
-                 * capable of Rx Pause ONLY, we will advertise that we
-                 * support both symmetric and asymmetric Rx PAUSE.  Later
-                 * (in e1000e_config_fc_after_link_up) we will disable the
-                 * hw's ability to send PAUSE frames.
-                 */
-                mii_autoneg_adv_reg |= (ADVERTISE_PAUSE_ASYM | ADVERTISE_PAUSE_CAP);
-                phy.autoneg_advertised |= (ADVERTISED_Pause | ADVERTISED_Asym_Pause);
-            }
-            FcMode::TxPause => {
-                /* Tx Flow control is enabled, and Rx Flow control is
-                 * disabled, by a software over-ride.
-                 */
-                mii_autoneg_adv_reg |= ADVERTISE_PAUSE_ASYM;
-                mii_autoneg_adv_reg &= !ADVERTISE_PAUSE_CAP;
-                phy.autoneg_advertised |= ADVERTISED_Asym_Pause;
-                phy.autoneg_advertised &= !ADVERTISED_Pause;
-            }
-            FcMode::Full => {
-                /* Flow control (both Rx and Tx) is enabled by a software
-                 * over-ride.
-                 */
-                mii_autoneg_adv_reg |= (ADVERTISE_PAUSE_ASYM | ADVERTISE_PAUSE_CAP);
-                phy.autoneg_advertised |= (ADVERTISED_Pause | ADVERTISED_Asym_Pause);
-            }
-            _ => {
-                error!("Flow control param set incorrectly\n");
-                return Err(Error::Config("Flow control param set incorrectly"));
-            }
-        }
-
-        self.e1e_wphy(MII_ADVERTISE, mii_autoneg_adv_reg)?;
-
-        info!("Auto-Neg Advertising {:#X}", mii_autoneg_adv_reg);
-
-        if (phy.autoneg_mask & ADVERTISE_1000_FULL) > 0 {
-            self.e1e_wphy(MII_CTRL1000, mii_1000t_ctrl_reg);
-        }
-
-        Ok(())
-    }
-
-    fn force_mac_fc(&mut self) -> Result {
-        let mut ctrl = self.er32(CTRL);
-
-        /* Because we didn't get link via the internal auto-negotiation
-         * mechanism (we either forced link or we got link via PHY
-         * auto-neg), we have to manually enable/disable transmit an
-         * receive flow control.
-         *
-         * The "Case" statement below enables/disable flow control
-         * according to the "hw->fc.current_mode" parameter.
-         *
-         * The possible values of the "fc" parameter are:
-         *      0:  Flow control is completely disabled
-         *      1:  Rx flow control is enabled (we can receive pause
-         *          frames but not send pause frames).
-         *      2:  Tx flow control is enabled (we can send pause frames
-         *          but we do not receive pause frames).
-         *      3:  Both Rx and Tx flow control (symmetric) is enabled.
-         *  other:  No other values should be possible at this point.
-         */
-        let mode = self.hw.as_ref().fc.current_mode;
-        info!("hw->fc.current_mode = {:?}\n", mode);
-
-        match mode {
-            FcMode::None => ctrl &= (!(CTRL_TFCE | CTRL_RFCE)),
-            FcMode::RxPause => {
-                ctrl &= !CTRL_TFCE;
-                ctrl |= CTRL_RFCE;
-            }
-            FcMode::TxPause => {
-                ctrl &= !CTRL_RFCE;
-                ctrl |= CTRL_TFCE;
-            }
-            FcMode::Full => ctrl |= (CTRL_TFCE | CTRL_RFCE),
-            FcMode::Default => {
-                error!("Flow control param set incorrectly");
-                return Err(Error::Config("Flow control param set incorrectly"));
-            }
-        }
-
-        self.ew32(CTRL, ctrl);
-
-        return Ok(());
-    }
+    //     Ok(())
+    // }
 
     fn force_speed_1000(&mut self) -> Result {
         info!("force_speed_1000");
@@ -1417,10 +1127,10 @@ where
         /* Clear Auto-Crossover to force MDI manually.  M88E1000 requires MDI
          * forced whenever speed and duplex are forced.
          */
-        let mut phy_data = self.e1e_rphy(M88E1000_PHY_SPEC_CTRL)?;
+        // let mut phy_data = self.e1e_rphy(M88E1000_PHY_SPEC_CTRL)?;
 
-        phy_data &= !M88E1000_PSCR_AUTO_X_MODE;
-        self.e1e_wphy(M88E1000_PHY_SPEC_CTRL, phy_data)?;
+        // phy_data &= !M88E1000_PSCR_AUTO_X_MODE;
+        // self.e1e_wphy(M88E1000_PHY_SPEC_CTRL, phy_data)?;
 
         let mut phy_ctrl = self.e1e_rphy(MII_BMCR)?;
         /* Force speed/duplex on the mac */
@@ -1453,94 +1163,6 @@ where
         // if self.hw.as_ref().phy.kind != PhyType::Bm{
         //     phy_data |= M88E1000_PHY_SPEC_CTRL;
         // }
-
-        Ok(())
-    }
-
-    fn copper_link_setup_82577(&mut self) -> Result {
-        let mut phy_data = self.e1e_rphy(I82577_CFG_REG)?;
-
-        /* Enable CRS on Tx. This must be set for half-duplex operation. */
-        phy_data |= I82577_CFG_ASSERT_CRS_ON_TX;
-
-        /* Enable downshift */
-        phy_data |= I82577_CFG_ENABLE_DOWNSHIFT;
-
-        self.e1e_wphy(I82577_CFG_REG, phy_data)?;
-
-        /* Set MDI/MDIX mode */
-        phy_data = self.e1e_rphy(I82577_PHY_CTRL_2)?;
-        phy_data &= !I82577_PHY_CTRL2_MDIX_CFG_MASK;
-        /* Options:
-         *   0 - Auto (default)
-         *   1 - MDI mode
-         *   2 - MDI-X mode
-         */
-        match self.hw.as_ref().phy.mdix {
-            1 => {}
-            2 => {
-                phy_data |= I82577_PHY_CTRL2_MANUAL_MDIX;
-            }
-            _ => {
-                phy_data |= I82577_PHY_CTRL2_AUTO_MDI_MDIX;
-            }
-        }
-        self.e1e_wphy(I82577_PHY_CTRL_2, phy_data)?;
-
-        self.set_master_slave_mode()
-    }
-
-    /**
-     *  e1000_set_master_slave_mode - Setup PHY for Master/slave mode
-     *  @hw: pointer to the HW structure
-     *
-     *  Sets up Master/slave mode
-     **/
-    fn set_master_slave_mode(&mut self) -> Result {
-        /* Resolve Master/Slave mode */
-        let mut phy_data = self.e1e_rphy(MII_CTRL1000)?;
-
-        /* load defaults for future use */
-        self.hw.as_mut().phy.original_ms_type = if (phy_data & CTL1000_ENABLE_MASTER) > 0 {
-            if (phy_data & CTL1000_AS_MASTER) > 0 {
-                MsType::ForceMaster
-            } else {
-                MsType::ForceSlave
-            }
-        } else {
-            MsType::Auto
-        };
-
-        match self.hw.as_ref().phy.ms_type {
-            MsType::HwDefault => {}
-            MsType::ForceMaster => phy_data |= (CTL1000_ENABLE_MASTER | CTL1000_AS_MASTER),
-            MsType::ForceSlave => {
-                phy_data |= CTL1000_ENABLE_MASTER;
-                phy_data &= !(CTL1000_AS_MASTER);
-            }
-            MsType::Auto => phy_data &= !CTL1000_ENABLE_MASTER,
-        }
-
-        return self.e1e_wphy(MII_CTRL1000, phy_data);
-    }
-
-    fn set_fc_watermarks(&mut self) -> Result {
-        let mut fcrtl = 0;
-        let mut fcrth = 0;
-        if self.hw.as_ref().fc.current_mode == FcMode::TxPause {
-            /* We need to set up the Receive Threshold high and low water
-             * marks as well as (optionally) enabling the transmission of
-             * XON frames.
-             */
-            fcrtl = self.hw.as_ref().fc.low_water;
-            if self.hw.as_ref().fc.send_xon {
-                fcrtl |= FCRTL_XONE;
-            }
-
-            fcrth = self.hw.as_ref().fc.high_water;
-        }
-        self.ew32(FCRTL, fcrtl);
-        self.ew32(FCRTH, fcrth);
 
         Ok(())
     }
@@ -1629,7 +1251,7 @@ where
 
         self.ew32(TCTL, tctl);
 
-        self.config_collision_dist_generic();
+        self.hw.as_mut().config_collision_dist_generic();
 
         /* SPT and KBL Si errata workaround to avoid data corruption */
         if self.hw.as_ref().mac.kind == MacType::e1000_pch_spt {
@@ -1646,23 +1268,6 @@ where
             reg_val |= TARC0_CB_MULTIQ_2_REQ;
             self.ew32(TARC(0), reg_val);
         }
-    }
-
-    /**
-     *  e1000e_config_collision_dist_generic - Configure collision distance
-     *  @hw: pointer to the HW structure
-     *
-     *  Configures the collision distance to the default value and is used
-     *  during link setup.
-     **/
-    fn config_collision_dist_generic(&mut self) {
-        let mut tctl = self.er32(TCTL);
-
-        tctl &= !TCTL_COLD;
-        tctl |= COLLISION_DISTANCE << COLD_SHIFT;
-
-        self.ew32(TCTL, tctl);
-        self.e1e_flush();
     }
 
     pub fn configure_msix(&mut self) {
@@ -1809,6 +1414,10 @@ where
             fence_r();
 
             i += 1;
+
+            if i >= self.tx_ring.size {
+                i = 0;
+            }
 
             desc = &self.tx_ring.as_ref()[i];
         }
@@ -1971,100 +1580,6 @@ where
         hw.flags.restart_now = false;
     }
 
-    /**
-     * e1000_get_speed_and_duplex
-     * @hw: Struct containing variables accessed by shared code
-     * @speed: Speed of the connection
-     * @duplex: Duplex setting of the connection
-     *
-     * Detects the current speed and duplex settings of the hardware.
-     */
-    fn get_speed_and_duplex_copper(&mut self) {
-        let mut speed = 0;
-        let mut duplex = 0;
-        let status = self.er32(STATUS);
-        if (status & STATUS_SPEED_1000) > 0 {
-            speed = 1000;
-        } else if (status & STATUS_SPEED_100) > 0 {
-            speed = 100;
-        } else {
-            speed = 10;
-        }
-        let link = status & STATUS_LU != 0;
-        if (status & STATUS_FD) > 0 {
-            duplex = FULL_DUPLEX;
-        } else {
-            duplex = HALF_DUPLEX;
-        }
-
-        let status = &mut self.hw.as_mut().status;
-        status.link_speed = speed;
-        status.link_duplex = duplex;
-
-        info!(
-            "{} Mbps, {} Duplex Link {}",
-            speed,
-            if duplex == FULL_DUPLEX {
-                "Full"
-            } else {
-                "Half"
-            },
-            link
-        );
-    }
-
-    fn has_link(&mut self) -> bool {
-        let mut link_active = false;
-
-        match self.hw.as_ref().phy.media_type {
-            MediaType::media_type_copper => {
-                if self.hw.as_ref().mac.get_link_status {
-                    let _ = self.check_for_copper_link();
-                    link_active = !self.hw.as_ref().mac.get_link_status;
-                } else {
-                    link_active = true;
-                }
-            }
-            _ => todo!(),
-        }
-
-        link_active
-    }
-
-    fn check_for_copper_link(&mut self) -> Result {
-        if self.hw.as_ref().mac.get_link_status {
-            return Ok(());
-        }
-        self.hw.as_mut().mac.get_link_status = false;
-
-        let link = self.phy_has_link_generic(1, 0)?;
-        if !link {
-            return Ok(());
-        }
-        self.hw.as_mut().mac.get_link_status = true;
-
-        Ok(())
-    }
-
-    fn phy_has_link_generic(&mut self, iterations: u32, usec_interval: u32) -> Result<bool> {
-        let mut success = false;
-
-        for i in 0..iterations {
-            if self.e1e_rphy(MII_BMSR).is_err() {
-                self.udelay(usec_interval);
-            }
-
-            let phy_status = self.e1e_rphy(MII_BMSR)?;
-            if phy_status & BMSR_LSTATUS != 0 {
-                success = true;
-                break;
-            }
-
-            self.udelay(usec_interval);
-        }
-        Ok(success)
-    }
-
     fn udelay(&self, val: u32) {
         self.kernel().delay(val as u64 * 1000);
     }
@@ -2164,7 +1679,7 @@ where
         }
 
         self.phy_read_status()?;
-        self.get_speed_and_duplex_copper();
+        self.hw.as_mut().get_speed_and_duplex_copper();
 
         self.check_downshift()?;
 
@@ -2310,43 +1825,11 @@ where
     }
 
     fn print_status(&mut self) {
-        let status = self.er32(STATUS);
-        let ctrl = self.er32(CTRL);
-
-        let speed = if status & STATUS_SPEED_10 > 0 {
-            "10Mbps"
-        } else if status & STATUS_SPEED_100 > 0 {
-            "100Mbps"
-        } else {
-            "1000Mbps"
-        };
-
-        let duplex = if status & STATUS_FD > 0 {
-            "Full"
-        } else {
-            "Half"
-        };
-
-        info!(
-            "MAC Status: {:#X} Duplex {}, LU {}, Flow Control {}, Speed {}",
-            status,
-            duplex,
-            (status & STATUS_LU) != 0,
-            if ((ctrl & CTRL_TFCE) > 0) && ((ctrl & CTRL_RFCE) > 0) {
-                "Rx/Tx"
-            } else if (ctrl & CTRL_RFCE) > 0 {
-                "Rx"
-            } else if (ctrl & CTRL_TFCE) > 0 {
-                "Tx"
-            } else {
-                "None"
-            },
-            speed,
-        );
+        self.hw.as_mut().print_status();
     }
 
     pub fn task_watchdog(&mut self) -> Result {
-        let link = self.has_link();
+        let link = self.hw.as_mut().has_link();
 
         self.update_adaptive();
 

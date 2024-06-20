@@ -15,6 +15,7 @@ use crate::PhyInfo;
 use crate::PhyType;
 use crate::E1000;
 use alloc::vec::Vec;
+use crate::e1000::board::FcMode;
 use core::mem::size_of;
 
 const E1000_ICH_RAR_ENTRIES: u16 = 7;
@@ -239,8 +240,6 @@ impl DevSpecIch8lan {
         Ok(())
     }
 
-
-
     fn init_phy_workarounds<K: KernelFunc>(&mut self, hw: &mut Hw<K>) -> Result {
         let fwsm = hw.er32(FWSM);
 
@@ -324,6 +323,8 @@ impl DevSpecIch8lan {
     }
 
     fn phy_hw_reset_generic<K: KernelFunc>(&mut self, hw: &mut Hw<K>) -> Result {
+        return Ok(());
+
         if self.check_reset_block(hw).is_err() {
             return Ok(());
         }
@@ -429,7 +430,7 @@ impl DevSpecIch8lan {
     }
 
     fn gate_hw_phy_config<K: KernelFunc>(&mut self, hw: &mut Hw<K>, gate: bool) {
-        if (hw.mac.kind < MacType:: e1000_pch2lan) {
+        if (hw.mac.kind < MacType::e1000_pch2lan) {
             return;
         }
 
@@ -472,6 +473,8 @@ impl DevSpecIch8lan {
             hw.write_reg_array(MTA, i as usize, 0);
         }
 
+        self.setup_link(hw)?;
+
         /* Set the transmit descriptor write-back policy for both queues */
         let mut txdctl = hw.er32(TXDCTL(0));
         txdctl = ((txdctl & !TXDCTL_WTHRESH) | TXDCTL_FULL_TX_DESC_WB);
@@ -513,7 +516,46 @@ impl DevSpecIch8lan {
 
         Ok(())
     }
+    pub(crate) fn setup_link<K: KernelFunc>(&self, hw: &mut Hw<K>) -> Result {
+        /* ICH parts do not have a word in the NVM to determine
+         * the default flow control setting, so we explicitly
+         * set it to full.
+         */
+        if (hw.fc.requested_mode == FcMode::Default) {
+            /* Workaround h/w hang when Tx flow control enabled */
+            if (hw.mac.kind == MacType::e1000_pchlan) {
+                hw.fc.requested_mode = FcMode::RxPause;
+            } else {
+                hw.fc.requested_mode = FcMode::Full;
+            }
+        }
 
+        /* Save off the requested flow control mode for use later.  Depending
+         * on the link partner's capabilities, we may or may not use this mode.
+         */
+        hw.fc.current_mode = hw.fc.requested_mode;
+
+        info!(
+            "After fix-ups FlowControl is now = {:?}",
+            hw.fc.current_mode
+        );
+
+        /* Continue to configure the copper link. */
+        self.setup_copper_link_pch_lpt(hw)?;
+
+        hw.ew32(FCTTV, hw.fc.pause_time as u32);
+        if ((hw.phy.kind == PhyType::T82578)
+            || (hw.phy.kind == PhyType::T82579)
+            || (hw.phy.kind == PhyType::I217)
+            || (hw.phy.kind == PhyType::T82577))
+        {
+            hw.ew32(FCRTV_PCH, hw.fc.refresh_time as u32);
+
+            hw.e1e_wphy(PHY_REG(BM_PORT_CTRL_PAGE, 27), hw.fc.pause_time)?;
+        }
+
+        return hw.set_fc_watermarks();
+    }
     fn init_hw_bits<K: KernelFunc>(&self, hw: &mut Hw<K>) {
         /* Extended Device Control */
         let mut reg = hw.er32(CTRL_EXT);
@@ -583,6 +625,52 @@ impl DevSpecIch8lan {
             reg |= CTRL_MEHE;
             hw.ew32(CTRL, reg);
         }
+    }
+    pub(crate) fn setup_copper_link_pch_lpt<K: KernelFunc>(&self, hw: &mut Hw<K>) -> Result {
+        info!("Setup CTRL SLU");
+        let mut ctrl = hw.er32(CTRL);
+        ctrl |= CTRL_SLU;
+        ctrl &= !(CTRL_FRCSPD | CTRL_FRCDPX);
+        hw.ew32(CTRL, ctrl);
+        hw.e1e_flush();
+
+        hw.print_status();
+        self.copper_link_setup_82577(hw)?;
+
+        hw.setup_copper_link()
+    }
+
+    fn copper_link_setup_82577<K: KernelFunc>(&self, hw: &mut Hw<K>) -> Result {
+        let mut phy_data = hw.e1e_rphy(I82577_CFG_REG)?;
+
+        /* Enable CRS on Tx. This must be set for half-duplex operation. */
+        phy_data |= I82577_CFG_ASSERT_CRS_ON_TX;
+
+        /* Enable downshift */
+        phy_data |= I82577_CFG_ENABLE_DOWNSHIFT;
+
+        hw.e1e_wphy(I82577_CFG_REG, phy_data)?;
+
+        /* Set MDI/MDIX mode */
+        phy_data = hw.e1e_rphy(I82577_PHY_CTRL_2)?;
+        phy_data &= !I82577_PHY_CTRL2_MDIX_CFG_MASK;
+        /* Options:
+         *   0 - Auto (default)
+         *   1 - MDI mode
+         *   2 - MDI-X mode
+         */
+        match hw.phy.mdix {
+            1 => {}
+            2 => {
+                phy_data |= I82577_PHY_CTRL2_MANUAL_MDIX;
+            }
+            _ => {
+                phy_data |= I82577_PHY_CTRL2_AUTO_MDI_MDIX;
+            }
+        }
+        hw.e1e_wphy(I82577_PHY_CTRL_2, phy_data)?;
+
+        hw.set_master_slave_mode()
     }
 
     /**
@@ -682,7 +770,7 @@ impl DevSpecIch8lan {
         if (ctrl & CTRL_PHY_RST) > 0 {
             info!("Phy reset");
             self.get_cfg_done(hw)?;
-            // self.post_phy_reset(hw)?;
+            self.post_phy_reset(hw)?;
             info!("Phy reset ok");
         }
         // /* For PCH, this write will make sure that any noise
