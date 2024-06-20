@@ -101,10 +101,10 @@ pub(crate) struct ShadowRam {
 }
 const E1000_ICH8_SHADOW_RAM_WORDS: usize = 2048;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(crate) struct DevSpecIch8lan {
     pub(crate) kmrn_lock_loss_workaround_enabled: bool,
-    // pub(crate) shadow_ram: [ShadowRam; E1000_ICH8_SHADOW_RAM_WORDS],
+    pub(crate) shadow_ram: Vec<ShadowRam>,
     pub(crate) nvm_k1_enabled: bool,
     pub(crate) eee_disable: bool,
     pub(crate) eee_lp_ability: u16,
@@ -113,10 +113,14 @@ pub(crate) struct DevSpecIch8lan {
 
 impl Default for DevSpecIch8lan {
     fn default() -> Self {
+        let mut shadow_ram = Vec::try_with_capacity(E1000_ICH8_SHADOW_RAM_WORDS).unwrap();
+        for _ in 0..E1000_ICH8_SHADOW_RAM_WORDS {
+            shadow_ram.try_push(ShadowRam::default()).unwrap();
+        }
+
         Self {
             kmrn_lock_loss_workaround_enabled: Default::default(),
-            // TODO 会引起内核崩溃
-            // shadow_ram: [ShadowRam::default(); E1000_ICH8_SHADOW_RAM_WORDS],
+            shadow_ram,
             nvm_k1_enabled: Default::default(),
             eee_disable: Default::default(),
             eee_lp_ability: Default::default(),
@@ -190,6 +194,12 @@ impl DevSpecIch8lan {
         }
 
         hw.nvm.word_size = E1000_ICH8_SHADOW_RAM_WORDS as _;
+
+        /* Clear shadow ram */
+        for i in 0..hw.nvm.word_size as usize {
+            self.shadow_ram[i].modified = false;
+            self.shadow_ram[i].value = 0xFFFF;
+        }
 
         Ok(())
     }
@@ -612,6 +622,9 @@ impl DevSpecIch8lan {
         }
 
         let mut data: Vec<u16> = Vec::try_with_capacity(words as usize)?;
+        for _ in 0..words {
+            data.try_push(0).unwrap();
+        }
 
         let res = self.valid_nvm_bank_detect(hw);
         let bank = match res {
@@ -626,10 +639,48 @@ impl DevSpecIch8lan {
         };
         act_offset += offset as u32;
 
-        for i in 0..words {
-            let offset = act_offset as usize + i as usize;
-            let word = self.read_flash_word(hw, offset)?;
-            data.try_push(word);
+        let mut i = 0usize;
+        let mut offset_to_read = 0;
+        let words = words as usize;
+        let offset = offset as usize;
+        let act_offset = act_offset as usize;
+        let mut dword = 0u32;
+
+        while i < words {
+            if (words - i == 1) {
+                if (self.shadow_ram[offset + i].modified) {
+                    data[i] = self.shadow_ram[offset + i].value;
+                } else {
+                    offset_to_read = act_offset + i - ((act_offset + i) % 2);
+
+                    dword = self.read_flash_dword(hw, offset_to_read)?;
+
+                    if ((act_offset + i) % 2 == 0) {
+                        data[i] = (dword & 0xFFFF) as u16;
+                    } else {
+                        data[i] = ((dword >> 16) & 0xFFFF) as u16;
+                    }
+                }
+            } else {
+                offset_to_read = act_offset + i;
+                if (!(self.shadow_ram[offset + i].modified)
+                    || !(self.shadow_ram[offset + i + 1].modified))
+                {
+                    dword = self.read_flash_dword(hw, offset_to_read)?;
+                }
+                if (self.shadow_ram[offset + i].modified) {
+                    data[i] = self.shadow_ram[offset + i].value;
+                } else {
+                    data[i] = (dword & 0xFFFF) as u16;
+                }
+                if (self.shadow_ram[offset + i].modified) {
+                    data[i + 1] = self.shadow_ram[offset + i + 1].value;
+                } else {
+                    data[i + 1] = (dword >> 16 & 0xFFFF) as u16;
+                }
+            }
+
+            i += 2;
         }
 
         Ok(data)

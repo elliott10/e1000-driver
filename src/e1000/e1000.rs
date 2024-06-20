@@ -86,6 +86,7 @@ where
 
     pub fn init(&mut self) -> Result {
         info!("Init begin ...");
+        self.print_status();
         self.check_opention();
         self.read_mac_addr_generic();
         self.get_variants()?;
@@ -98,12 +99,45 @@ where
 
         let mut binding = self.hw.clone();
         let hw2 = binding.as_mut();
-        self.dev_spec.reset_hw(hw2);
+        // self.dev_spec.reset_hw(hw2);
+        // self.print_status();
+        // self.reset();
 
-        self.reset();
+        self.print_status();
+        self.simple_reset();
 
+        self.print_status();
+
+        self.print_info();
         info!("Init ok");
         Ok(())
+    }
+
+    fn simple_reset(&mut self) {
+        info!("Simple reset");
+
+        let mut ctrl = self.er32(CTRL);
+        ctrl |= CTRL_RST;
+        self.ew32(CTRL, ctrl);
+
+        self.hw.as_mut().udelay(20_000);
+
+        info!("reset finish");
+
+        self.print_status();
+
+        ctrl = self.er32(CTRL);
+
+        ctrl |= CTRL_ASDE | CTRL_SPD_1000;
+
+        self.ew32(CTRL, ctrl);
+        ctrl |= CTRL_SLU;
+
+        self.ew32(CTRL, ctrl);
+
+        info!("SLU");
+
+        fence_w();
     }
 
     pub fn status_mut(&mut self) -> &mut E1000Status {
@@ -214,16 +248,16 @@ where
                 "1000"
             }
         );
-        info!("MAC: {:?}, PHY: {:?}", mac_kind, phy_kind);
-        // let pba = self.read_pba_string_generic().unwrap();
-        // let p = if pba.len() > 0 {
-        //     let s = CStr::from_bytes_until_nul(&pba).unwrap();
-        //     s.to_str().unwrap()
-        // } else {
-        //     "unknown"
-        // };
+        // info!("MAC: {:?}, PHY: {:?}", mac_kind, phy_kind);
+        let pba = self.read_pba_string_generic().unwrap();
+        let p = if pba.len() > 0 {
+            let s = CStr::from_bytes_until_nul(&pba).unwrap();
+            s.to_str().unwrap()
+        } else {
+            "unknown"
+        };
 
-        // info!("MAC: {:?}, PHY: {:?}, PBA No: {}", mac_kind, phy_kind, p);
+        info!("MAC: {:?}, PHY: {:?}, PBA No: {}", mac_kind, phy_kind, p);
     }
 
     fn read_pba_string_generic(&mut self) -> Result<[u8; PBANUM_LENGTH]> {
@@ -943,12 +977,16 @@ where
     }
 
     fn power_up_phy(&mut self) -> Result {
+        self.print_status();
+
         let mut mii = self.e1e_rphy(MII_BMCR)?;
         mii &= !BMCR_PDOWN;
-        self.write_phy_reg_mdic(MII_BMCR, mii)?;
+        self.e1e_wphy(MII_BMCR, mii)?;
+        info!("power up phy");
+
+        self.print_status();
 
         self.setup_link();
-        info!("power up phy ok");
         Ok(())
     }
 
@@ -1016,12 +1054,15 @@ where
         }
     }
 
-    fn setup_copper_link_pch_lpt(&mut self) -> Result {
+    fn ctrl_slu(&mut self) {
+        info!("Setup CTRL SLU");
         let mut ctrl = self.er32(CTRL);
         ctrl |= CTRL_SLU;
-        ctrl &= !(CTRL_FRCSPD | CTRL_FRCDPX);
         self.ew32(CTRL, ctrl);
+        self.e1e_flush();
+    }
 
+    fn setup_copper_link_pch_lpt(&mut self) -> Result {
         self.copper_link_setup_82577()?;
 
         self.setup_copper_link()
@@ -1039,9 +1080,13 @@ where
     }
 
     fn setup_copper_link(&mut self) -> Result {
-        if self.hw.as_ref().mac.autoneg {
-            self.copper_link_autoneg()?;
-        }
+        // if self.hw.as_ref().mac.autoneg {
+        //     self.copper_link_autoneg()?;
+        // }
+
+        self.force_speed_1000();
+
+        self.print_status();
 
         let link = self.phy_has_link_generic(10, 10)?;
 
@@ -1103,6 +1148,7 @@ where
             }
         }
 
+        info!("Auto-Neg Complete");
         hw.mac.get_link_status = true;
 
         Ok(())
@@ -1360,6 +1406,8 @@ where
     }
 
     fn force_speed_1000(&mut self) -> Result {
+        info!("force_speed_1000");
+
         /* Clear Auto-Crossover to force MDI manually.  M88E1000 requires MDI
          * forced whenever speed and duplex are forced.
          */
@@ -1404,9 +1452,9 @@ where
     }
 
     fn copper_link_setup_82577(&mut self) -> Result {
-        /* Enable CRS on Tx. This must be set for half-duplex operation. */
         let mut phy_data = self.e1e_rphy(I82577_CFG_REG)?;
 
+        /* Enable CRS on Tx. This must be set for half-duplex operation. */
         phy_data |= I82577_CFG_ASSERT_CRS_ON_TX;
 
         /* Enable downshift */
@@ -1917,58 +1965,6 @@ where
         hw.flags.restart_now = false;
     }
 
-    fn read_phy_reg_mdic(&mut self, offset: u32) -> Result<u16> {
-        self.hw.as_mut().phy.addr = 1;
-
-        if (offset > MAX_PHY_REG_ADDRESS) {
-            error!("PHY Address {} is out of range", offset);
-            return Err(Error::Unknown("PHY Address"));
-        }
-        /* Set up Op-code, Phy Address, and register offset in the MDI
-         * Control register.  The MAC will take care of interfacing with the
-         * PHY to retrieve the desired data.
-         */
-        let mut mdic = ((offset << MDIC_REG_SHIFT)
-            | (self.hw.as_mut().phy.addr << MDIC_PHY_SHIFT)
-            | (MDIC_OP_READ));
-
-        self.ew32(MDIC, mdic);
-
-        for _ in 0..GEN_POLL_TIMEOUT {
-            self.kernel().delay(50_000);
-            mdic = self.er32(MDIC);
-            if (mdic & MDIC_READY) > 0 {
-                break;
-            }
-        }
-
-        if (mdic & MDIC_READY) == 0 {
-            error!("MDI Read PHY Reg Address {} did not complete", offset);
-            return Err(Error::Unknown("PHY"));
-        }
-        if (mdic & MDIC_ERROR) > 0 {
-            error!("MDI Read PHY Reg Address {} Error", offset);
-            return Err(Error::Unknown("PHY"));
-        }
-        if (((mdic & MDIC_REG_MASK) >> MDIC_REG_SHIFT) != offset) {
-            error!(
-                "MDI Read offset error - requested {}, returned {}",
-                offset,
-                (mdic & MDIC_REG_MASK) >> MDIC_REG_SHIFT,
-            );
-
-            return Err(Error::Unknown("PHY"));
-        }
-
-        /* Allow some time after each MDIC transaction to avoid
-         * reading duplicate data in the next MDIC transaction.
-         */
-        if (self.hw.as_ref().mac.kind == MacType::e1000_pch2lan) {
-            self.kernel().delay(100_000);
-        }
-
-        Ok(mdic as u16)
-    }
     /**
      * e1000_get_speed_and_duplex
      * @hw: Struct containing variables accessed by shared code
@@ -1988,7 +1984,7 @@ where
         } else {
             speed = 10;
         }
-
+        let link = status & STATUS_LU != 0;
         if (status & STATUS_FD) > 0 {
             duplex = FULL_DUPLEX;
         } else {
@@ -2000,13 +1996,14 @@ where
         status.link_duplex = duplex;
 
         info!(
-            "{} Mbps, {} Duplex\n",
+            "{} Mbps, {} Duplex Link {}",
             speed,
             if duplex == FULL_DUPLEX {
                 "Full"
             } else {
                 "Half"
-            }
+            },
+            link
         );
     }
 
@@ -2136,59 +2133,6 @@ where
         stats.tsctfc += self.er32(TSCTFC) as u64;
 
         stats.clone()
-    }
-
-    fn write_phy_reg_mdic(&mut self, offset: u32, value: u16) -> Result {
-        self.hw.as_mut().phy.addr = 1;
-
-        if (offset > MAX_PHY_REG_ADDRESS) {
-            error!("PHY Address {} is out of range", offset);
-            return Err(Error::Unknown("PHY Address"));
-        }
-        /* Set up Op-code, Phy Address, and register offset in the MDI
-         * Control register.  The MAC will take care of interfacing with the
-         * PHY to retrieve the desired data.
-         */
-        let mut mdic = ((offset << MDIC_REG_SHIFT)
-            | (self.hw.as_mut().phy.addr << MDIC_PHY_SHIFT)
-            | (MDIC_OP_WRITE));
-
-        self.ew32(MDIC, mdic);
-
-        for _ in 0..GEN_POLL_TIMEOUT {
-            self.kernel().delay(50_000);
-            mdic = self.er32(MDIC);
-            if (mdic & MDIC_READY) > 0 {
-                break;
-            }
-        }
-
-        if (mdic & MDIC_READY) == 0 {
-            error!("MDI Read PHY Reg Address {} did not complete", offset);
-            return Err(Error::Unknown("PHY"));
-        }
-        if (mdic & MDIC_ERROR) > 0 {
-            error!("MDI Read PHY Reg Address {} Error", offset);
-            return Err(Error::Unknown("PHY"));
-        }
-        if (((mdic & MDIC_REG_MASK) >> MDIC_REG_SHIFT) != offset) {
-            error!(
-                "MDI Read offset error - requested {}, returned {}",
-                offset,
-                (mdic & MDIC_REG_MASK) >> MDIC_REG_SHIFT,
-            );
-
-            return Err(Error::Unknown("PHY"));
-        }
-
-        /* Allow some time after each MDIC transaction to avoid
-         * reading duplicate data in the next MDIC transaction.
-         */
-        if (self.hw.as_ref().mac.kind == MacType::e1000_pch2lan) {
-            self.kernel().delay(100_000);
-        }
-
-        Ok(())
     }
 
     fn after_link_up(&mut self) -> Result {
@@ -2362,10 +2306,25 @@ where
     fn print_status(&mut self) {
         let status = self.er32(STATUS);
         let ctrl = self.er32(CTRL);
+
+        let speed = if status & STATUS_SPEED_10 > 0 {
+            "10Mbps"
+        } else if status & STATUS_SPEED_100 > 0 {
+            "100Mbps"
+        } else {
+            "1000Mbps"
+        };
+
+        let duplex = if status & STATUS_FD > 0 {
+            "Full"
+        } else {
+            "Half"
+        };
+
         info!(
-            "MAC Status: {:#X} FD {}, LU {}, Flow Control {}",
+            "MAC Status: {:#X} Duplex {}, LU {}, Flow Control {}, Speed {}",
             status,
-            (status & STATUS_FD) != 0,
+            duplex,
             (status & STATUS_LU) != 0,
             if ((ctrl & CTRL_TFCE) > 0) && ((ctrl & CTRL_RFCE) > 0) {
                 "Rx/Tx"
@@ -2376,11 +2335,12 @@ where
             } else {
                 "None"
             },
+            speed,
         );
     }
 
     pub fn task_watchdog(&mut self) -> Result {
-        // let link = self.has_link();
+        let link = self.has_link();
 
         self.update_adaptive();
 
