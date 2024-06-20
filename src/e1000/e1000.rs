@@ -97,12 +97,16 @@ where
         self.hw.as_mut().phy.autoneg_wait_to_complete = false;
         self.hw.as_mut().phy.copper_options();
         if self.is_enable_mng_pass_thru() {
+            info!("MNG Pass Through is Enabled");
             self.hw.as_mut().flags.mng_pt_enabled = true;
         }
 
         let mut binding = self.hw.clone();
         let hw2 = binding.as_mut();
         self.dev_spec.reset_hw(hw2);
+
+        self.eeprom_checks()?;
+
         self.print_status();
         self.reset();
 
@@ -113,6 +117,22 @@ where
 
         self.print_info();
         info!("Init ok");
+        Ok(())
+    }
+
+    fn eeprom_checks(&mut self) -> Result {
+        if (self.hw.as_ref().mac.kind != MacType::e1000_82573) {
+            return Ok(());
+        }
+
+        // ret_val = self.read_nvm(NVM_INIT_CONTROL2_REG, 1);
+        // le16_to_cpus(&buf);
+        // if (!ret_val && (!(buf & BIT(0)))) {
+        // 	/* Deep Smart Power Down (DSPD) */
+        // 	dev_warn(&adapter->pdev->dev,
+        // 		 "Warning: detected DSPD enabled in EEPROM\n");
+        // }
+
         Ok(())
     }
 
@@ -407,37 +427,40 @@ where
     }
 
     fn is_enable_mng_pass_thru(&mut self) -> bool {
-        // let manc = self.er32(MANC);
+        let manc = self.er32(MANC);
+        let e1000_mng_mode_pt = 2;
+        if manc & MANC_RCV_TCO_EN == 0 {
+            return false;
+        }
+        let mut factps = 0;
 
-        // if manc & MANC_RCV_TCO_EN == 0 {
-        //     return false;
-        // }
+        if self.hw.as_mut().mac.has_fwsm {
+            let fwsm = self.er32(FWSM);
+            factps = self.er32(FACTPS);
 
-        // if self.mac.has_fwsm {
-        //     let fwsm = self.er32(FWSM);
-        //     let factps = self.er32(FACTPS);
+            if factps & FACTPS_MNGCG == 0
+                && (fwsm & FWSM_MODE_MASK) == (e1000_mng_mode_pt << FWSM_MODE_SHIFT)
+            {
+                return true;
+            }
+        } else if self.hw.as_ref().mac.kind == MacType::e1000_82574
+            || self.hw.as_mut().mac.kind == MacType::e1000_82573
+        {
+            factps = self.er32(FACTPS);
+            let mut data: u16 = 0;
+            data = match self.read_nvm(NVM_INIT_CONTROL2_REG, 1) {
+                Ok(d) => d[0],
+                Err(_) => return false,
+            };
 
-        //     if factps & FACTPS_MNGCG == 0
-        //         && (fwsm & FWSM_MODE_MASK) == (e1000_mng_mode_pt << FWSM_MODE_SHIFT)
-        //     {
-        //         return true;
-        //     }
-        // } else if self.mac.kind == MacType::e1000_82574 || self.mac.kind == MacType::e1000_82573 {
-        //     let mut data: u16 = 0;
-        //     let ret_val = self.read_nvm(NVM_INIT_CONTROL2_REG, 1, &mut data);
-
-        //     if ret_val != 0 {
-        //         return false;
-        //     }
-
-        //     if factps & FACTPS_MNGCG == 0
-        //         && (data & NVM_INIT_CTRL2_MNGM) == (e1000_mng_mode_pt << 13)
-        //     {
-        //         return true;
-        //     }
-        // } else if manc & MANC_SMBUS_EN != 0 && manc & MANC_ASF_EN == 0 {
-        //     return true;
-        // }
+            if factps & FACTPS_MNGCG == 0
+                && (data & NVM_INIT_CTRL2_MNGM) as u32 == (e1000_mng_mode_pt << 13)
+            {
+                return true;
+            }
+        } else if manc & MANC_SMBUS_EN != 0 && manc & MANC_ASF_EN == 0 {
+            return true;
+        }
 
         false
     }
@@ -620,10 +643,10 @@ where
     }
 
     /**
-     * e1000e_get_hw_control - get control of the h/w from f/w
+     * get_hw_control - get control of the h/w from f/w
      * @adapter: address of board private structure
      *
-     * e1000e_get_hw_control sets {CTRL_EXT|SWSM}:DRV_LOAD bit.
+     * get_hw_control sets {CTRL_EXT|SWSM}:DRV_LOAD bit.
      * For ASF and Pass Through versions of f/w this means that
      * the driver is loaded. For AMT version (only with 82573)
      * of the f/w this means that the network i/f is open.

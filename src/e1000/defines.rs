@@ -588,7 +588,6 @@ pub(crate) const CTL1000_PREFER_MASTER: u16 = 0x0400; // Prefer to operate as ma
 pub(crate) const CTL1000_AS_MASTER: u16 = 0x0800; // Operate as master
 pub(crate) const CTL1000_ENABLE_MASTER: u16 = 0x1000; // Enable master/slave functionality
                                                       // Given the macro definition and understanding it's not practically used but for informational purposes:
-pub(crate) const ADVERTISE_1000_HALF: u16 = 0x0010; // Placeholder for advertising 1000BASE-T half duplex, not utilized in current configuration
 
 pub(crate) const M88E1000_PHY_SPEC_CTRL: u32 = 0x10; // PHY Specific Control Register
 pub(crate) const M88E1000_PHY_SPEC_STATUS: u32 = 0x11; // PHY Specific Status Register
@@ -671,8 +670,7 @@ pub(crate) const ADVERTISE_10_HALF: u16 = 0x0001;
 pub(crate) const ADVERTISE_10_FULL: u16 = 0x0002;
 pub(crate) const ADVERTISE_100_HALF: u16 = 0x0004;
 pub(crate) const ADVERTISE_100_FULL: u16 = 0x0008;
-// ADVERTISE_1000_HALF is informative and not used, hence commented out.
-// pub(crate) const ADVERTISE_1000_HALF: u32 = 0x0010;
+pub(crate) const ADVERTISE_1000_HALF: u16 = 0x0010;
 pub(crate) const ADVERTISE_1000_FULL: u16 = 0x0020;
 
 pub(crate) const E1000_ALL_SPEED_DUPLEX: u16 = ADVERTISE_10_HALF
@@ -729,12 +727,10 @@ pub(crate) const I82578_E_PHY_ID: u32 = 0x004DD040;
 pub(crate) const I82579_E_PHY_ID: u32 = 0x01540090;
 pub(crate) const I217_E_PHY_ID: u32 = 0x015400A0;
 
-
 pub(crate) const PHY_REVISION_MASK: u32 = 0xFFFFFFF0;
 pub(crate) const MAX_PHY_MULTI_PAGE_REG: u16 = 0xF;
 
 pub(crate) const KABGTXD_BGSQLBIAS: u32 = 0x00050000; // Band Gap SQL BIAS
-
 
 pub(crate) const EXTCNF_CTRL_MDIO_SW_OWNERSHIP: u32 = 0x00000020;
 pub(crate) const EXTCNF_CTRL_LCD_WRITE_ENABLE: u32 = 0x00000001;
@@ -746,3 +742,5 @@ pub(crate) const EXTCNF_SIZE_EXT_PCIE_LENGTH_SHIFT: u32 = 16;
 pub(crate) const EXTCNF_CTRL_EXT_CNF_POINTER_MASK: u32 = 0x0FFF0000;
 pub(crate) const EXTCNF_CTRL_EXT_CNF_POINTER_SHIFT: u32 = 16;
 
+/* Manageability Operation Mode mask */
+pub(crate) const NVM_INIT_CTRL2_MNGM: u16 = 0x6000;
