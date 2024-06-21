@@ -605,7 +605,6 @@ pub(crate) const IGP02E1000_PHY_POWER_MGMT: u8 = 0x19; // Power Management Regis
 pub(crate) const IGP01E1000_PHY_PAGE_SELECT: u32 = 0x1F; // Page Select Register
 pub(crate) const BM_PHY_PAGE_SELECT: u8 = 22; // Page Select for BM (Base Management)
 pub(crate) const IGP_PAGE_SHIFT: u16 = 5; // Shift amount for IGP page addressing
-pub(crate) const PHY_REG_MASK: u8 = 0x1F; // Mask to get the register address within a page
 
 pub(crate) const IGP01E1000_PLHR_SS_DOWNGRADE: u16 = 0x8000; // Signal Speed Downgrade in PHY Link Health Register
 
@@ -617,6 +616,13 @@ pub(crate) const ADVERTISED_Asym_Pause: u16 = 1 << 14;
 pub(crate) const RXCSUM_IPOFLD: u32 = 0x00000100; /* TCP / UDP checksum offload */
 pub(crate) const RXCSUM_TUOFL: u32 = 0x00000200; /* TCP / UDP checksum offload */
 pub(crate) const PBECCSTS_ECC_ENABLE: u32 = 0x00010000;
+
+
+pub(crate) const PHY_CTRL_D0A_LPLU: u32 = 0x00000002;
+pub(crate) const PHY_CTRL_NOND0A_LPLU: u32 = 0x00000004;
+pub(crate) const PHY_CTRL_NOND0A_GBE_DISABLE: u32 = 0x00000008;
+pub(crate) const PHY_CTRL_GBE_DISABLE: u32 = 0x00000040;
+
 
 use core::arch::asm;
 

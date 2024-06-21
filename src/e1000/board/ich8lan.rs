@@ -5,6 +5,7 @@ use super::NvmInfo;
 use super::NvmType;
 use super::{DevSpecParam, Hw};
 use crate::defines::*;
+use crate::e1000::board::FcMode;
 use crate::err::*;
 use crate::phy::*;
 use crate::BoardVariant;
@@ -15,7 +16,6 @@ use crate::PhyInfo;
 use crate::PhyType;
 use crate::E1000;
 use alloc::vec::Vec;
-use crate::e1000::board::FcMode;
 use core::mem::size_of;
 
 const E1000_ICH_RAR_ENTRIES: u16 = 7;
@@ -74,6 +74,9 @@ const ICH_NVM_SIG_VALUE: u8 = 0x80;
 
 const FEXTNVM3_PHY_CFG_COUNTER_MASK: u32 = 0x0C000000;
 const FEXTNVM3_PHY_CFG_COUNTER_50MSEC: u32 = 0x08000000;
+
+const FEXTNVM_SW_CONFIG: u32 = 1;
+const FEXTNVM_SW_CONFIG_ICH8M: u32 = (1 << 27); /* different on ICH8M */
 
 struct FlashCtrl {
     value: u16,
@@ -473,7 +476,7 @@ impl DevSpecIch8lan {
             hw.write_reg_array(MTA, i as usize, 0);
         }
 
-        self.setup_link(hw)?;
+        let ret = self.setup_link(hw);
 
         /* Set the transmit descriptor write-back policy for both queues */
         let mut txdctl = hw.er32(TXDCTL(0));
@@ -514,7 +517,7 @@ impl DevSpecIch8lan {
          */
         self.clear_hw_cntrs(hw);
 
-        Ok(())
+        ret
     }
     pub(crate) fn setup_link<K: KernelFunc>(&self, hw: &mut Hw<K>) -> Result {
         /* ICH parts do not have a word in the NVM to determine
@@ -530,6 +533,7 @@ impl DevSpecIch8lan {
             }
         }
 
+        hw.fc.requested_mode = FcMode::None;
         /* Save off the requested flow control mode for use later.  Depending
          * on the link partner's capabilities, we may or may not use this mode.
          */
@@ -555,7 +559,68 @@ impl DevSpecIch8lan {
         }
 
         return hw.set_fc_watermarks();
+
+        Ok(())
     }
+
+    fn close_fc<K: KernelFunc>(&self, hw: &mut Hw<K>) {
+        info!("close fc");
+
+        // No flow control
+        hw.ew32(FCAH, 0);
+        hw.ew32(FCAL, 0);
+        hw.ew32(FCT, 0);
+        hw.ew32(FCTTV, 0);
+    }
+
+    fn sw_lcd_config<K: KernelFunc>(&self, hw: &mut Hw<K>) -> Result {
+        let mut phy_page = 0;
+        let mut sw_cfg_mask = FEXTNVM_SW_CONFIG_ICH8M;
+
+        let mut data = hw.er32(FEXTNVM);
+        if data & sw_cfg_mask == 0 {
+            return Ok(());
+        }
+
+        /* Make sure HW does not configure LCD from PHY
+         * extended configuration before SW configuration
+         */
+        data = hw.er32(EXTCNF_CTRL);
+
+        let mut cnf_size = hw.er32(EXTCNF_SIZE);
+        cnf_size &= EXTCNF_SIZE_EXT_PCIE_LENGTH_MASK;
+        cnf_size >>= EXTCNF_SIZE_EXT_PCIE_LENGTH_SHIFT;
+        if cnf_size == 0 {
+            return Ok(());
+        }
+
+        let mut cnf_base_addr = data & EXTCNF_CTRL_EXT_CNF_POINTER_MASK;
+        cnf_base_addr >>= EXTCNF_CTRL_EXT_CNF_POINTER_SHIFT;
+
+        /* Configure LCD from extended configuration region. */
+
+        /* cnf_base_addr is in DWORD */
+        let mut word_addr = (cnf_base_addr << 1) as u16;
+
+        for i in 0..cnf_size as u16 {
+            let mut reg_data = self.read_nvm(hw, (word_addr + i * 2), 1)?[0];
+
+            let mut reg_addr = self.read_nvm(hw, (word_addr + i * 2 + 1), 1)?[0];
+
+            /* Save off the PHY page for future writes. */
+            if (reg_addr as u32 == IGP01E1000_PHY_PAGE_SELECT) {
+                phy_page = reg_data;
+                continue;
+            }
+
+            reg_addr &= PHY_REG_MASK;
+            reg_addr |= phy_page;
+
+            hw.e1e_wphy(reg_addr as u32, reg_data);
+        }
+        Ok(())
+    }
+
     fn init_hw_bits<K: KernelFunc>(&self, hw: &mut Hw<K>) {
         /* Extended Device Control */
         let mut reg = hw.er32(CTRL_EXT);
@@ -633,6 +698,8 @@ impl DevSpecIch8lan {
         ctrl &= !(CTRL_FRCSPD | CTRL_FRCDPX);
         hw.ew32(CTRL, ctrl);
         hw.e1e_flush();
+
+        self.close_fc(hw);
 
         hw.print_status();
         self.copper_link_setup_82577(hw)?;
@@ -814,15 +881,59 @@ impl DevSpecIch8lan {
         }
 
         /* Configure the LCD with the extended configuration region in NVM */
-        // ret_val = e1000_sw_lcd_config_ich8lan(hw);
-        // if (ret_val)
-        // 	return ret_val;
+        self.sw_lcd_config(hw)?;
 
         /* Configure the LCD with the OEM bits in NVM */
-        // ret_val = e1000_oem_bits_config_ich8lan(hw, true);
+        self.oem_bits_config(hw, true)?;
 
         Ok(())
     }
+
+    fn oem_bits_config<K: KernelFunc>(&self, hw: &mut Hw<K>, d0_state: bool) -> Result {
+        if (hw.mac.kind < MacType::e1000_pchlan) {
+            return Ok(());
+        }
+        let mut mac_reg = hw.er32(FEXTNVM);
+        if (mac_reg & FEXTNVM_SW_CONFIG_ICH8M) == 0 {
+            return Ok(());
+        }
+
+        mac_reg = hw.er32(PHY_CTRL);
+
+        let mut oem_reg = hw.e1e_rphy(HV_OEM_BITS)?;
+
+        oem_reg &= !(HV_OEM_BITS_GBE_DIS | HV_OEM_BITS_LPLU);
+
+        if d0_state {
+            if (mac_reg & PHY_CTRL_GBE_DISABLE) > 0 {
+                oem_reg |= HV_OEM_BITS_GBE_DIS;
+            }
+
+            if (mac_reg & PHY_CTRL_D0A_LPLU) > 0 {
+                oem_reg |= HV_OEM_BITS_LPLU;
+            }
+        } else {
+            if (mac_reg & (PHY_CTRL_GBE_DISABLE | PHY_CTRL_NOND0A_GBE_DISABLE)) > 0 {
+                oem_reg |= HV_OEM_BITS_GBE_DIS;
+            }
+
+            if (mac_reg & (PHY_CTRL_D0A_LPLU | PHY_CTRL_NOND0A_LPLU)) > 0 {
+                oem_reg |= HV_OEM_BITS_LPLU;
+            }
+        }
+
+        /* Set Restart auto-neg to activate the bits */
+        if ((d0_state || (hw.mac.kind != MacType::e1000_pchlan))
+            && self.check_reset_block(hw).is_ok())
+        {
+            oem_reg |= HV_OEM_BITS_RESTART_AN;
+        }
+
+        hw.e1e_wphy(HV_OEM_BITS, oem_reg)?;
+
+        Ok(())
+    }
+
     /**
      *  e1000_lan_init_done_ich8lan - Check for PHY config completion
      *  @hw: pointer to the HW structure

@@ -93,3 +93,23 @@ pub(crate) const CV_SMB_CTRL_FORCE_SMBUS: u16 = 0x0001;
 /* KMRN Mode Control */
 pub(crate) const HV_KMRN_MODE_CTRL: u32 = PHY_REG(769, 16);
 pub(crate) const HV_KMRN_MDIO_SLOW: u16 = 0x0400;
+
+/* SMBus Address Phy Register */
+pub(crate) const HV_SMB_ADDR: u32 = PHY_REG(768, 26);
+pub(crate) const HV_SMB_ADDR_MASK: u16 = 0x007F;
+pub(crate) const HV_SMB_ADDR_PEC_EN: u16 = 0x0200;
+pub(crate) const HV_SMB_ADDR_VALID: u16 = 0x0080;
+pub(crate) const HV_SMB_ADDR_FREQ_MASK: u16 = 0x1100;
+pub(crate) const HV_SMB_ADDR_FREQ_LOW_SHIFT: u32 = 8;
+pub(crate) const HV_SMB_ADDR_FREQ_HIGH_SHIFT: u32 = 12;
+pub(crate) const HV_OEM_BITS: u32 = PHY_REG(768, 25);
+// Assuming these are meant to be bit masks for register fields
+pub(crate) const HV_OEM_BITS_LPLU: u16 = 0x0004; // Low Power Link Up
+pub(crate) const HV_OEM_BITS_GBE_DIS: u16 = 0x0040; // Gigabit Disable
+pub(crate) const HV_OEM_BITS_RESTART_AN: u16 = 0x0400; // Restart Auto-negotiation
+
+// For the register definition, if you're representing a struct or enum to hold register addresses and fields,
+// it would depend on how you structure your hardware abstraction layer. However, given just the address and bit position,
+// here's a simplified placeholder using tuples, assuming you have a way to work with register addresses and bitfields.
+// A more sophisticated approach would involve a Register or Bitfield type with methods for accessing/modifying fields.
+pub(crate) const HV_OEM_BITS_REGISTER: u32 = PHY_REG(768, 25); // Tuple representing the register address and bit position

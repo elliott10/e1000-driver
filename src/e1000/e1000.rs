@@ -87,6 +87,8 @@ where
     pub fn init(&mut self) -> Result {
         info!("Init begin ...");
         self.print_status();
+        self.simple_reset();
+
         self.check_opention();
         self.read_mac_addr_generic();
         self.get_variants()?;
@@ -110,7 +112,7 @@ where
         self.print_status();
         self.reset();
 
-        // self.print_status();
+        self.print_status();
         // self.simple_reset();
 
         self.print_status();
@@ -143,7 +145,7 @@ where
         ctrl |= CTRL_RST;
         self.ew32(CTRL, ctrl);
 
-        self.hw.as_mut().udelay(20_000);
+        self.udelay(20_000_000);
 
         info!("reset finish");
 
@@ -151,14 +153,24 @@ where
 
         ctrl = self.er32(CTRL);
 
-        ctrl |= CTRL_ASDE | CTRL_SPD_1000;
+        ctrl |= CTRL_ASDE | CTRL_SLU;
 
         self.ew32(CTRL, ctrl);
-        ctrl |= CTRL_SLU;
 
+        ctrl = self.er32(CTRL);
+
+        ctrl &= !(CTRL_LRST | CTRL_PHY_RST | CTRL_ILOS | CTRL_VME);
         self.ew32(CTRL, ctrl);
+
+        // No flow control
+        self.ew32(FCAH, 0);
+        self.ew32(FCAL, 0);
+        self.ew32(FCT, 0);
+        self.ew32(FCTTV, 0);
 
         info!("SLU");
+
+        self.print_status();
 
         fence_w();
     }
@@ -827,7 +839,7 @@ where
             status.msix_vec_num
         );
 
-        self.power_up_phy()?;
+        // self.power_up_phy()?;
         self.configure()?;
         self.hw.as_mut().mac.get_link_status = true;
 
@@ -908,7 +920,7 @@ where
 
     fn configure(&mut self) -> Result {
         self.set_rx_mode();
-        self.init_manageability_pt();
+        // self.init_manageability_pt();
         self.configure_tx();
         self.setup_rctl();
         self.configure_rx();
@@ -1062,6 +1074,8 @@ where
         let mut hw = self.hw.clone();
         let hw = hw.as_mut();
 
+        hw.fc.requested_mode = FcMode::None;
+
         if hw.fc.requested_mode == FcMode::Default {
             // return self.set_default_fc_generic();
         }
@@ -1089,7 +1103,9 @@ where
 
         self.ew32(FCTTV, hw.fc.pause_time as u32);
 
-        hw.set_fc_watermarks()
+        // hw.set_fc_watermarks()
+
+        Ok(())
     }
 
     fn setup_physical_interface(&mut self) -> Result {
@@ -1853,6 +1869,11 @@ where
 
     pub fn task_watchdog(&mut self) -> Result {
         let link = self.hw.as_mut().has_link();
+
+        if link {
+            info!("Link is Up");
+            self.print_status();
+        }
 
         self.update_adaptive();
 

@@ -1586,6 +1586,33 @@ where
 
         Ok(())
     }
+
+    fn write_smbus_addr(&mut self) -> Result {
+        let mut strap = self.er32(STRAP);
+        let mut freq = (strap & STRAP_SMT_FREQ_MASK) >> STRAP_SMT_FREQ_SHIFT;
+
+        strap &= STRAP_SMBUS_ADDRESS_MASK;
+
+        let mut phy_data = self.read_phy_reg_hv(HV_SMB_ADDR)?;
+
+        phy_data &= !HV_SMB_ADDR_MASK;
+        phy_data |= (strap >> STRAP_SMBUS_ADDRESS_SHIFT) as u16;
+        phy_data |= HV_SMB_ADDR_PEC_EN | HV_SMB_ADDR_VALID;
+
+        if self.phy.kind == PhyType::I217 {
+            /* Restore SMBus frequency */
+            freq -= 1;
+            if freq > 0 {
+                phy_data &= !HV_SMB_ADDR_FREQ_MASK;
+                phy_data |= ((freq & BIT(0)) << HV_SMB_ADDR_FREQ_LOW_SHIFT) as u16;
+                phy_data |= ((freq & BIT(1)) << (HV_SMB_ADDR_FREQ_HIGH_SHIFT - 1)) as u16;
+            } else {
+                error!("Unsupported SMB frequency in PHY");
+            }
+        }
+
+        return self.write_phy_reg_hv(HV_SMB_ADDR, phy_data);
+    }
 }
 
 #[derive(Clone)]

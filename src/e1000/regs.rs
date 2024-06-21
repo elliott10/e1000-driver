@@ -58,7 +58,7 @@ pub(crate) const STRAP_SMBUS_ADDRESS_SHIFT: u32 = 17;
 pub(crate) const STRAP_SMT_FREQ_MASK: u32 = 0x00003000;
 pub(crate) const STRAP_SMT_FREQ_SHIFT: u32 = 12;
 
-pub(crate) const FEXTNVM: u16 = 0x00028; // Future Extended NVM - RW
+pub(crate) const FEXTNVM: usize = 0x00028; // Future Extended NVM - RW
 pub(crate) const FEXTNVM3: usize = 0x0003C; // Future Extended NVM 3 - RW
 pub(crate) const FEXTNVM4: u16 = 0x00024; // Future Extended NVM 4 - RW
 pub(crate) const FEXTNVM5: u16 = 0x00014; // Future Extended NVM 5 - RW
@@ -79,6 +79,8 @@ pub(crate) const RDTR: usize = 0x02820; // Rx Delay Timer - Read-Write
 pub(crate) const RADV: usize = 0x0282C; // Rx Interrupt Absolute Delay Timer - Read-Write
 
 pub(crate) const PBECCSTS: usize = 0x0100C; /* Packet Buffer ECC Status - RW */
+
+pub(crate) const PHY_CTRL: usize = 0x00F10; /* PHY Control Register in CSR */
 
 pub(crate) fn TARC(n: usize) -> usize {
     0x03840 + (n * 0x100)
@@ -175,14 +177,12 @@ pub(crate) const FCRTV_PCH: usize = 0x05F40; // PCH Flow Control Refresh Timer V
 pub(crate) const PHY_PAGE_SHIFT: u32 = 5;
 pub(crate) const MAX_PHY_REG_ADDRESS: u32 = 0x1F; // Assuming this is the maximum register address
 
-pub(crate) const  fn PHY_REG(page: u32, reg: u32) -> u32 {
+pub(crate) const fn PHY_REG(page: u32, reg: u32) -> u32 {
     // Use bitwise shift and AND operation to combine page and register
     (page << PHY_PAGE_SHIFT) | (reg & MAX_PHY_REG_ADDRESS)
 }
 
-
 pub(crate) const KABGTXD: usize = 0x03004; // AFE Band Gap Transmit Ref Data
-
 
 pub(crate) const EXTCNF_CTRL: usize = 0x00F00; // Extended Configuration Control
 pub(crate) const EXTCNF_SIZE: usize = 0x00F08; // Extended Configuration Size
