@@ -1360,7 +1360,11 @@ where
 
         Ok(())
     }
-    fn phy_has_link_generic(&mut self, iterations: u32, usec_interval: u32) -> Result<bool> {
+    pub(crate) fn phy_has_link_generic(
+        &mut self,
+        iterations: u32,
+        usec_interval: u32,
+    ) -> Result<bool> {
         let mut success = false;
 
         for i in 0..iterations {

@@ -845,6 +845,11 @@ where
 
         info!("e1000_init has been completed");
 
+        let ret = self.hw.as_mut().phy_has_link_generic(10, 10)?;
+
+        info!("link : {}", ret);
+        self.print_status();
+
         self.after_link_up()?;
 
         fence_r();
@@ -1074,10 +1079,8 @@ where
         let mut hw = self.hw.clone();
         let hw = hw.as_mut();
 
-        hw.fc.requested_mode = FcMode::None;
-
         if hw.fc.requested_mode == FcMode::Default {
-            // return self.set_default_fc_generic();
+            return self.set_default_fc_generic();
         }
         /* Save off the requested flow control mode for use later.  Depending
          * on the link partner's capabilities, we may or may not use this mode.
@@ -1759,7 +1762,7 @@ where
             data &= !(0x7F << 5);
             self.e1e_wphy(PHY_REG(769, 23), data)?;
             data = self.e1e_rphy(PHY_REG(769, 16))?;
-            data |= BIT(13)as u16;
+            data |= BIT(13) as u16;
             self.e1e_wphy(PHY_REG(769, 16), data)?;
             data = self.e1e_rphy(PHY_REG(776, 20))?;
             data &= !(0x3FF << 2);
@@ -1771,7 +1774,7 @@ where
         }
 
         /* re-enable Rx path after enabling/disabling workaround */
-        return self.e1e_wphy(PHY_REG(769, 20), phy_reg & !(BIT(14)as u16));
+        return self.e1e_wphy(PHY_REG(769, 20), phy_reg & !(BIT(14) as u16));
     }
 
     fn udelay(&self, val: u32) {

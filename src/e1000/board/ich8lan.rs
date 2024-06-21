@@ -533,7 +533,6 @@ impl DevSpecIch8lan {
             }
         }
 
-        hw.fc.requested_mode = FcMode::None;
         /* Save off the requested flow control mode for use later.  Depending
          * on the link partner's capabilities, we may or may not use this mode.
          */
