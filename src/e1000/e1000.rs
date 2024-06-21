@@ -1642,6 +1642,7 @@ where
      *  @enable: flag to enable/disable workaround when enabling/disabling jumbos
      **/
     fn lv_jumbo_workaround_ich8lan(&mut self, enable: bool) -> Result {
+        info!("lv_jumbo_workaround_ich8lan");
         let mut hw = self.hw.clone();
         let hw = hw.as_mut();
 
