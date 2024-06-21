@@ -927,7 +927,7 @@ where
             self.kernel.delay(100_000);
         }
 
-        Ok(mdic as u16)
+        Ok((mdic & 0xFFFF) as u16)
     }
 
     pub(crate) fn e1e_wphy(&mut self, offset: u32, value: u16) -> Result {
@@ -1066,8 +1066,10 @@ where
          * Control register.  The MAC will take care of interfacing with the
          * PHY to retrieve the desired data.
          */
-        let mut mdic =
-            ((offset << MDIC_REG_SHIFT) | (self.phy.addr << MDIC_PHY_SHIFT) | (MDIC_OP_WRITE));
+        let mut mdic = ((value as u32)
+            | (offset << MDIC_REG_SHIFT)
+            | (self.phy.addr << MDIC_PHY_SHIFT)
+            | (MDIC_OP_WRITE));
 
         self.ew32(MDIC, mdic);
 
