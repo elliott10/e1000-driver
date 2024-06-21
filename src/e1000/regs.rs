@@ -186,3 +186,16 @@ pub(crate) const KABGTXD: usize = 0x03004; // AFE Band Gap Transmit Ref Data
 
 pub(crate) const EXTCNF_CTRL: usize = 0x00F00; // Extended Configuration Control
 pub(crate) const EXTCNF_SIZE: usize = 0x00F08; // Extended Configuration Size
+pub(crate) fn RAL(index: usize) -> usize {
+    RA + index * 8
+}
+
+pub(crate) fn RAH(index: usize) -> usize {
+    RA + index * 8 + 4
+}
+
+pub(crate) const fn PCH_RAICC(n: usize) -> usize {
+    0x05F50 + (n * 4)
+}
+
+pub(crate) const KMRNCTRLSTA: usize = 0x00034; /* MAC-PHY interface - RW */

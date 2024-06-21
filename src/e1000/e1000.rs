@@ -839,7 +839,7 @@ where
             status.msix_vec_num
         );
 
-        // self.power_up_phy()?;
+        self.power_up_phy()?;
         self.configure()?;
         self.hw.as_mut().mac.get_link_status = true;
 
@@ -1103,7 +1103,7 @@ where
 
         self.ew32(FCTTV, hw.fc.pause_time as u32);
 
-        // hw.set_fc_watermarks()
+        hw.set_fc_watermarks()?;
 
         Ok(())
     }
@@ -1558,6 +1558,22 @@ where
         let mut hw2 = self.hw.clone();
         let hw = hw2.as_mut();
 
+        /* Workaround Si errata on PCHx - configure jumbo frame flow.
+         * If jumbo frames not set, program related MAC/PHY registers
+         * to h/w defaults
+         */
+        if (hw.mac.kind >= MacType::e1000_pch2lan) {
+            let ret = if self.kernel().is_mtu_bg_eth() {
+                self.lv_jumbo_workaround_ich8lan(true)
+            } else {
+                self.lv_jumbo_workaround_ich8lan(false)
+            };
+
+            if ret.is_err() {
+                error!("failed to enable|disable jumbo frame workaround mode");
+            }
+        }
+
         /* Program MC offset vector base */
         let mut rctl = self.er32(RCTL);
         rctl &= !(3 << RCTL_MO_SHIFT);
@@ -1617,6 +1633,144 @@ where
         self.ew32(RCTL, rctl);
 
         hw.flags.restart_now = false;
+    }
+
+    /**
+     *  e1000_lv_jumbo_workaround_ich8lan - required for jumbo frame operation
+     *  with 82579 PHY
+     *  @hw: pointer to the HW structure
+     *  @enable: flag to enable/disable workaround when enabling/disabling jumbos
+     **/
+    fn lv_jumbo_workaround_ich8lan(&mut self, enable: bool) -> Result {
+        let mut hw = self.hw.clone();
+        let hw = hw.as_mut();
+
+        /* disable Rx path while enabling/disabling workaround */
+        let mut phy_reg = self.e1e_rphy(PHY_REG(769, 20))?;
+        self.e1e_wphy(PHY_REG(769, 20), phy_reg | (BIT(14) as u16))?;
+
+        if (enable) {
+            /* Write Rx addresses (rar_entry_count for RAL/H, and
+             * SHRAL/H) and initial CRC values to the MAC
+             */
+            // for i in 0..self.hw.as_ref().mac.rar_entry_count as usize {
+            //     let mut mac_addr = [0u8; 6];
+
+            // 	let addr_high = self.er32(RAH(i));
+            // 	if (addr_high & RAH_AV)==0{
+            // 		continue;
+            //     }
+            // 	let addr_low = self.er32(RAL(i));
+            // 	mac_addr[0] = (addr_low & 0xFF) as u8;
+            // 	mac_addr[1] = ((addr_low >> 8) & 0xFF) as u8;
+            // 	mac_addr[2] = ((addr_low >> 16) & 0xFF) as u8;
+            // 	mac_addr[3] = ((addr_low >> 24) & 0xFF) as u8;
+            // 	mac_addr[4] = (addr_high & 0xFF) as u8;
+            // 	mac_addr[5] = ((addr_high >> 8) & 0xFF) as u8;
+
+            //     self.	ew32(PCH_RAICC(i), !ether_crc_le(6, mac_addr));
+            // }
+
+            // /* Write Rx addresses to the PHY */
+            // e1000_copy_rx_addrs_to_phy_ich8lan(hw);
+
+            // /* Enable jumbo frame workaround in the MAC */
+            // mac_reg = er32(FFLT_DBG);
+            // mac_reg &= ~BIT(14);
+            // mac_reg |= (7 << 15);
+            // ew32(FFLT_DBG, mac_reg);
+
+            // mac_reg = er32(RCTL);
+            // mac_reg |= E1000_RCTL_SECRC;
+            // ew32(RCTL, mac_reg);
+
+            // ret_val = e1000e_read_kmrn_reg(hw,
+            // 			       E1000_KMRNCTRLSTA_CTRL_OFFSET,
+            // 			       &data);
+            // if (ret_val)
+            // 	return ret_val;
+            // ret_val = e1000e_write_kmrn_reg(hw,
+            // 				E1000_KMRNCTRLSTA_CTRL_OFFSET,
+            // 				data | BIT(0));
+            // if (ret_val)
+            // 	return ret_val;
+            // ret_val = e1000e_read_kmrn_reg(hw,
+            // 			       E1000_KMRNCTRLSTA_HD_CTRL,
+            // 			       &data);
+            // if (ret_val)
+            // 	return ret_val;
+            // data &= ~(0xF << 8);
+            // data |= (0xB << 8);
+            // ret_val = e1000e_write_kmrn_reg(hw,
+            // 				E1000_KMRNCTRLSTA_HD_CTRL,
+            // 				data);
+            // if (ret_val)
+            // 	return ret_val;
+
+            // /* Enable jumbo frame workaround in the PHY */
+            // e1e_rphy(hw, PHY_REG(769, 23), &data);
+            // data &= ~(0x7F << 5);
+            // data |= (0x37 << 5);
+            // ret_val = e1e_wphy(hw, PHY_REG(769, 23), data);
+            // if (ret_val)
+            // 	return ret_val;
+            // e1e_rphy(hw, PHY_REG(769, 16), &data);
+            // data &= ~BIT(13);
+            // ret_val = e1e_wphy(hw, PHY_REG(769, 16), data);
+            // if (ret_val)
+            // 	return ret_val;
+            // e1e_rphy(hw, PHY_REG(776, 20), &data);
+            // data &= ~(0x3FF << 2);
+            // data |= (E1000_TX_PTR_GAP << 2);
+            // ret_val = e1e_wphy(hw, PHY_REG(776, 20), data);
+            // if (ret_val)
+            // 	return ret_val;
+            // ret_val = e1e_wphy(hw, PHY_REG(776, 23), 0xF100);
+            // if (ret_val)
+            // 	return ret_val;
+            // e1e_rphy(hw, HV_PM_CTRL, &data);
+            // ret_val = e1e_wphy(hw, HV_PM_CTRL, data | BIT(10));
+            // if (ret_val)
+            // 	return ret_val;
+        } else {
+            /* Write MAC register values back to h/w defaults */
+            let mut mac_reg = self.er32(FFLT_DBG);
+            mac_reg &= !(0xF << 14);
+            self.ew32(FFLT_DBG, mac_reg);
+
+            mac_reg = self.er32(RCTL);
+            mac_reg &= !RCTL_SECRC;
+            self.ew32(RCTL, mac_reg);
+
+            let mut data = hw.read_kmrn_reg(KMRNCTRLSTA_CTRL_OFFSET);
+
+            hw.write_kmrn_reg(KMRNCTRLSTA_CTRL_OFFSET, data & !(BIT(0) as u16));
+
+            data = hw.read_kmrn_reg(KMRNCTRLSTA_HD_CTRL);
+
+            data &= !(0xF << 8);
+            data |= (0xB << 8);
+
+            hw.write_kmrn_reg(KMRNCTRLSTA_HD_CTRL, data);
+
+            /* Write PHY register values back to h/w defaults */
+            let mut data = self.e1e_rphy(PHY_REG(769, 23))?;
+            data &= !(0x7F << 5);
+            self.e1e_wphy(PHY_REG(769, 23), data)?;
+            data = self.e1e_rphy(PHY_REG(769, 16))?;
+            data |= BIT(13)as u16;
+            self.e1e_wphy(PHY_REG(769, 16), data)?;
+            data = self.e1e_rphy(PHY_REG(776, 20))?;
+            data &= !(0x3FF << 2);
+            data |= (0x8 << 2);
+            self.e1e_wphy(PHY_REG(776, 20), data)?;
+            self.e1e_wphy(PHY_REG(776, 23), 0x7E00)?;
+            data = self.e1e_rphy(HV_PM_CTRL)?;
+            self.e1e_wphy(HV_PM_CTRL, data & !(BIT(10) as u16))?;
+        }
+
+        /* re-enable Rx path after enabling/disabling workaround */
+        return self.e1e_wphy(PHY_REG(769, 20), phy_reg & !(BIT(14)as u16));
     }
 
     fn udelay(&self, val: u32) {

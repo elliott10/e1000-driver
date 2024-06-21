@@ -502,6 +502,23 @@ where
 
         Err(Error::Nvm("poll fail"))
     }
+    pub(crate) fn read_kmrn_reg(&mut self, offset: u32) -> u16 {
+        let mut kmrnctrlsta =
+            ((offset << KMRNCTRLSTA_OFFSET_SHIFT) & KMRNCTRLSTA_OFFSET) | KMRNCTRLSTA_REN;
+        self.ew32(KMRNCTRLSTA, kmrnctrlsta);
+        self.e1e_flush();
+
+        self.udelay(2);
+
+        self.er32(KMRNCTRLSTA) as u16
+    }
+    pub(crate) fn write_kmrn_reg(&mut self, offset: u32, data: u16) {
+        let mut kmrnctrlsta =
+            ((offset << KMRNCTRLSTA_OFFSET_SHIFT) & KMRNCTRLSTA_OFFSET) | data as u32;
+        self.ew32(KMRNCTRLSTA, kmrnctrlsta);
+        self.e1e_flush();
+        self.udelay(2);
+    }
 
     fn is_enable_mng_pass_thru(&mut self) -> bool {
         // let manc = self.er32(MANC);
@@ -999,11 +1016,12 @@ where
         }
 
         info!(
-            "writing PHY addr {} page {} (or {:#X} shifted) reg {:#X}",
+            "writing PHY addr {} page {} (or {:#X} shifted) reg {:#X} data {:#X}",
             self.phy.addr,
             page,
             page << IGP_PAGE_SHIFT,
-            reg
+            reg,
+            value
         );
 
         self.write_phy_reg_mdic(MAX_PHY_REG_ADDRESS & reg as u32, value)

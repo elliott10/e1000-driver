@@ -623,7 +623,18 @@ pub(crate) const PHY_CTRL_NOND0A_LPLU: u32 = 0x00000004;
 pub(crate) const PHY_CTRL_NOND0A_GBE_DISABLE: u32 = 0x00000008;
 pub(crate) const PHY_CTRL_GBE_DISABLE: u32 = 0x00000040;
 
-
+pub(crate) const KMRNCTRLSTA_OFFSET: u32 = 0x001F0000;
+pub(crate) const KMRNCTRLSTA_OFFSET_SHIFT: u32 = 16;
+pub(crate) const KMRNCTRLSTA_REN: u32 = 0x00200000;
+pub(crate) const KMRNCTRLSTA_CTRL_OFFSET: u32 = 0x1;
+pub(crate) const KMRNCTRLSTA_DIAG_OFFSET: u8 = 0x3;
+pub(crate) const KMRNCTRLSTA_TIMEOUTS: u8 = 0x4;
+pub(crate) const KMRNCTRLSTA_INBAND_PARAM: u8 = 0x9;
+pub(crate) const KMRNCTRLSTA_IBIST_DISABLE: u16 = 0x0200;
+pub(crate) const KMRNCTRLSTA_DIAG_NELPBK: u16 = 0x1000;
+pub(crate) const KMRNCTRLSTA_K1_CONFIG: u8 = 0x7;
+pub(crate) const KMRNCTRLSTA_K1_ENABLE: u16 = 0x0002;
+pub(crate) const KMRNCTRLSTA_HD_CTRL: u32 = 0x10;
 use core::arch::asm;
 
 pub(crate) fn fence() {

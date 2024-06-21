@@ -699,8 +699,6 @@ impl DevSpecIch8lan {
         hw.ew32(CTRL, ctrl);
         hw.e1e_flush();
 
-        self.close_fc(hw);
-
         hw.print_status();
         self.copper_link_setup_82577(hw)?;
 

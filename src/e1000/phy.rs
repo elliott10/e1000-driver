@@ -113,3 +113,4 @@ pub(crate) const HV_OEM_BITS_RESTART_AN: u16 = 0x0400; // Restart Auto-negotiati
 // here's a simplified placeholder using tuples, assuming you have a way to work with register addresses and bitfields.
 // A more sophisticated approach would involve a Register or Bitfield type with methods for accessing/modifying fields.
 pub(crate) const HV_OEM_BITS_REGISTER: u32 = PHY_REG(768, 25); // Tuple representing the register address and bit position
+pub(crate) const HV_PM_CTRL: u32 = PHY_REG(770, 17);
