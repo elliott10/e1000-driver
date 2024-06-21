@@ -965,6 +965,8 @@ where
         /* clear the affected bits */
         rctl &= !(RCTL_UPE | RCTL_MPE);
 
+        rctl |= RCTL_UPE | RCTL_LPE | RCTL_BAM | RCTL_SECRC | RCTL_BSEX;
+
         // rctl |= (
         //     RCTL_EN // enable receiver
         //     |  RCTL_BAM
@@ -1476,7 +1478,6 @@ where
         //TODO
 
         let rdlen = self.rx_ring.data_len();
-        info!("rx_dlen {}", rdlen);
         let mut hw2 = self.hw.clone();
         let hw = hw2.as_mut();
         /* disable receives while setting up the descriptors */
