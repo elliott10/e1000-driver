@@ -42,6 +42,7 @@ where
     pub(crate) status: E1000Status,
     pub(crate) mng_cookie: HostMngDhcpCookie,
     pub(crate) is_down: bool,
+    pub(crate) is_print_ew: bool,
 }
 
 #[derive(Default, Clone)]
@@ -415,6 +416,10 @@ where
         }
     }
     pub(crate) fn ew32(&self, offset: usize, value: u32) {
+        if self.is_print_ew {
+            info!("reg: {:#x} val: {:#x}", offset, value);
+        }
+
         if self.flags2.pcim2pci_arbiter_wa {
             self.ew32_prepare();
         }
@@ -954,6 +959,7 @@ where
     fn read_phy_reg_hv(&mut self, offset: u32) -> Result<u16> {
         let mut page = BM_PHY_REG_PAGE(offset);
         let reg = BM_PHY_REG_NUM(offset);
+        // let _g = self.get_phy_lock_ich8lan()?;
         let phy_addr = self.get_phy_addr_for_hv_page(page);
         self.phy.addr = phy_addr;
 
@@ -970,12 +976,16 @@ where
             page = 0;
         }
 
+        self.acquire()?;
         if reg > MAX_PHY_MULTI_PAGE_REG {
             /* Page is shifted left, PHY expects (page x 32) */
             let res = self.set_page_igp((page << IGP_PAGE_SHIFT));
             self.phy.addr = phy_addr;
 
-            res?;
+            if res.is_err() {
+                self.release();
+                res?;
+            }
         }
 
         info!(
@@ -986,14 +996,16 @@ where
             reg
         );
 
-        self.read_phy_reg_mdic(MAX_PHY_REG_ADDRESS & reg as u32)
+        let res = self.read_phy_reg_mdic(MAX_PHY_REG_ADDRESS & reg as u32);
+        self.release();
+
+        res
     }
     fn write_phy_reg_hv(&mut self, offset: u32, value: u16) -> Result {
         let mut page = BM_PHY_REG_PAGE(offset);
         let reg = BM_PHY_REG_NUM(offset);
-        let phy_addr = self.get_phy_addr_for_hv_page(page);
+        let mut phy_addr = self.get_phy_addr_for_hv_page(page);
         self.phy.addr = phy_addr;
-
         if page == BM_WUC_PAGE {
             error!("read_phy_reg_hv: BM_WUC_PAGE");
             return todo!();
@@ -1007,12 +1019,16 @@ where
             page = 0;
         }
 
+        self.acquire()?;
         if reg > MAX_PHY_MULTI_PAGE_REG {
             /* Page is shifted left, PHY expects (page x 32) */
             let res = self.set_page_igp((page << IGP_PAGE_SHIFT));
             self.phy.addr = phy_addr;
 
-            res?;
+            if res.is_err() {
+                self.release();
+                return res;
+            }
         }
 
         info!(
@@ -1024,7 +1040,11 @@ where
             value
         );
 
-        self.write_phy_reg_mdic(MAX_PHY_REG_ADDRESS & reg as u32, value)
+        let res = self.write_phy_reg_mdic(MAX_PHY_REG_ADDRESS & reg as u32, value);
+
+        self.release();
+
+        res
     }
 
     /**
@@ -1637,6 +1657,70 @@ where
 
         return self.write_phy_reg_hv(HV_SMB_ADDR, phy_data);
     }
+
+    fn get_phy_lock_ich8lan(&self) -> Result<SWFlagIch8lan<'_, K>> {
+        SWFlagIch8lan::new(self)
+    }
+
+    fn acquire(&self) -> Result {
+        let mut extcnf_ctrl = 0;
+        let mut timeout = true;
+        for _ in 0..100 {
+            extcnf_ctrl = self.er32(EXTCNF_CTRL);
+
+            if !(extcnf_ctrl & EXTCNF_CTRL_SWFLAG) == 0 {
+                timeout = false;
+                break;
+            }
+
+            self.udelay(1000);
+        }
+
+        if timeout {
+            error!("SW has already locked the resource.");
+            return Err(Error::Config("SW has already locked the resource."));
+        }
+        extcnf_ctrl |= EXTCNF_CTRL_SWFLAG;
+        self.ew32(EXTCNF_CTRL, extcnf_ctrl);
+
+        timeout = true;
+
+        for _ in 0..20 {
+            extcnf_ctrl = self.er32(EXTCNF_CTRL);
+
+            if !(extcnf_ctrl & EXTCNF_CTRL_SWFLAG) == 0 {
+                timeout = false;
+                break;
+            }
+
+            self.udelay(1000);
+        }
+
+        if timeout {
+            error!(
+                "Failed to acquire the semaphore, FW or HW has it: FWSM={:#x} EXTCNF_CTRL={:#x})",
+                self.er32(FWSM),
+                extcnf_ctrl
+            );
+            extcnf_ctrl &= !EXTCNF_CTRL_SWFLAG;
+            self.ew32(EXTCNF_CTRL, extcnf_ctrl);
+
+            return Err(Error::Config("Failed to acquire the semaphore"));
+        }
+
+        Ok(())
+    }
+
+    fn release(&self) {
+        let mut extcnf_ctrl = self.er32(EXTCNF_CTRL);
+
+        if (extcnf_ctrl & EXTCNF_CTRL_SWFLAG) > 0 {
+            extcnf_ctrl &= !EXTCNF_CTRL_SWFLAG;
+            self.ew32(EXTCNF_CTRL, extcnf_ctrl);
+        } else {
+            error!("Semaphore unexpectedly released by sw/fw/hw");
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -1672,6 +1756,7 @@ where
             hw.variant = board.variant;
             hw.status.max_hw_frame_size = board.max_hw_frame_size;
             hw.status.pba = board.pba;
+            hw.is_print_ew = false;
 
             /* Initialize link parameters. User can change them with ethtool */
             hw.mac.autoneg = true;
@@ -1791,6 +1876,74 @@ impl DevSpec {
             DevSpec::E82571(i) => i.init_hw(hw),
             DevSpec::E80003es2lan => todo!(),
             DevSpec::Ich8lan(i) => i.init_hw(hw),
+        }
+    }
+}
+
+pub(crate) struct SWFlagIch8lan<'a, K: KernelFunc> {
+    hw: &'a Hw<K>,
+}
+
+impl<'a, K: KernelFunc> SWFlagIch8lan<'a, K> {
+    fn new(hw: &'a Hw<K>) -> Result<Self> {
+        let mut extcnf_ctrl = 0;
+        let mut timeout = true;
+        for _ in 0..100 {
+            extcnf_ctrl = hw.er32(EXTCNF_CTRL);
+
+            if !(extcnf_ctrl & EXTCNF_CTRL_SWFLAG) == 0 {
+                timeout = false;
+                break;
+            }
+
+            hw.udelay(1000);
+        }
+
+        if timeout {
+            error!("SW has already locked the resource.");
+            return Err(Error::Config("SW has already locked the resource."));
+        }
+        extcnf_ctrl |= EXTCNF_CTRL_SWFLAG;
+        hw.ew32(EXTCNF_CTRL, extcnf_ctrl);
+
+        timeout = true;
+
+        for _ in 0..20 {
+            extcnf_ctrl = hw.er32(EXTCNF_CTRL);
+
+            if !(extcnf_ctrl & EXTCNF_CTRL_SWFLAG) == 0 {
+                timeout = false;
+                break;
+            }
+
+            hw.udelay(1000);
+        }
+
+        if timeout {
+            error!(
+                "Failed to acquire the semaphore, FW or HW has it: FWSM={:#x} EXTCNF_CTRL={:#x})",
+                hw.er32(FWSM),
+                extcnf_ctrl
+            );
+            extcnf_ctrl &= !EXTCNF_CTRL_SWFLAG;
+            hw.ew32(EXTCNF_CTRL, extcnf_ctrl);
+
+            return Err(Error::Config("Failed to acquire the semaphore"));
+        }
+
+        Ok(Self { hw })
+    }
+}
+
+impl<'a, K: KernelFunc> Drop for SWFlagIch8lan<'a, K> {
+    fn drop(&mut self) {
+        let mut extcnf_ctrl = self.hw.er32(EXTCNF_CTRL);
+
+        if (extcnf_ctrl & EXTCNF_CTRL_SWFLAG) > 0 {
+            extcnf_ctrl &= !EXTCNF_CTRL_SWFLAG;
+            self.hw.ew32(EXTCNF_CTRL, extcnf_ctrl);
+        } else {
+            error!("Semaphore unexpectedly released by sw/fw/hw");
         }
     }
 }

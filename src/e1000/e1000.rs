@@ -843,17 +843,60 @@ where
         self.configure()?;
         self.hw.as_mut().mac.get_link_status = true;
 
-        info!("e1000_init has been completed");
+        info!(
+            "e1000_init has been completed ctrl {:#x} ctrl_ext {:#x} rctl {:#x}",
+            self.er32(CTRL),
+            self.er32(CTRL_EXT),
+            self.er32(RCTL)
+        );
+        self.hw.as_mut().is_print_ew = true;
+
+        self.after_open();
+
+        self.after_open();
 
         let ret = self.hw.as_mut().phy_has_link_generic(10, 10)?;
-
         info!("link : {}", ret);
+
+        self.hw.as_mut().is_print_ew = false;
+
         self.print_status();
 
         self.after_link_up()?;
 
         fence_r();
         Ok(())
+    }
+
+    fn after_open(&mut self) {
+        // todo
+        fence();
+        self.update_mc_addr_list_generic();
+        self.ew32(MTA, 0x10);
+        self.clean_uc_addr();
+        self.ew32(RCTL, self.er32(RCTL));
+        self.ew32(CTRL, self.er32(CTRL));
+
+        fence();
+    }
+
+    fn clean_uc_addr(&mut self) {
+        let mut hw = self.hw.clone();
+        let hw = hw.as_mut();
+
+        for i in 1..hw.mac.rar_entry_count as usize {
+            hw.ew32(RAL(i), 0);
+            hw.ew32(RAH(i), 0)
+        }
+    }
+
+    fn update_mc_addr_list_generic(&mut self) {
+        let mut hw = self.hw.clone();
+        let hw = hw.as_mut();
+
+        for i in 0..hw.mac.mta_reg_count as usize {
+            hw.write_reg_array(MTA, i, 0);
+        }
     }
 
     fn old_open(&mut self) -> Result {
