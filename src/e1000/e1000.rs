@@ -87,7 +87,7 @@ where
     pub fn init(&mut self) -> Result {
         info!("Init begin ...");
         self.print_status();
-        self.simple_reset();
+        // self.simple_reset();
 
         self.check_opention();
         self.read_mac_addr_generic();
@@ -853,16 +853,14 @@ where
 
         self.after_open();
 
-        self.after_open();
-
-        let ret = self.hw.as_mut().phy_has_link_generic(10, 10)?;
+        let ret = self.hw.as_mut().phy_has_link_generic(1, 10)?;
         info!("link : {}", ret);
 
-        self.hw.as_mut().is_print_ew = false;
+        // self.hw.as_mut().is_print_ew = false;
 
         self.print_status();
 
-        self.after_link_up()?;
+        // self.after_link_up()?;
 
         fence_r();
         Ok(())
@@ -870,14 +868,34 @@ where
 
     fn after_open(&mut self) {
         // todo
-        fence();
         self.update_mc_addr_list_generic();
         self.ew32(MTA, 0x10);
         self.clean_uc_addr();
-        self.ew32(RCTL, self.er32(RCTL));
-        self.ew32(CTRL, self.er32(CTRL));
+        self.ew32(RCTL, 0x4008002);
+        self.ew32(CTRL, 0x40180240);
 
-        fence();
+        // if (self.hw.as_ref().mac.kind >= MacType::e1000_pch_lpt) {
+        //     for _ in 0..1 {
+        //         let link = self.hw.as_mut().phy_has_link_generic(1, 0).unwrap();
+
+        //         if link {
+        //             "link up";
+        //             break;
+        //         }
+        //         let mut mac_reg = self.er32(FEXTNVM4);
+        //         mac_reg &= !FEXTNVM4_BEACON_DURATION_MASK;
+        //         mac_reg |= FEXTNVM4_BEACON_DURATION_8USEC;
+        //         self.ew32(FEXTNVM4, mac_reg);
+        //         self.ew32(0xf8, 0x40000000);
+        //         self.ew32(FEXTNVM6, 0xe00);
+        //         self.ew32(0xc8, 0x10);
+        //         self.ew32(0xd0, 0x40009d);
+
+        //         // for _ in 0..1000_000 {
+        //         //     self.hw.as_ref().udelay(1_000);
+        //         // }
+        //     }
+        // }
     }
 
     fn clean_uc_addr(&mut self) {
@@ -2071,10 +2089,14 @@ where
 
     pub fn task_watchdog(&mut self) -> Result {
         let link = self.hw.as_mut().has_link();
-
         if link {
             info!("Link is Up");
             self.print_status();
+        } else {
+         
+            // for _ in 0..1000 {
+            //     self.udelay(1000_0000);
+            // }
         }
 
         self.update_adaptive();

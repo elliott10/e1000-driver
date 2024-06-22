@@ -60,10 +60,10 @@ pub(crate) const STRAP_SMT_FREQ_SHIFT: u32 = 12;
 
 pub(crate) const FEXTNVM: usize = 0x00028; // Future Extended NVM - RW
 pub(crate) const FEXTNVM3: usize = 0x0003C; // Future Extended NVM 3 - RW
-pub(crate) const FEXTNVM4: u16 = 0x00024; // Future Extended NVM 4 - RW
-pub(crate) const FEXTNVM5: u16 = 0x00014; // Future Extended NVM 5 - RW
-pub(crate) const FEXTNVM6: u16 = 0x00010; // Future Extended NVM 6 - RW
-pub(crate) const FEXTNVM7: u16 = 0x000E4; // Future Extended NVM 7 - RW
+pub(crate) const FEXTNVM4: usize = 0x00024; // Future Extended NVM 4 - RW
+pub(crate) const FEXTNVM5: usize = 0x00014; // Future Extended NVM 5 - RW
+pub(crate) const FEXTNVM6: usize = 0x00010; // Future Extended NVM 6 - RW
+pub(crate) const FEXTNVM7: usize = 0x000E4; // Future Extended NVM 7 - RW
 pub(crate) const FEXTNVM8: usize = 0x5BB0; // Future Extended NVM 8 - RW
 pub(crate) const FEXTNVM9: usize = 0x5BB4; // Future Extended NVM 9 - RW
 pub(crate) const FEXTNVM11: usize = 0x5BBC; // Future Extended NVM 11 - RW

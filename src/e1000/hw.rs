@@ -1617,17 +1617,27 @@ where
     }
 
     fn check_for_copper_link(&mut self) -> Result {
-        if self.mac.get_link_status {
+        if !self.mac.get_link_status {
             return Ok(());
         }
         self.mac.get_link_status = false;
 
         let link = self.phy_has_link_generic(1, 0)?;
-        if !link {
+        if link {
+            info!("link up!");
             return Ok(());
         }
-        self.mac.get_link_status = true;
 
+        let mut mac_reg = self.er32(FEXTNVM4);
+        mac_reg &= !FEXTNVM4_BEACON_DURATION_MASK;
+        mac_reg |= FEXTNVM4_BEACON_DURATION_8USEC;
+        self.ew32(FEXTNVM4, mac_reg);
+        self.ew32(0xf8, 0x40000000);
+        self.ew32(FEXTNVM6, 0xe00);
+        self.ew32(0xc8, 0x10);
+        self.ew32(0xd0, 0x40009d);
+
+        self.mac.get_link_status = true;
         Ok(())
     }
 
@@ -1668,7 +1678,7 @@ where
         for _ in 0..100 {
             extcnf_ctrl = self.er32(EXTCNF_CTRL);
 
-            if !(extcnf_ctrl & EXTCNF_CTRL_SWFLAG) == 0 {
+            if extcnf_ctrl & EXTCNF_CTRL_SWFLAG == 0 {
                 timeout = false;
                 break;
             }
@@ -1688,7 +1698,7 @@ where
         for _ in 0..20 {
             extcnf_ctrl = self.er32(EXTCNF_CTRL);
 
-            if !(extcnf_ctrl & EXTCNF_CTRL_SWFLAG) == 0 {
+            if extcnf_ctrl & EXTCNF_CTRL_SWFLAG > 0 {
                 timeout = false;
                 break;
             }
@@ -1886,51 +1896,6 @@ pub(crate) struct SWFlagIch8lan<'a, K: KernelFunc> {
 
 impl<'a, K: KernelFunc> SWFlagIch8lan<'a, K> {
     fn new(hw: &'a Hw<K>) -> Result<Self> {
-        let mut extcnf_ctrl = 0;
-        let mut timeout = true;
-        for _ in 0..100 {
-            extcnf_ctrl = hw.er32(EXTCNF_CTRL);
-
-            if !(extcnf_ctrl & EXTCNF_CTRL_SWFLAG) == 0 {
-                timeout = false;
-                break;
-            }
-
-            hw.udelay(1000);
-        }
-
-        if timeout {
-            error!("SW has already locked the resource.");
-            return Err(Error::Config("SW has already locked the resource."));
-        }
-        extcnf_ctrl |= EXTCNF_CTRL_SWFLAG;
-        hw.ew32(EXTCNF_CTRL, extcnf_ctrl);
-
-        timeout = true;
-
-        for _ in 0..20 {
-            extcnf_ctrl = hw.er32(EXTCNF_CTRL);
-
-            if !(extcnf_ctrl & EXTCNF_CTRL_SWFLAG) == 0 {
-                timeout = false;
-                break;
-            }
-
-            hw.udelay(1000);
-        }
-
-        if timeout {
-            error!(
-                "Failed to acquire the semaphore, FW or HW has it: FWSM={:#x} EXTCNF_CTRL={:#x})",
-                hw.er32(FWSM),
-                extcnf_ctrl
-            );
-            extcnf_ctrl &= !EXTCNF_CTRL_SWFLAG;
-            hw.ew32(EXTCNF_CTRL, extcnf_ctrl);
-
-            return Err(Error::Config("Failed to acquire the semaphore"));
-        }
-
         Ok(Self { hw })
     }
 }

@@ -635,6 +635,12 @@ pub(crate) const KMRNCTRLSTA_DIAG_NELPBK: u16 = 0x1000;
 pub(crate) const KMRNCTRLSTA_K1_CONFIG: u8 = 0x7;
 pub(crate) const KMRNCTRLSTA_K1_ENABLE: u16 = 0x0002;
 pub(crate) const KMRNCTRLSTA_HD_CTRL: u32 = 0x10;
+
+pub(crate) const FEXTNVM4_BEACON_DURATION_MASK:u32 =	0x7;
+pub(crate)  const FEXTNVM4_BEACON_DURATION_8USEC: u32=	0x7;
+ pub(crate) const FEXTNVM4_BEACON_DURATION_16USEC: u32 =	0x3;
+
+
 use core::arch::asm;
 
 pub(crate) fn fence() {

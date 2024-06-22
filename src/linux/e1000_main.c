@@ -1,10 +1,8 @@
-#include "asm-generic/int-ll64.h"
 #include "e1000.h"
 #include "linux/etherdevice.h"
 #include "linux/gfp_types.h"
 #include "linux/irqreturn.h"
 #include "linux/printk.h"
-#include "linux/refcount.h"
 #include "linux/skbuff.h"
 #include "linux/stddef.h"
 #include <linux/cpu.h>
@@ -160,7 +158,7 @@ static irqreturn_t e1000_intr_msi(int __always_unused irq, void *data) {
   if (e1000r_irq_handle(e1000, irq)) {
     return IRQ_NONE;
   }
-  mod_timer(&adapter->watchdog_timer, jiffies + 1);
+  // mod_timer(&adapter->watchdog_timer, jiffies + 2 );
 
   if (napi_schedule_prep(&adapter->napi)) {
     status->total_tx_bytes = 0;
@@ -320,12 +318,12 @@ int e1000e_open(struct net_device *netdev) {
 
   e1000r_trigger_lsc(e1000);
 
-  netif_start_queue(netdev);
+  // netif_start_queue(netdev);
 
-  netif_carrier_on(netdev);
+  // netif_carrier_on(netdev);
 
-  mod_timer(&adapter->watchdog_timer, jiffies + 1);
   pr_info("e1000e open ok");
+  mod_timer(&adapter->watchdog_timer, round_jiffies(jiffies + 2 * HZ));
   return 0;
 err_req_irq:
 
