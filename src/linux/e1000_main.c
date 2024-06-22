@@ -618,6 +618,12 @@ void cb_on_rcv_pkt(const void *pdev, struct E1000RcvPkt pkt) {
   // skb_checksum_none_assert(skb);
   napi_gro_receive(&adapter->napi, skb);
 }
+void cb_enbale_net(const void *pdev) {
+  struct e1000_adapter *adapter = (struct e1000_adapter *)pdev;
+  netif_start_queue(adapter->netdev);
+
+  netif_carrier_on(adapter->netdev);
+}
 
 /**
  * e1000e_poll - NAPI Rx polling callback
@@ -968,6 +974,7 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent) {
   config.cb_pci_read_config_word = cb_pci_read_config_word;
   config.cb_udelay = cb_udelay;
   config.cb_on_xmit_completed = cb_on_xmit_completed;
+  config.cb_enable_net = cb_enbale_net;
 
   size_t e1000 = e1000r_new(config);
   if (!e1000)

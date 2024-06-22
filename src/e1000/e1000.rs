@@ -29,6 +29,7 @@ where
     pub(crate) rx_ring: Ring<RxDesc, K>,
     pub(crate) hw: HwRc<K>,
     pub(crate) dev_spec: DevSpec,
+    is_link_up: bool,
 }
 
 impl<K> E1000<K>
@@ -66,6 +67,7 @@ where
             rx_ring,
             tx_ring,
             dev_spec,
+            is_link_up: false,
         })
     }
 
@@ -849,12 +851,12 @@ where
             self.er32(CTRL_EXT),
             self.er32(RCTL)
         );
-        self.hw.as_mut().is_print_ew = true;
+        // self.hw.as_mut().is_print_ew = true;
 
         self.after_open();
 
-        let ret = self.hw.as_mut().phy_has_link_generic(1, 10)?;
-        info!("link : {}", ret);
+        // let ret = self.hw.as_mut().phy_has_link_generic(1, 10)?;
+        // info!("link : {}", ret);
 
         // self.hw.as_mut().is_print_ew = false;
 
@@ -871,8 +873,9 @@ where
         self.update_mc_addr_list_generic();
         self.ew32(MTA, 0x10);
         self.clean_uc_addr();
-        self.ew32(RCTL, 0x4008002);
-        self.ew32(CTRL, 0x40180240);
+        // self.ew32(RCTL, 0x4008002);
+        // self.ew32(CTRL, 0x40180240);
+        self.ew32(CTRL, self.er32(CTRL));
 
         // if (self.hw.as_ref().mac.kind >= MacType::e1000_pch_lpt) {
         //     for _ in 0..1 {
@@ -2090,13 +2093,12 @@ where
     pub fn task_watchdog(&mut self) -> Result {
         let link = self.hw.as_mut().has_link();
         if link {
-            info!("Link is Up");
-            self.print_status();
-        } else {
-         
-            // for _ in 0..1000 {
-            //     self.udelay(1000_0000);
-            // }
+            if !self.is_link_up {
+                info!("Link is up");
+                self.is_link_up = true;
+
+                self.after_link_up();
+            }
         }
 
         self.update_adaptive();

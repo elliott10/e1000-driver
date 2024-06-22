@@ -149,6 +149,8 @@ typedef uint16_t (*E1000CbPciReadConfigWord)(const void *pdev, int32_t where_);
 
 typedef void (*E1000CbOnXmitCompleted)(const void *pdev, uint32_t pkts, uint32_t bytes);
 
+typedef void (*E1000CbEnableNet)(const void *pdev);
+
 typedef struct E1000Config {
   uint32_t device_id;
   E1000CbBarNremap cb_bar_n_remap;
@@ -160,6 +162,7 @@ typedef struct E1000Config {
   E1000CbDmaFreeCoherent cb_dma_free_coherent;
   E1000CbPciReadConfigWord cb_pci_read_config_word;
   E1000CbOnXmitCompleted cb_on_xmit_completed;
+  E1000CbEnableNet cb_enable_net;
   const void *adapter;
 } E1000Config;
 

@@ -54,6 +54,7 @@ pub trait KernelFunc: Send + Sync + Clone {
 
     fn on_xmit_completed(&self, pkts: u32, bytes: u32);
 
+    fn enable_net(&self);
     // fn num_msix_vectors(&self)->usize;
 }
 

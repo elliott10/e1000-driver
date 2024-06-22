@@ -29,6 +29,7 @@ struct KFun {
     cb_dma_free: E1000CbDmaFreeCoherent,
     cb_pci_read_config_word: E1000CbPciReadConfigWord,
     cb_on_xmit_completed: E1000CbOnXmitCompleted,
+    cb_enable_net: E1000CbEnableNet,
     adapter: *const c_void,
 }
 
@@ -74,6 +75,10 @@ impl KernelFunc for KFun {
     fn on_xmit_completed(&self, pkts: u32, bytes: u32) {
         unsafe { (self.cb_on_xmit_completed)(self.adapter, pkts, bytes) }
     }
+
+    fn enable_net(&self) {
+        unsafe { ((self.cb_enable_net)(self.adapter)) }
+    }
 }
 
 type DevicePtr = *mut Device;
@@ -103,6 +108,7 @@ pub type E1000CbPciReadConfigWord = unsafe extern "C" fn(pdev: *const c_void, wh
 pub type E1000CbOnXmitCompleted = unsafe extern "C" fn(pdev: *const c_void, pkts: u32, bytes: u32);
 pub type E1000CbOnRcv = unsafe extern "C" fn(pdev: *const c_void, pkt: E1000RcvPkt);
 
+pub type E1000CbEnableNet = unsafe extern "C" fn(pdev: *const c_void);
 #[repr(C)]
 pub struct E1000Config {
     device_id: u32,
@@ -115,6 +121,7 @@ pub struct E1000Config {
     cb_dma_free_coherent: E1000CbDmaFreeCoherent,
     cb_pci_read_config_word: E1000CbPciReadConfigWord,
     cb_on_xmit_completed: E1000CbOnXmitCompleted,
+    cb_enable_net: E1000CbEnableNet,
     adapter: *const c_void,
 }
 
@@ -141,6 +148,7 @@ extern "C" fn e1000r_new(config: E1000Config) -> usize {
         cb_dma_free: config.cb_dma_free_coherent,
         cb_pci_read_config_word: config.cb_pci_read_config_word,
         cb_on_xmit_completed: config.cb_on_xmit_completed,
+        cb_enable_net: config.cb_enable_net,
     };
 
     let e1000 = match E1000::new(kfun, config.device_id) {
