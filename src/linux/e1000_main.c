@@ -387,15 +387,8 @@ static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
 
   // unsigned int first;
   size_t e1000 = adapter->ptr;
-  unsigned int len = skb_headlen(skb);
-  unsigned int nr_frags;
-  unsigned int mss;
-  int count = 0;
-  // int tso;
-  // unsigned int tx_flags = 0;
-  unsigned int f;
+
   __be16 protocol = vlan_get_protocol(skb);
-  struct E1000Status *status = e1000r_status(e1000);
 
   if (skb->len <= 0) {
     dev_kfree_skb_any(skb);
@@ -408,43 +401,7 @@ static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
   if (skb_put_padto(skb, 17))
     return NETDEV_TX_OK;
 
-  mss = skb_shinfo(skb)->gso_size;
-  if (mss) {
-    u8 hdr_len;
-
-    /* TSO Workaround for 82571/2/3 Controllers -- if skb->data
-     * points to just header, pull a few bytes of payload from
-     * frags into skb->data
-     */
-    hdr_len = skb_tcp_all_headers(skb);
-    /* we do this workaround for ES2LAN, but it is un-necessary,
-     * avoiding it could save a lot of cycles
-     */
-    if (skb->data_len && (hdr_len == len)) {
-      unsigned int pull_size;
-
-      pull_size = min_t(unsigned int, 4, skb->data_len);
-      if (!__pskb_pull_tail(skb, pull_size)) {
-        e_err("__pskb_pull_tail failed.\n");
-        dev_kfree_skb_any(skb);
-        return NETDEV_TX_OK;
-      }
-      len = skb_headlen(skb);
-    }
-  }
-
-  /* reserve a descriptor for the offload context */
-  if ((mss) || (skb->ip_summed == CHECKSUM_PARTIAL))
-    count++;
-  count++;
-
-  count += DIV_ROUND_UP(len, status->tx_fifo_limit);
-
-  nr_frags = skb_shinfo(skb)->nr_frags;
-
-  for (f = 0; f < nr_frags; f++)
-    count += DIV_ROUND_UP(skb_frag_size(&skb_shinfo(skb)->frags[f]),
-                          status->tx_fifo_limit);
+  unsigned int len = skb_headlen(skb);
 
   struct E1000XmitConfig config = {
       .timestamp = jiffies,
@@ -460,7 +417,7 @@ static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
   skb_tx_timestamp(skb);
   netdev_sent_queue(netdev, skb->len);
 
-  int32_t n = e1000r_transmit(e1000, config, skb->data, len);
+  int32_t n = e1000r_transmit(e1000, config, skb->data, skb->len);
   if (n < 0) {
     return NETDEV_TX_BUSY;
   }
@@ -609,13 +566,21 @@ static void e1000_netpoll(struct net_device *netdev) {
 
 void cb_on_rcv_pkt(const void *pdev, struct E1000RcvPkt pkt) {
   struct e1000_adapter *adapter = (struct e1000_adapter *)pdev;
-  struct sk_buff *skb = napi_alloc_skb(&adapter->napi, pkt.length);
-  skb_copy_to_linear_data_offset(skb, -NET_IP_ALIGN, (pkt.data - NET_IP_ALIGN),
-                                 (pkt.length + NET_IP_ALIGN));
+  unsigned int len = pkt.length;
+
+  struct sk_buff *skb = napi_alloc_skb(&adapter->napi, len);
+  // skb_copy_to_linear_data_offset(skb, -NET_IP_ALIGN, (pkt.data -
+  // NET_IP_ALIGN),
+  //                                (pkt.length + NET_IP_ALIGN));
+
   /* end copybreak code */
-  skb_put(skb, pkt.length);
+  skb_put_data(skb, pkt.data, len);
+
   skb->protocol = eth_type_trans(skb, adapter->netdev);
   // skb_checksum_none_assert(skb);
+
+  pr_info("rcv pktlen %d skb len %d protocol %d", len, skb->len, skb->protocol);
+
   napi_gro_receive(&adapter->napi, skb);
 }
 void cb_enbale_net(const void *pdev) {
@@ -1046,29 +1011,31 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent) {
   //   }
   // }
 
-  netdev->features &= ~NETIF_F_TSO;
-  netdev->features &= ~NETIF_F_TSO6;
+  // netdev->features &= ~NETIF_F_TSO;
+  // netdev->features &= ~NETIF_F_TSO6;
 
   /* Set user-changeable features (subset of all device features) */
   netdev->hw_features = netdev->features;
-  netdev->hw_features |= NETIF_F_RXFCS;
-  netdev->priv_flags |= IFF_SUPP_NOFCS;
-  netdev->hw_features |= NETIF_F_RXALL;
+  // netdev->hw_features |= NETIF_F_RXFCS;
+  // netdev->priv_flags |= IFF_SUPP_NOFCS;
+  // netdev->hw_features |= NETIF_F_RXALL;
 
-  if (flags.has_hw_vlan_filter)
-    netdev->features |= NETIF_F_HW_VLAN_CTAG_FILTER;
+  // if (flags.has_hw_vlan_filter)
+  //   netdev->features |= NETIF_F_HW_VLAN_CTAG_FILTER;
 
-  netdev->vlan_features |=
-      (NETIF_F_SG | NETIF_F_TSO | NETIF_F_TSO6 | NETIF_F_HW_CSUM);
+  // netdev->vlan_features |=
+  //     (NETIF_F_SG | NETIF_F_TSO | NETIF_F_TSO6 | NETIF_F_HW_CSUM);
 
-  netdev->priv_flags |= IFF_UNICAST_FLT;
+  // netdev->priv_flags |= IFF_UNICAST_FLT;
 
-  netdev->features |= NETIF_F_HIGHDMA;
-  netdev->vlan_features |= NETIF_F_HIGHDMA;
+  // netdev->features |= NETIF_F_HIGHDMA;
+  // netdev->vlan_features |= NETIF_F_HIGHDMA;
 
   /* MTU range: 68 - max_hw_frame_size */
   netdev->min_mtu = ETH_MIN_MTU;
-  netdev->max_mtu = status->max_hw_frame_size - (VLAN_ETH_HLEN + ETH_FCS_LEN);
+  netdev->max_mtu = ETH_DATA_LEN;
+  // netdev->max_mtu = status->max_hw_frame_size - (VLAN_ETH_HLEN +
+  // ETH_FCS_LEN);
 
   e1000r_read_mac_addr(e1000, &mac_addr);
 

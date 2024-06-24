@@ -358,7 +358,7 @@ where
     }
 
     pub fn xmit(&mut self, config: E1000XmitConfig, packet: &[u8]) -> Result<u32> {
-        // info!("transmit {}", packet.len());
+        info!("transmit {}", packet.len());
 
         let tdh = self.er32(TDH(0));
         let mut i = self.er32(TDT(0)) as usize;
@@ -422,7 +422,7 @@ where
             self.rx_ring.next_to_clean = new_index;
 
             let desc = &mut self.rx_ring.as_mut()[index];
-            // info!("rx index: {}, len: {}", index, len);
+            info!("rx index: {}, len: {}", index, len);
 
             let mbuf = unsafe { &*slice_from_raw_parts(self.rx_ring.mbufs[index] as *mut u8, len) };
             let mut data = Vec::try_with_capacity(len).unwrap();
@@ -1954,7 +1954,6 @@ where
         }
 
         let mut txb2b = true;
-
 
         self.hw.as_mut().config_collision_dist_generic();
         self.hw.as_mut().config_fc_after_link_up()?;
