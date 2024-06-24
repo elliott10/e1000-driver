@@ -114,3 +114,7 @@ pub(crate) const HV_OEM_BITS_RESTART_AN: u16 = 0x0400; // Restart Auto-negotiati
 // A more sophisticated approach would involve a Register or Bitfield type with methods for accessing/modifying fields.
 pub(crate) const HV_OEM_BITS_REGISTER: u32 = PHY_REG(768, 25); // Tuple representing the register address and bit position
 pub(crate) const HV_PM_CTRL: u32 = PHY_REG(770, 17);
+
+pub(crate) const I82579_LPI_CTRL: u32 = PHY_REG(772, 20);
+
+pub(crate) const I82579_LPI_CTRL_ENABLE_MASK: u16 = 0x6000;

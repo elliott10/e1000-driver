@@ -323,7 +323,7 @@ int e1000e_open(struct net_device *netdev) {
   // netif_carrier_on(netdev);
 
   pr_info("e1000e open ok");
-  mod_timer(&adapter->watchdog_timer, round_jiffies(jiffies + 2 * HZ));
+  mod_timer(&adapter->watchdog_timer, round_jiffies(jiffies + 1));
   return 0;
 err_req_irq:
 

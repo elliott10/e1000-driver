@@ -617,7 +617,6 @@ pub(crate) const RXCSUM_IPOFLD: u32 = 0x00000100; /* TCP / UDP checksum offload 
 pub(crate) const RXCSUM_TUOFL: u32 = 0x00000200; /* TCP / UDP checksum offload */
 pub(crate) const PBECCSTS_ECC_ENABLE: u32 = 0x00010000;
 
-
 pub(crate) const PHY_CTRL_D0A_LPLU: u32 = 0x00000002;
 pub(crate) const PHY_CTRL_NOND0A_LPLU: u32 = 0x00000004;
 pub(crate) const PHY_CTRL_NOND0A_GBE_DISABLE: u32 = 0x00000008;
@@ -636,10 +635,22 @@ pub(crate) const KMRNCTRLSTA_K1_CONFIG: u8 = 0x7;
 pub(crate) const KMRNCTRLSTA_K1_ENABLE: u16 = 0x0002;
 pub(crate) const KMRNCTRLSTA_HD_CTRL: u32 = 0x10;
 
-pub(crate) const FEXTNVM4_BEACON_DURATION_MASK:u32 =	0x7;
-pub(crate)  const FEXTNVM4_BEACON_DURATION_8USEC: u32=	0x7;
- pub(crate) const FEXTNVM4_BEACON_DURATION_16USEC: u32 =	0x3;
+pub(crate) const FEXTNVM4_BEACON_DURATION_MASK: u32 = 0x7;
+pub(crate) const FEXTNVM4_BEACON_DURATION_8USEC: u32 = 0x7;
+pub(crate) const FEXTNVM4_BEACON_DURATION_16USEC: u32 = 0x3;
 
+pub(crate) const I217_EEE_PCS_STATUS: u16 = 0x9401; // IEEE MMD Register 3.1
+pub(crate) const I217_EEE_CAPABILITY: u16 = 0x8000; // IEEE MMD Register 3.20
+pub(crate) const I217_EEE_ADVERTISEMENT: u16 = 0x8001; // IEEE MMD Register 7.60
+pub(crate) const I217_EEE_LP_ABILITY: u16 = 0x8002; // IEEE MMD Register 7.61
+
+pub(crate) const I82579_EEE_PCS_STATUS: u16 = 0x182E; // IEEE MMD Register 3.1 >> 8
+pub(crate) const I82579_EEE_CAPABILITY: u16 = 0x0410; // IEEE MMD Register 3.20
+pub(crate) const I82579_EEE_ADVERTISEMENT: u16 = 0x040E; // IEEE MMD Register 7.60
+pub(crate) const I82579_EEE_LP_ABILITY: u16 = 0x040F; // IEEE MMD Register 7.61
+
+pub(crate) const LPA_PAUSE_CAP: u16 = 0x0400; /* Can pause                   */
+pub(crate) const LPA_PAUSE_ASYM: u16 = 0x0800; /* Can pause asymetrically     */
 
 use core::arch::asm;
 

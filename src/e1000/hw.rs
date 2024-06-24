@@ -214,7 +214,7 @@ impl Default for MsType {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy, PartialOrd)]
 pub enum PhyType {
     Unknown,
     None,
@@ -1155,9 +1155,145 @@ where
         // e1e_wphy(hw, MII_BMCR, mii_reg);
     }
 
-    fn config_fc_after_link_up(&mut self) -> Result {
+    pub(crate) fn config_fc_after_link_up(&mut self) -> Result {
         self.get_speed_and_duplex_copper();
-        self.force_mac_fc()?;
+
+        if self.mac.autoneg_failed {
+        } else {
+            self.force_mac_fc()?;
+        }
+
+        /* Check for the case where we have copper media and auto-neg is
+         * enabled.  In this case, we need to check and see if Auto-Neg
+         * has completed, and if so, how the PHY and link partner has
+         * flow control configured.
+         */
+        if ((self.phy.media_type == MediaType::media_type_copper) && self.mac.autoneg) {
+            /* Read the MII Status Register and check to see if AutoNeg
+             * has completed.  We read this twice because this reg has
+             * some "sticky" (latched) bits.
+             */
+            let mut mii_status_reg = self.e1e_rphy(MII_BMSR)?;
+
+            mii_status_reg = self.e1e_rphy(MII_BMSR)?;
+
+            if (mii_status_reg & BMSR_ANEGCOMPLETE) == 0 {
+                error!("Copper PHY and Auto Neg has not completed.");
+                return Err(Error::Unknown("Copper PHY and Auto Neg has not completed."));
+            }
+
+            /* The AutoNeg process has completed, so we now need to
+             * read both the Auto Negotiation Advertisement
+             * Register (Address 4) and the Auto_Negotiation Base
+             * Page Ability Register (Address 5) to determine how
+             * flow control was negotiated.
+             */
+            let mut mii_nway_adv_reg = self.e1e_rphy(MII_ADVERTISE)?;
+
+            let mut mii_nway_lp_ability_reg = self.e1e_rphy(MII_LPA)?;
+
+            /* Two bits in the Auto Negotiation Advertisement Register
+             * (Address 4) and two bits in the Auto Negotiation Base
+             * Page Ability Register (Address 5) determine flow control
+             * for both the PHY and the link partner.  The following
+             * table, taken out of the IEEE 802.3ab/D6.0 dated March 25,
+             * 1999, describes these PAUSE resolution bits and how flow
+             * control is determined based upon these settings.
+             * NOTE:  DC = Don't Care
+             *
+             *   LOCAL DEVICE  |   LINK PARTNER
+             * PAUSE | ASM_DIR | PAUSE | ASM_DIR | NIC Resolution
+             *-------|---------|-------|---------|--------------------
+             *   0   |    0    |  DC   |   DC    | e1000_fc_none
+             *   0   |    1    |   0   |   DC    | e1000_fc_none
+             *   0   |    1    |   1   |    0    | e1000_fc_none
+             *   0   |    1    |   1   |    1    | e1000_fc_tx_pause
+             *   1   |    0    |   0   |   DC    | e1000_fc_none
+             *   1   |   DC    |   1   |   DC    | e1000_fc_full
+             *   1   |    1    |   0   |    0    | e1000_fc_none
+             *   1   |    1    |   0   |    1    | e1000_fc_rx_pause
+             *
+             * Are both PAUSE bits set to 1?  If so, this implies
+             * Symmetric Flow Control is enabled at both ends.  The
+             * ASM_DIR bits are irrelevant per the spec.
+             *
+             * For Symmetric Flow Control:
+             *
+             *   LOCAL DEVICE  |   LINK PARTNER
+             * PAUSE | ASM_DIR | PAUSE | ASM_DIR | Result
+             *-------|---------|-------|---------|--------------------
+             *   1   |   DC    |   1   |   DC    | E1000_fc_full
+             *
+             */
+            if (mii_nway_adv_reg & ADVERTISE_PAUSE_CAP) > 0
+                && (mii_nway_lp_ability_reg & LPA_PAUSE_CAP) > 0
+            {
+                /* Now we need to check if the user selected Rx ONLY
+                 * of pause frames.  In this case, we had to advertise
+                 * FULL flow control because we could not advertise Rx
+                 * ONLY. Hence, we must now check to see if we need to
+                 * turn OFF the TRANSMISSION of PAUSE frames.
+                 */
+                if (self.fc.requested_mode == FcMode::Full) {
+                    self.fc.current_mode = FcMode::Full;
+                    info!("Flow Control = FULL.");
+                } else {
+                    self.fc.current_mode = FcMode::RxPause;
+                    info!("Flow Control = Rx PAUSE frames only.");
+                }
+            }
+            /* For receiving PAUSE frames ONLY.
+             *
+             *   LOCAL DEVICE  |   LINK PARTNER
+             * PAUSE | ASM_DIR | PAUSE | ASM_DIR | Result
+             *-------|---------|-------|---------|--------------------
+             *   0   |    1    |   1   |    1    | e1000_fc_tx_pause
+             */
+            else if ((mii_nway_adv_reg & ADVERTISE_PAUSE_CAP) == 0
+                && (mii_nway_adv_reg & ADVERTISE_PAUSE_ASYM) > 0
+                && (mii_nway_lp_ability_reg & LPA_PAUSE_CAP) > 0
+                && (mii_nway_lp_ability_reg & LPA_PAUSE_ASYM) > 0)
+            {
+                self.fc.current_mode = FcMode::TxPause;
+                info!("Flow Control = Tx PAUSE frames only.");
+            }
+            /* For transmitting PAUSE frames ONLY.
+             *
+             *   LOCAL DEVICE  |   LINK PARTNER
+             * PAUSE | ASM_DIR | PAUSE | ASM_DIR | Result
+             *-------|---------|-------|---------|--------------------
+             *   1   |    1    |   0   |    1    | e1000_fc_rx_pause
+             */
+            else if ((mii_nway_adv_reg & ADVERTISE_PAUSE_CAP) > 0
+                && (mii_nway_adv_reg & ADVERTISE_PAUSE_ASYM) > 0
+                && (mii_nway_lp_ability_reg & LPA_PAUSE_CAP) == 0
+                && (mii_nway_lp_ability_reg & LPA_PAUSE_ASYM) > 0)
+            {
+                self.fc.current_mode = FcMode::RxPause;
+                info!("Flow Control = Rx PAUSE frames only.\n");
+            } else {
+                /* Per the IEEE spec, at this point flow control
+                 * should be disabled.
+                 */
+                self.fc.current_mode = FcMode::None;
+                info!("Flow Control = NONE.");
+            }
+
+            /* Now we need to do one last check...  If we auto-
+             * negotiated to HALF DUPLEX, flow control should not be
+             * enabled per IEEE 802.3 spec.
+             */
+            self.get_speed_and_duplex_copper();
+
+            if (self.status.link_duplex == HALF_DUPLEX) {
+                self.fc.current_mode = FcMode::None;
+            }
+
+            /* Now we call a subroutine to actually force the MAC
+             * controller to use the correct flow control settings.
+             */
+            self.force_mac_fc()?;
+        }
 
         Ok(())
     }

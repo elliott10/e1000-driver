@@ -860,7 +860,7 @@ where
 
         // self.hw.as_mut().is_print_ew = false;
 
-        self.print_status();
+        // self.print_status();
 
         // self.after_link_up()?;
 
@@ -872,7 +872,7 @@ where
         // todo
         self.update_mc_addr_list_generic();
         self.ew32(MTA, 0x10);
-        self.clean_uc_addr();
+        // self.clean_uc_addr();
         // self.ew32(RCTL, 0x4008002);
         // self.ew32(CTRL, 0x40180240);
         self.ew32(CTRL, self.er32(CTRL));
@@ -1949,8 +1949,15 @@ where
             warn!("Link Speed was downgraded by SmartSpeed");
         }
 
+        if self.hw.as_ref().phy.kind > PhyType::T82579 {
+            self.set_eee_pchlan()?;
+        }
+
         let mut txb2b = true;
 
+
+        self.hw.as_mut().config_collision_dist_generic();
+        self.hw.as_mut().config_fc_after_link_up()?;
         /* workaround: re-program speed mode bit after
          * link-up event
          */
@@ -1969,7 +1976,31 @@ where
 
         Ok(())
     }
+    fn set_eee_pchlan(&mut self) -> Result {
+        let mut lpa;
+        let mut pcs_status;
+        let mut adv_addr;
 
+        match self.hw.as_ref().phy.kind {
+            PhyType::T82579 => {
+                lpa = I82579_EEE_LP_ABILITY;
+                pcs_status = I82579_EEE_PCS_STATUS;
+                adv_addr = I82579_EEE_ADVERTISEMENT;
+            }
+            PhyType::I217 => {
+                lpa = I217_EEE_LP_ABILITY;
+                pcs_status = I217_EEE_PCS_STATUS;
+                adv_addr = I217_EEE_ADVERTISEMENT;
+            }
+            _ => return Ok(()),
+        }
+
+        let mut lpi_ctrl = self.e1e_rphy(I82579_LPI_CTRL)?;
+        /* Clear bits that enable EEE in various speeds */
+        lpi_ctrl &= !I82579_LPI_CTRL_ENABLE_MASK;
+
+        self.e1e_wphy(I82579_LPI_CTRL, lpi_ctrl)
+    }
     /**
      *  e1000e_check_downshift - Checks whether a downshift in speed occurred
      *  @hw: pointer to the HW structure
@@ -2098,6 +2129,8 @@ where
                 self.is_link_up = true;
 
                 self.after_link_up();
+
+                self.kernel().enable_net();
             }
         }
 
