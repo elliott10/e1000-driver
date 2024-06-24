@@ -66,6 +66,7 @@ static void cb_on_xmit_completed(const void *data, uint32_t pkts,
                                  uint32_t bytes) {
 
   struct e1000_adapter *adapter = (struct e1000_adapter *)data;
+
   netdev_completed_queue(adapter->netdev, pkts, bytes);
 }
 /**
@@ -421,7 +422,7 @@ static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
   if (n < 0) {
     return NETDEV_TX_BUSY;
   }
-  napi_consume_skb(skb, 64);
+  // napi_consume_skb(skb, 64);
   return NETDEV_TX_OK;
 }
 /**

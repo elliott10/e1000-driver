@@ -360,46 +360,65 @@ where
     pub fn xmit(&mut self, config: E1000XmitConfig, packet: &[u8]) -> Result<u32> {
         info!("transmit {}", packet.len());
 
-        let tdh = self.er32(TDH(0));
-        let mut i = self.er32(TDT(0)) as usize;
+        let mut i = self.tx_ring.next_to_use;
 
-        let mut offset = 0;
+        let n = {
+            let n = self.tx_ring.one_copy_data_from(i, packet);
 
-        let mut count = 0;
-
-        let mut src = packet;
-
-        loop {
-            let n = self.tx_ring.one_copy_data_from(i, src);
             let mut tx_desc = &mut self.tx_ring.as_mut()[i];
-
-            let mut txd_lower = 0;
-
-            tx_desc.lower =
-                (TXD_CMD_EOP | TXD_CMD_IFCS | TXD_CMD_RS | (src.len() as u32 & 0xffff)).to_le();
+            tx_desc.lower = (TXD_CMD_EOP | TXD_CMD_IFCS | TXD_CMD_RS | (n as u32 & 0xffff)).to_le();
             tx_desc.status = 0;
-
-            fence_w();
-
-            // tx_desc.length = n as u16;
-            // // tx_desc.cmd = (TXD_CMD_RS | TXD_CMD_EOP | TXD_CMD_IFCS) as u8;
-            // tx_desc.cmd = (TXD_CMD_RS | TXD_CMD_IDE | TXD_CMD_EOP | TXD_CMD_IFCS) as u8;
-            // tx_desc.status = 0;
-
-            count += 1;
-            i += 1;
-
-            if n >= src.len() {
-                break;
-            }
-            src = &src[n..];
+            n
+        };
+        i += 1;
+        if i >= self.tx_ring.size {
+            i = 0;
         }
-
-        i %= TX_RING_SIZE;
+        self.tx_ring.next_to_use = i;
         self.ew32(TDT(0), i as u32);
-        // sync
-        fence_w();
-        Ok(packet.len() as u32)
+
+        Ok(n as u32)
+
+        // let tdh = self.er32(TDH(0));
+        // let mut i = self.er32(TDT(0)) as usize;
+
+        // let mut offset = 0;
+
+        // let mut count = 0;
+
+        // let mut src = packet;
+
+        // loop {
+        //     let n = self.tx_ring.one_copy_data_from(i, src);
+        //     let mut tx_desc = &mut self.tx_ring.as_mut()[i];
+
+        //     let mut txd_lower = 0;
+
+        //     tx_desc.lower =
+        //         (TXD_CMD_EOP | TXD_CMD_IFCS | TXD_CMD_RS | (src.len() as u32 & 0xffff)).to_le();
+        //     tx_desc.status = 0;
+
+        //     fence_w();
+
+        //     // tx_desc.length = n as u16;
+        //     // // tx_desc.cmd = (TXD_CMD_RS | TXD_CMD_EOP | TXD_CMD_IFCS) as u8;
+        //     // tx_desc.cmd = (TXD_CMD_RS | TXD_CMD_IDE | TXD_CMD_EOP | TXD_CMD_IFCS) as u8;
+        //     // tx_desc.status = 0;
+
+        //     count += 1;
+        //     i += 1;
+
+        //     if n >= src.len() {
+        //         break;
+        //     }
+        //     src = &src[n..];
+        // }
+
+        // i %= TX_RING_SIZE;
+        // self.ew32(TDT(0), i as u32);
+        // // sync
+        // fence_w();
+        // Ok(packet.len() as u32)
     }
 
     pub fn clean_rx(&mut self, max: u32) -> Vec<RcvPkt> {
@@ -1512,22 +1531,21 @@ where
         let mut bytes = 0;
 
         let mut i = self.tx_ring.next_to_clean;
-        let mut desc = &self.tx_ring.as_ref()[i];
-        while (desc.status & (TXD_STAT_DD as u8)) != 0 {
+        loop {
             // info!("tx ok");
+            let desc = &self.tx_ring.as_ref()[i];
+            if (desc.status & (TXD_STAT_DD as u8)) == 0 {
+                break;
+            }
 
             pkts += 1;
             bytes += desc.lower & 0xffff;
-
-            fence_r();
 
             i += 1;
 
             if i >= self.tx_ring.size {
                 i = 0;
             }
-
-            desc = &self.tx_ring.as_ref()[i];
         }
 
         let mut status = &mut self.hw.as_mut().status;
