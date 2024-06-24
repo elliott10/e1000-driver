@@ -423,40 +423,68 @@ where
 
     pub fn clean_rx(&mut self, max: u32) -> Vec<RcvPkt> {
         let mut out = Vec::new();
-        let mut index = self.rx_ring.next_to_clean;
+        let mut i = self.rx_ring.next_to_clean;
+        let mut pkts_compl = 0;
+        let mut bytes_compl = 0;
 
         for _ in 0..max {
-            let len = self.rx_ring.as_mut()[index].length as usize;
-            let addr = self.rx_ring.as_mut()[index].addr;
-            let status = self.rx_ring.as_mut()[index].status;
-
-            if (status & RXD_STAT_DD as u8) == 0 {
+            let desc = self.rx_ring.mut_volatile(i);
+            if (desc.status & RXD_STAT_DD as u8) == 0 {
                 break;
             }
-            let mut new_index = index + 1;
-            if new_index >= self.rx_ring.size {
-                new_index = 0;
-            }
-
-            self.rx_ring.next_to_clean = new_index;
-
-            let desc = &mut self.rx_ring.as_mut()[index];
-            info!("rx index: {}, len: {}", index, len);
-
-            let mbuf = unsafe { &*slice_from_raw_parts(self.rx_ring.mbufs[index] as *mut u8, len) };
+            let len = desc.length as usize;
+            let mbuf = unsafe { &*slice_from_raw_parts(self.rx_ring.mbufs[i] as *mut u8, len) };
             let mut data = Vec::try_with_capacity(len).unwrap();
-            for b in mbuf {
-                data.try_push(*b).unwrap();
-            }
-
-            self.e1e_flush();
-            fence_w();
-            self.ew32(RDT(0), index as u32);
+            data.try_extend_from_slice(mbuf);
             out.try_push(RcvPkt { data }).unwrap();
-            index = new_index;
+
+            i += 1;
+            if i >= self.rx_ring.size {
+                i = 0;
+            }
+        }
+
+        if self.rx_ring.next_to_clean != i {
+            self.rx_ring.next_to_clean = i;
+            self.ew32(RDT(0), i as u32);
         }
 
         out
+        // let mut out = Vec::new();
+        // let mut index = self.rx_ring.next_to_clean;
+
+        // for _ in 0..max {
+        //     let len = self.rx_ring.as_mut()[index].length as usize;
+        //     let addr = self.rx_ring.as_mut()[index].addr;
+        //     let status = self.rx_ring.as_mut()[index].status;
+
+        //     if (status & RXD_STAT_DD as u8) == 0 {
+        //         break;
+        //     }
+        //     let mut new_index = index + 1;
+        //     if new_index >= self.rx_ring.size {
+        //         new_index = 0;
+        //     }
+
+        //     self.rx_ring.next_to_clean = new_index;
+
+        //     let desc = &mut self.rx_ring.as_mut()[index];
+        //     // info!("rx index: {}, len: {}", index, len);
+
+        //     let mbuf = unsafe { &*slice_from_raw_parts(self.rx_ring.mbufs[index] as *mut u8, len) };
+        //     let mut data = Vec::try_with_capacity(len).unwrap();
+        //     for b in mbuf {
+        //         data.try_push(*b).unwrap();
+        //     }
+
+        //     // self.e1e_flush();
+        //     // fence_w();
+        //     self.ew32(RDT(0), index as u32);
+        //     out.try_push(RcvPkt { data }).unwrap();
+        //     index = new_index;
+        // }
+
+        // out
     }
 
     fn is_enable_mng_pass_thru(&mut self) -> bool {
@@ -1007,7 +1035,7 @@ where
     }
 
     fn configure(&mut self) -> Result {
-        self.set_rx_mode();
+        // self.set_rx_mode();
         // self.init_manageability_pt();
         self.configure_tx();
         self.setup_rctl();
@@ -1329,9 +1357,11 @@ where
         self.ew32(TDT(0), 0);
 
         /* Set the Tx Interrupt Delay register */
-        self.ew32(TIDV, self.hw.as_ref().status.tx_int_delay);
+        // self.ew32(TIDV, self.hw.as_ref().status.tx_int_delay);
+        self.ew32(TIDV, 0);
         /* Tx irq moderation */
-        self.ew32(TADV, self.hw.as_ref().status.tx_abs_int_delay);
+        // self.ew32(TADV, self.hw.as_ref().status.tx_abs_int_delay);
+        self.ew32(TADV, 0);
 
         if self.hw.as_ref().flags2.dma_burst {
             let mut txdctl = self.er32(TXDCTL(0));
@@ -1584,10 +1614,13 @@ where
         }
 
         /* set the Receive Delay Timer Register */
-        self.ew32(RDTR, hw.status.rx_int_delay);
+        // self.ew32(RDTR, hw.status.rx_int_delay);
+        self.ew32(RDTR, 0);
 
         /* irq moderation */
-        self.ew32(RADV, hw.status.rx_abs_int_delay);
+        // self.ew32(RADV, hw.status.rx_abs_int_delay);
+        self.ew32(RADV, 0);
+
         if (hw.status.itr_setting != 0) && (hw.status.itr != 0) {
             self.write_itr(hw.status.itr);
         }
@@ -1619,10 +1652,10 @@ where
         // 	writel(0, rx_ring->tail);
 
         /* Enable Receive Checksum Offload for TCP and UDP */
-        let mut rxcsum = self.er32(RXCSUM);
-        rxcsum &= !RXCSUM_IPOFLD;
-        rxcsum &= !RXCSUM_TUOFL;
-        self.ew32(RXCSUM, rxcsum);
+        // let mut rxcsum = self.er32(RXCSUM);
+        // rxcsum &= !RXCSUM_IPOFLD;
+        // rxcsum &= !RXCSUM_TUOFL;
+        // self.ew32(RXCSUM, rxcsum);
 
         self.ew32(RCTL, rctl);
     }
@@ -1663,11 +1696,13 @@ where
         /* Program MC offset vector base */
         let mut rctl = self.er32(RCTL);
         rctl &= !(3 << RCTL_MO_SHIFT);
-        rctl |= RCTL_EN
-            | RCTL_BAM
-            | RCTL_LBM_NO
-            | RCTL_RDMTS_HALF
-            | (hw.mac.mc_filter_type << RCTL_MO_SHIFT);
+        rctl =
+            RCTL_BAM
+            // | RCTL_LBM_NO
+            // | RCTL_RDMTS_HALF
+            // | (hw.mac.mc_filter_type << RCTL_MO_SHIFT);
+            & !(0b11 << 10) // Legacy description type
+            ;
 
         /* Do not Store bad packets */
         rctl &= !RCTL_SBP;

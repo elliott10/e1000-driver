@@ -91,6 +91,13 @@ where
         self.mbufs = mbufs;
         self.ring = unsafe { ring.as_mut_ptr() };
     }
+
+    pub(crate) fn mut_volatile(&mut self, i: usize)-> T {
+        unsafe {
+            self.ring.offset(i as _).read_volatile()
+        }
+    }
+
 }
 
 impl<T, K> AsRef<[T]> for Ring<T, K>

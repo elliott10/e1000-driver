@@ -159,7 +159,7 @@ static irqreturn_t e1000_intr_msi(int __always_unused irq, void *data) {
   if (e1000r_irq_handle(e1000, irq)) {
     return IRQ_NONE;
   }
-  // mod_timer(&adapter->watchdog_timer, jiffies + 2 );
+
 
   if (napi_schedule_prep(&adapter->napi)) {
     status->total_tx_bytes = 0;
