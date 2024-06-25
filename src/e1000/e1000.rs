@@ -426,16 +426,19 @@ where
         let mut i = self.rx_ring.next_to_clean;
         let mut pkts_compl = 0;
         let mut bytes_compl = 0;
-        info!(
-            "clean_rx: max {}, index: {}, head {}",
-            max,
-            i,
-            self.er32(RDH(0))
-        );
+        let mut tail = i;
 
         for _ in 0..max {
+            info!(
+                "clean_rx: max {}, index: {}, head {}",
+                max,
+                i,
+                self.er32(RDH(0))
+            );
+
             let desc = self.rx_ring.mut_volatile(i);
             if (desc.status & RXD_STAT_DD as u8) == 0 {
+                tail = i;
                 break;
             }
             self.rx_ring.as_mut()[i].status = 0;
@@ -453,7 +456,7 @@ where
 
         if self.rx_ring.next_to_clean != i {
             self.rx_ring.next_to_clean = i;
-            self.ew32(RDT(0), i as u32);
+            self.ew32(RDT(0), tail as u32);
         }
 
         out
