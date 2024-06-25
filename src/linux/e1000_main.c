@@ -158,12 +158,12 @@ static irqreturn_t e1000_intr_msi(int __always_unused irq, void *data) {
   if (e1000r_irq_handle(e1000, irq)) {
     return IRQ_NONE;
   }
-  pr_info("intr_msi");
   if (napi_schedule_prep(&adapter->napi)) {
     status->total_tx_bytes = 0;
     status->total_tx_packets = 0;
     status->total_rx_bytes = 0;
     status->total_rx_packets = 0;
+    pr_info("__napi_schedule");
     __napi_schedule(&adapter->napi);
   }
   return IRQ_HANDLED;
@@ -609,7 +609,6 @@ void cb_enbale_net(const void *pdev) {
 static int e1000e_poll(struct napi_struct *napi, int budget) {
   struct e1000_adapter *adapter =
       container_of(napi, struct e1000_adapter, napi);
-  pr_info("e1000e_poll");
 
   bool tx_cleand = false;
 
@@ -618,6 +617,8 @@ static int e1000e_poll(struct napi_struct *napi, int budget) {
   // }
 
   int work_done = e1000r_clear_rx(adapter->ptr, budget, cb_on_rcv_pkt, adapter);
+
+  pr_info("e1000e_poll done %d", work_done);
 
   if (!tx_cleand || work_done == budget)
     return budget;
