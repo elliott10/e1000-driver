@@ -283,11 +283,12 @@ static int __maybe_unused e1000_resume(struct device *dev) {
 void e1000e_down(struct e1000_adapter *adapter, bool reset) {
   pr_info("e1000_down");
   struct net_device *netdev = adapter->netdev;
+	netif_carrier_off(netdev);
+  netif_stop_queue(netdev);
+  
 
   e1000r_down(adapter->ptr);
 
-  netif_carrier_off(netdev);
-  netif_stop_queue(netdev);
   napi_synchronize(&adapter->napi);
   del_timer_sync(&adapter->watchdog_timer);
 }
