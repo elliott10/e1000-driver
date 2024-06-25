@@ -1560,6 +1560,14 @@ where
         tctl &= !TCTL_EN;
         self.ew32(TCTL, tctl);
 
+        /* disable receives in the hardware */
+        let rctl = self.er32(RCTL);
+        self.ew32(RCTL, rctl & !RCTL_EN);
+
+        self.e1e_flush();
+
+        self.udelay(10000);
+
         self.irq_disable();
 
         self.hw.as_mut().disable_pcie_master();

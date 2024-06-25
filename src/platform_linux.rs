@@ -280,7 +280,7 @@ extern "C" fn e1000r_open(ptr: usize) -> i32 {
 #[no_mangle]
 extern "C" fn e1000r_down(ptr: usize) -> i32 {
     let dev = dev_mut(ptr);
-    match dev.dev.open() {
+    match dev.dev.down() {
         Ok(_) => 0,
         Err(_) => -1,
     }
