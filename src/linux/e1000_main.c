@@ -400,7 +400,7 @@ static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
   if (skb_put_padto(skb, ETH_ZLEN))
     return NETDEV_TX_OK;
 
-  // unsigned int len = skb_headlen(skb);
+  unsigned int len = skb_headlen(skb);
 
   struct E1000XmitConfig config = {
       .timestamp = jiffies,
@@ -414,13 +414,12 @@ static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
   // e1000_transfer_dhcp_info(adapter, skb);
 
   skb_tx_timestamp(skb);
-  netdev_sent_queue(netdev, skb->len);
+  netdev_sent_queue(netdev, len);
 
-  int32_t n = e1000r_transmit(e1000, config, skb->data, skb->len);
+  int32_t n = e1000r_transmit(e1000, config, skb->head, len);
   if (n < 0) {
     return NETDEV_TX_BUSY;
   }
-  // napi_consume_skb(skb, 64);
   return NETDEV_TX_OK;
 }
 /**
@@ -597,7 +596,7 @@ void cb_on_rcv_pkt(const void *pdev, struct E1000RcvPkt pkt) {
 }
 void cb_enbale_net(const void *pdev) {
   struct e1000_adapter *adapter = (struct e1000_adapter *)pdev;
-  netif_start_queue(adapter->netdev);
+  netif_wake_queue(adapter->netdev);
 
   netif_carrier_on(adapter->netdev);
 }
@@ -626,17 +625,9 @@ static int e1000e_poll(struct napi_struct *napi, int budget) {
   // /* Exit the polling mode, but don't re-enable interrupts if stack might
   //  * poll us due to busy-polling
   //  */
-  // if (likely(napi_complete_done(napi, work_done))) {
-  //   e1000r_irq_enable(adapter->ptr);
-  //   //   if (adapter->itr_setting & 3)
-  //   //     e1000_set_itr(adapter);
-  //   //   if (!test_bit(__E1000_DOWN, &adapter->state)) {
-  //   //     if (adapter->msix_entries)
-  //   //       ew32(IMS, adapter->rx_ring->ims_val);
-  //   //     else
-  //   //       e1000_irq_enable(adapter);
-  //   //   }
-  // }
+  if (likely(napi_complete_done(napi, work_done))) {
+    e1000r_irq_enable(adapter->ptr);
+  }
 
   return work_done;
 }
