@@ -375,6 +375,27 @@ err_req_irq:
 
   return err;
 }
+
+static void e1000_free_irq(struct e1000_adapter *adapter) {
+  struct net_device *netdev = adapter->netdev;
+
+  if (adapter->msix_entries) {
+    int vector = 0;
+
+    free_irq(adapter->msix_entries[vector].vector, netdev);
+    vector++;
+
+    free_irq(adapter->msix_entries[vector].vector, netdev);
+    vector++;
+
+    /* Other Causes interrupt vector */
+    free_irq(adapter->msix_entries[vector].vector, netdev);
+    return;
+  }
+
+  free_irq(adapter->pdev->irq, netdev);
+}
+
 /**
  * e1000e_close - Disables a network interface
  * @netdev: network interface device structure
@@ -395,6 +416,7 @@ int e1000e_close(struct net_device *netdev) {
 
   if (netif_device_present(netdev)) {
     e1000e_down(adapter, false);
+    e1000_free_irq(adapter);
     /* Link status message must follow this format */
     netdev_info(netdev, "NIC Link is Down\n");
   }
