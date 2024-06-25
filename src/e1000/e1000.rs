@@ -465,7 +465,7 @@ where
             let addr = self.rx_ring.as_mut()[index].addr;
             info!("rx status {}, addr {:#X}", status, addr);
 
-            if (status & RXD_STAT_DD) == 0 {
+            if (status & RXD_STAT_DD as u8) == 0 {
                 break;
             }
 
