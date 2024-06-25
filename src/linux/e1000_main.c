@@ -262,10 +262,11 @@ static void e1000_remove(struct pci_dev *pdev) {
   struct net_device *netdev = pci_get_drvdata(pdev);
   struct e1000_adapter *adapter = netdev_priv(netdev);
 
-  e1000r_drop(adapter->ptr);
-
   unregister_netdev(netdev);
   pci_release_selected_regions(pdev, adapter->bars);
+
+  pr_info("e1000r_drop");
+  e1000r_drop(adapter->ptr);
 }
 static int __maybe_unused e1000_suspend(struct device *dev) { return 0; }
 
