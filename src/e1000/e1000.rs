@@ -432,6 +432,7 @@ where
             if (desc.status & RXD_STAT_DD as u8) == 0 {
                 break;
             }
+            desc.status = 0;
             let len = desc.length as usize;
             let mbuf = unsafe { &*slice_from_raw_parts(self.rx_ring.mbufs[i] as *mut u8, len) };
             let mut data = Vec::try_with_capacity(len).unwrap();
@@ -1656,10 +1657,10 @@ where
         // 	writel(0, rx_ring->tail);
 
         /* Enable Receive Checksum Offload for TCP and UDP */
-        // let mut rxcsum = self.er32(RXCSUM);
-        // rxcsum &= !RXCSUM_IPOFLD;
-        // rxcsum &= !RXCSUM_TUOFL;
-        // self.ew32(RXCSUM, rxcsum);
+        let mut rxcsum = self.er32(RXCSUM);
+        rxcsum &= !RXCSUM_IPOFLD;
+        rxcsum &= !RXCSUM_TUOFL;
+        self.ew32(RXCSUM, rxcsum);
 
         self.ew32(RCTL, rctl);
     }
@@ -1751,9 +1752,9 @@ where
         }
 
         // Read RFCTL register, enable extended status, and write back
-        // let mut rfctl = self.er32(RFCTL);
-        // rfctl |= RFCTL_EXTEN;
-        // self.ew32(RFCTL, rfctl);
+        let mut rfctl = self.er32(RFCTL);
+        rfctl |= RFCTL_EXTEN;
+        self.ew32(RFCTL, rfctl);
 
         self.ew32(RCTL, rctl);
 
