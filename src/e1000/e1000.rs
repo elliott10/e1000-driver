@@ -397,7 +397,6 @@ where
 
             let desc = self.rx_ring.mut_volatile(i);
             if (desc.status & RXD_STAT_DD as u8) == 0 {
-                tail = i;
                 break;
             }
             self.rx_ring.as_mut()[i].status = 0;
@@ -407,7 +406,8 @@ where
             data.try_extend_from_slice(mbuf);
             out.try_push(RcvPkt { data }).unwrap();
 
-            self.ew32(RDT(0), i as u32);
+            tail = i;
+            // self.ew32(RDT(0), i as u32);
             i += 1;
             if i >= self.rx_ring.size {
                 i = 0;
@@ -416,9 +416,7 @@ where
 
         if self.rx_ring.next_to_clean != i {
             self.rx_ring.next_to_clean = i;
-
-            // info!("clean_rx: rdt {}", tail);
-            // self.ew32(RDT(0), tail as u32);
+            self.ew32(RDT(0), tail as u32);
         }
 
         out
