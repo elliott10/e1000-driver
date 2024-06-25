@@ -432,7 +432,7 @@ where
             if (desc.status & RXD_STAT_DD as u8) == 0 {
                 break;
             }
-            desc.status = 0;
+            self.rx_ring.as_mut()[index].status = 0;
             let len = desc.length as usize;
             let mbuf = unsafe { &*slice_from_raw_parts(self.rx_ring.mbufs[i] as *mut u8, len) };
             let mut data = Vec::try_with_capacity(len).unwrap();
