@@ -1533,7 +1533,7 @@ where
                 break;
             }
             let len = desc.lower & 0xffff;
-            info!("tx [{}] ok len {}", i, len);
+            // info!("tx [{}] ok len {}", i, len);
             pkts += 1;
             bytes += len;
 

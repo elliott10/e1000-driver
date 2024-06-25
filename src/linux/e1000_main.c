@@ -984,7 +984,7 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent) {
   // struct E1000Status *status = e1000r_status(e1000);
 
   /* Set initial default active device features */
-  netdev->features = (NETIF_F_SG | NETIF_F_HW_CSUM);
+  // netdev->features = (NETIF_F_SG | NETIF_F_HW_CSUM);
 
   // netdev->features = (NETIF_F_SG | NETIF_F_HW_VLAN_CTAG_RX |
   //                     NETIF_F_HW_VLAN_CTAG_TX | NETIF_F_TSO | NETIF_F_TSO6 |
@@ -1020,9 +1020,9 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent) {
   // netdev->features &= ~NETIF_F_TSO6;
 
   /* Set user-changeable features (subset of all device features) */
-  netdev->hw_features = netdev->features;
+  // netdev->hw_features = netdev->features;
   // netdev->hw_features |= NETIF_F_RXFCS;
-  // netdev->priv_flags |= IFF_SUPP_NOFCS;
+  netdev->priv_flags |= IFF_SUPP_NOFCS;
   // netdev->hw_features |= NETIF_F_RXALL;
 
   // if (flags.has_hw_vlan_filter)
