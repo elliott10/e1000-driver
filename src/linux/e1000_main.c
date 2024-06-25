@@ -265,8 +265,8 @@ static void e1000_remove(struct pci_dev *pdev) {
   unregister_netdev(netdev);
   pci_release_selected_regions(pdev, adapter->bars);
 
-  pr_info("e1000r_drop");
-  e1000r_drop(adapter->ptr);
+  // pr_info("e1000r_drop");
+  // e1000r_drop(adapter->ptr);
 }
 static int __maybe_unused e1000_suspend(struct device *dev) { return 0; }
 
