@@ -421,69 +421,69 @@ where
     }
 
     pub fn clean_rx(&mut self, max: u32) -> Vec<RcvPkt> {
-        let mut out = Vec::new();
-        let mut i = self.rx_ring.next_to_clean;
-        let mut pkts_compl = 0;
-        let mut bytes_compl = 0;
-
-        for _ in 0..max {
-            let desc = self.rx_ring.mut_volatile(i);
-            if (desc.status & RXD_STAT_DD as u8) == 0 {
-                break;
-            }
-            let len = desc.length as usize;
-            let mbuf = unsafe { &*slice_from_raw_parts(self.rx_ring.mbufs[i] as *mut u8, len) };
-            let mut data = Vec::try_with_capacity(len).unwrap();
-            data.try_extend_from_slice(mbuf);
-            out.try_push(RcvPkt { data }).unwrap();
-
-            i += 1;
-            if i >= self.rx_ring.size {
-                i = 0;
-            }
-        }
-
-        if self.rx_ring.next_to_clean != i {
-            self.rx_ring.next_to_clean = i;
-            self.ew32(RDT(0), i as u32);
-        }
-
-        out
         // let mut out = Vec::new();
-        // let mut index = self.rx_ring.next_to_clean;
+        // let mut i = self.rx_ring.next_to_clean;
+        // let mut pkts_compl = 0;
+        // let mut bytes_compl = 0;
 
         // for _ in 0..max {
-        //     let len = self.rx_ring.as_mut()[index].length as usize;
-        //     let addr = self.rx_ring.as_mut()[index].addr;
-        //     let status = self.rx_ring.as_mut()[index].status;
-
-        //     if (status & RXD_STAT_DD as u8) == 0 {
+        //     let desc = self.rx_ring.mut_volatile(i);
+        //     if (desc.status & RXD_STAT_DD as u8) == 0 {
         //         break;
         //     }
-        //     let mut new_index = index + 1;
-        //     if new_index >= self.rx_ring.size {
-        //         new_index = 0;
-        //     }
-
-        //     self.rx_ring.next_to_clean = new_index;
-
-        //     let desc = &mut self.rx_ring.as_mut()[index];
-        //     // info!("rx index: {}, len: {}", index, len);
-
-        //     let mbuf = unsafe { &*slice_from_raw_parts(self.rx_ring.mbufs[index] as *mut u8, len) };
+        //     let len = desc.length as usize;
+        //     let mbuf = unsafe { &*slice_from_raw_parts(self.rx_ring.mbufs[i] as *mut u8, len) };
         //     let mut data = Vec::try_with_capacity(len).unwrap();
-        //     for b in mbuf {
-        //         data.try_push(*b).unwrap();
-        //     }
-
-        //     // self.e1e_flush();
-        //     // fence_w();
-        //     self.ew32(RDT(0), index as u32);
+        //     data.try_extend_from_slice(mbuf);
         //     out.try_push(RcvPkt { data }).unwrap();
-        //     index = new_index;
+
+        //     i += 1;
+        //     if i >= self.rx_ring.size {
+        //         i = 0;
+        //     }
+        // }
+
+        // if self.rx_ring.next_to_clean != i {
+        //     self.rx_ring.next_to_clean = i;
+        //     self.ew32(RDT(0), i as u32);
         // }
 
         // out
+        let mut out = Vec::new();
+        let mut index = self.rx_ring.next_to_clean;
+
+        for _ in 0..max {
+            let len = self.rx_ring.as_mut()[index].length as usize;
+            let addr = self.rx_ring.as_mut()[index].addr;
+            let status = self.rx_ring.as_mut()[index].status;
+
+            if (status & RXD_STAT_DD as u8) == 0 {
+                break;
+            }
+            let mut new_index = index + 1;
+            if new_index >= self.rx_ring.size {
+                new_index = 0;
+            }
+
+            self.rx_ring.next_to_clean = new_index;
+
+            let desc = &mut self.rx_ring.as_mut()[index];
+            // info!("rx index: {}, len: {}", index, len);
+
+            let mbuf = unsafe { &*slice_from_raw_parts(self.rx_ring.mbufs[index] as *mut u8, len) };
+            let mut data = Vec::try_with_capacity(len).unwrap();
+            for b in mbuf {
+                data.try_push(*b).unwrap();
+            }
+
+            // self.e1e_flush();
+            // fence_w();
+            self.ew32(RDT(0), index as u32);
+            out.try_push(RcvPkt { data }).unwrap();
+            index = new_index;
+        }
+
+        out
     }
 
     fn is_enable_mng_pass_thru(&mut self) -> bool {

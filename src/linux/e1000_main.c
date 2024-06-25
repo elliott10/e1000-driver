@@ -163,7 +163,7 @@ static irqreturn_t e1000_intr_msi(int __always_unused irq, void *data) {
     status->total_tx_packets = 0;
     status->total_rx_bytes = 0;
     status->total_rx_packets = 0;
-    pr_info("__napi_schedule");
+    pr_info("intr msi __napi_schedule");
     __napi_schedule(&adapter->napi);
   }
   return IRQ_HANDLED;
