@@ -400,7 +400,7 @@ static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
   if (skb_put_padto(skb, ETH_ZLEN))
     return NETDEV_TX_OK;
 
-  unsigned int len = skb_headlen(skb);
+  // unsigned int len = skb_headlen(skb);
 
   struct E1000XmitConfig config = {
       .timestamp = jiffies,
@@ -962,7 +962,7 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent) {
   adapter->msg_enable = netif_msg_init(debug, DEFAULT_MSG_ENABLE);
 
   struct e1000r_info_all info = e1000r_get_info_all(e1000);
-  struct Flags flags = info.flags;
+  // struct Flags flags = info.flags;
   struct Flags2 flags2 = info.flags2;
 
   /* Set default EEE advertisement */
@@ -989,7 +989,7 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent) {
   if (err)
     goto err_sw_init;
 
-  struct E1000Status *status = e1000r_status(e1000);
+  // struct E1000Status *status = e1000r_status(e1000);
 
   /* Set initial default active device features */
   netdev->features = (NETIF_F_SG | NETIF_F_HW_CSUM);
