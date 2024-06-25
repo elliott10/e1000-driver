@@ -423,7 +423,7 @@ where
     pub fn clean_rx(&mut self, max: u32) -> Vec<RcvPkt> {
         let mut out = Vec::new();
 
-        self.rx_ring.next_to_clean = self.er32(RDT(0));
+        self.rx_ring.next_to_clean = self.er32(RDT(0)) as usize;
         let mut i = self.rx_ring.next_to_clean;
         let mut pkts_compl = 0;
         let mut bytes_compl = 0;
