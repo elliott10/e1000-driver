@@ -445,11 +445,11 @@ where
             let len = desc.length as usize;
             let mbuf = unsafe { &*slice_from_raw_parts(self.rx_ring.mbufs[i] as *mut u8, len) };
             let mut data = Vec::try_with_capacity(len).unwrap();
-            // data.try_extend_from_slice(mbuf);
+            data.try_extend_from_slice(mbuf);
 
-            for b in mbuf {
-                data.try_push(*b).unwrap();
-            }
+            // for b in mbuf {
+                // data.try_push(*b).unwrap();
+            // }
 
             out.try_push(RcvPkt { data }).unwrap();
 
