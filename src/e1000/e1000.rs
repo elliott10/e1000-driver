@@ -388,12 +388,12 @@ where
         let mut tail = i;
 
         for _ in 0..max {
-            info!(
-                "clean_rx: max {}, index: {}, head {}",
-                max,
-                i,
-                self.er32(RDH(0))
-            );
+            // info!(
+            //     "clean_rx: max {}, index: {}, head {}",
+            //     max,
+            //     i,
+            //     self.er32(RDH(0))
+            // );
 
             let desc = self.rx_ring.mut_volatile(i);
             if (desc.status & RXD_STAT_DD as u8) == 0 {
@@ -1533,7 +1533,7 @@ where
                 break;
             }
             let len = desc.lower & 0xffff;
-            info!("tx [{}] ok len {}", i, len);
+            // info!("tx [{}] ok len {}", i, len);
             pkts += 1;
             bytes += len;
 
