@@ -275,6 +275,8 @@ size_t e1000r_clear_rx(size_t ptr, uint32_t max, E1000CbOnRcv on_rcv, const void
 
 void e1000r_configure_msix(size_t ptr);
 
+int32_t e1000r_down(size_t ptr);
+
 void e1000r_drop(size_t ptr);
 
 struct e1000r_info_all e1000r_get_info_all(size_t ptr);

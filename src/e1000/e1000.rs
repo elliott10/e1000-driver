@@ -1554,6 +1554,17 @@ where
         true
     }
 
+    pub fn down(&mut self) {
+        /* disable transmits in the hardware */
+        let mut tctl = self.er32(TCTL);
+        tctl &= !TCTL_EN;
+        self.ew32(TCTL, tctl);
+
+        self.irq_disable();
+
+        self.hw.as_mut().disable_pcie_master();
+    }
+
     fn configure_rx(&mut self) {
         //TODO
 

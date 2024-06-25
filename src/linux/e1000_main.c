@@ -273,7 +273,49 @@ static int __maybe_unused e1000_resume(struct device *dev) {
   return 0;
 }
 
-static void e1000_shutdown(struct pci_dev *pdev) {}
+/**
+ * e1000e_down - quiesce the device and optionally reset the hardware
+ * @adapter: board private structure
+ * @reset: boolean flag to reset the hardware or not
+ */
+void e1000e_down(struct e1000_adapter *adapter, bool reset) {
+  pr_info("e1000_down");
+  struct net_device *netdev = adapter->netdev;
+
+  e1000r_down(adapter->ptr);
+
+  netif_carrier_off(netdev);
+  netif_stop_queue(netdev);
+  napi_synchronize(&adapter->napi);
+  del_timer_sync(&adapter->watchdog_timer);
+}
+
+static int e1000e_pm_freeze(struct device *dev) {
+  pr_info("e1000e_pm_freeze");
+  struct net_device *netdev = dev_get_drvdata(dev);
+  struct e1000_adapter *adapter = netdev_priv(netdev);
+  bool present;
+
+  rtnl_lock();
+
+  present = netif_device_present(netdev);
+  netif_device_detach(netdev);
+
+  if (present && netif_running(netdev)) {
+    /* Quiesce the device without resetting the hardware */
+    // e1000e_down(adapter, false);
+    e1000e_down(adapter, false);
+  }
+  rtnl_unlock();
+
+  e1000e_reset_interrupt_capability(adapter);
+
+  return 0;
+}
+
+static void e1000_shutdown(struct pci_dev *pdev) {
+  e1000e_pm_freeze(&pdev->dev);
+}
 
 /**
  * e1000e_open - Called when a network interface is made active
@@ -590,7 +632,8 @@ void cb_on_rcv_pkt(const void *pdev, struct E1000RcvPkt pkt) {
   skb->protocol = eth_type_trans(skb, adapter->netdev);
   // skb_checksum_none_assert(skb);
 
-  // pr_info("rcv pktlen %d skb len %d protocol %d", len, skb->len, skb->protocol);
+  // pr_info("rcv pktlen %d skb len %d protocol %d", len, skb->len,
+  // skb->protocol);
 
   napi_gro_receive(&adapter->napi, skb);
 }

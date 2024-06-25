@@ -277,7 +277,14 @@ extern "C" fn e1000r_open(ptr: usize) -> i32 {
         Err(_) => -1,
     }
 }
-
+#[no_mangle]
+extern "C" fn e1000r_down(ptr: usize) -> i32 {
+    let dev = dev_mut(ptr);
+    match dev.dev.open() {
+        Ok(_) => 0,
+        Err(_) => -1,
+    }
+}
 #[no_mangle]
 extern "C" fn e1000_print_device_info(ptr: usize) {
     let dev = dev_mut(ptr);
