@@ -1700,13 +1700,9 @@ where
         /* Program MC offset vector base */
         let mut rctl = self.er32(RCTL);
         rctl &= !(3 << RCTL_MO_SHIFT);
-        rctl =
-            RCTL_BAM
-            | RCTL_LBM_NO
-            | RCTL_RDMTS_HALF
-            | (hw.mac.mc_filter_type << RCTL_MO_SHIFT);
-            // & !(0b11 << 10) // Legacy description type
-            ;
+        rctl = RCTL_BAM | RCTL_LBM_NO | RCTL_RDMTS_HALF | (hw.mac.mc_filter_type << RCTL_MO_SHIFT);
+
+        rctl &= !(0b11 << 10); // Legacy description type
 
         /* Do not Store bad packets */
         rctl &= !RCTL_SBP;
