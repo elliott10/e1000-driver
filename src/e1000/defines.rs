@@ -35,7 +35,8 @@ pub(crate) const IMS_TXQ0: u32 = ICR_TXQ0; // Tx Queue 0 Interrupt
 pub(crate) const IMS_TXQ1: u32 = ICR_TXQ1; // Tx Queue 1 Interrupt
 pub(crate) const IMS_OTHER: u32 = ICR_OTHER; // Other Interrupt
 
-pub(crate) const IMS_ENABLE_MASK: u32 = IMS_RXT0 | IMS_TXDW | IMS_RXDMT0 | IMS_RXSEQ | IMS_LSC;
+pub(crate) const IMS_ENABLE_MASK: u32 =
+    IMS_RXT0 | IMS_TXDW | IMS_RXDMT0 | IMS_RXSEQ | IMS_LSC | IMS_RXQ0;
 
 pub(crate) const IMS_OTHER_MASK: u32 = IMS_LSC | IMS_RXO | IMS_MDAC | IMS_SRPD | IMS_ACK | IMS_MNG;
 

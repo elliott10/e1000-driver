@@ -668,7 +668,7 @@ where
         //         if !(hw.flags2.disable_aim) {
         //             info!("Interrupt Throttle Rate off");
         //             hw.flags2.disable_aim = true;
-        //             self.e1000e_write_itr(0);
+        //             self.e1000e_write_iself.rx_ring.next_to_clean tr(0);
         //         }
         //     } else if hw.flags2.disable_aim {
         //         info!("Interrupt Throttle Rate on");
@@ -1639,8 +1639,9 @@ where
         self.ew32(RDBAH(0), (rdba >> 32) as u32);
         self.ew32(RDLEN(0), rdlen as u32);
         self.ew32(RDH(0), 0);
-        self.ew32(RDT(0), self.rx_ring.size as u32 - 1);
-        self.rx_ring.next_to_clean = 0;
+
+        self.rx_ring.next_to_clean = self.rx_ring.size as u32 - 1;
+        self.ew32(RDT(0), self.rx_ring.next_to_clean);
         // rx_ring->head = adapter->hw.hw_addr + E1000_RDH(0);
         // rx_ring->tail = adapter->hw.hw_addr + E1000_RDT(0);
 
