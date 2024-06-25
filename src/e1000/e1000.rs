@@ -1639,11 +1639,11 @@ where
         self.ew32(RDLEN(0), rdlen as u32);
         self.ew32(RDH(0), 0);
 
-        self.rx_ring.next_to_clean = 0;
-        self.ew32(RDT(0), 0);
-
-        // self.ew32(RDT(0), self.rx_ring.size as u32 - 1);
         // self.rx_ring.next_to_clean = 0;
+        // self.ew32(RDT(0), 0);
+
+        self.ew32(RDT(0), self.rx_ring.size as u32 - 1);
+        self.rx_ring.next_to_clean = 0;
         // rx_ring->head = adapter->hw.hw_addr + E1000_RDH(0);
         // rx_ring->tail = adapter->hw.hw_addr + E1000_RDT(0);
 
