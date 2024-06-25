@@ -1751,9 +1751,9 @@ where
         }
 
         // Read RFCTL register, enable extended status, and write back
-        let mut rfctl = self.er32(RFCTL);
-        rfctl |= RFCTL_EXTEN;
-        self.ew32(RFCTL, rfctl);
+        // let mut rfctl = self.er32(RFCTL);
+        // rfctl |= RFCTL_EXTEN;
+        // self.ew32(RFCTL, rfctl);
 
         self.ew32(RCTL, rctl);
 
