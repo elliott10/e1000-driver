@@ -261,12 +261,21 @@ static void e1000_remove(struct pci_dev *pdev) {
   pr_info("e1000_remove");
   struct net_device *netdev = pci_get_drvdata(pdev);
   struct e1000_adapter *adapter = netdev_priv(netdev);
+  del_timer_sync(&adapter->watchdog_timer);
+  cancel_work_sync(&adapter->watchdog_task);
 
   unregister_netdev(netdev);
-  pci_release_selected_regions(pdev, adapter->bars);
 
-  // pr_info("e1000r_drop");
-  // e1000r_drop(adapter->ptr);
+  if (pci_dev_run_wake(pdev))
+    pm_runtime_get_noresume(&pdev->dev);
+
+  e1000e_reset_interrupt_capability(adapter);
+
+  pci_release_mem_regions(pdev);
+
+  free_netdev(netdev);
+
+  pci_disable_device(pdev);
 }
 static int __maybe_unused e1000_suspend(struct device *dev) { return 0; }
 
@@ -283,9 +292,8 @@ static int __maybe_unused e1000_resume(struct device *dev) {
 void e1000e_down(struct e1000_adapter *adapter, bool reset) {
   pr_info("e1000_down");
   struct net_device *netdev = adapter->netdev;
-	netif_carrier_off(netdev);
+  netif_carrier_off(netdev);
   netif_stop_queue(netdev);
-  
 
   e1000r_down(adapter->ptr);
 
