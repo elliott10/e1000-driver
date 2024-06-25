@@ -316,6 +316,7 @@ static int e1000e_pm_freeze(struct device *dev) {
 }
 
 static void e1000_shutdown(struct pci_dev *pdev) {
+  pr_info("e1000_shutdown");
   e1000e_pm_freeze(&pdev->dev);
 }
 
@@ -1340,6 +1341,7 @@ int e1000_init_module(void) {
 
 void e1000_exit_module(void) {
   pci_unregister_driver(&e1000_driver);
+  pr_info("e1000_exit_module");
   return;
 }
 MODULE_AUTHOR("zhourui <zhourui818@126.com>");
