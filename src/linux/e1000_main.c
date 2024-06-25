@@ -416,7 +416,7 @@ static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
   skb_tx_timestamp(skb);
   netdev_sent_queue(netdev, len);
 
-  int32_t n = e1000r_transmit(e1000, config, skb->head, len);
+  int32_t n = e1000r_transmit(e1000, config, skb->data, len);
   if (n < 0) {
     return NETDEV_TX_BUSY;
   }
