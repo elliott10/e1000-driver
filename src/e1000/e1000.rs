@@ -422,12 +422,14 @@ where
 
     pub fn clean_rx(&mut self, max: u32) -> Vec<RcvPkt> {
         let mut out = Vec::new();
+
+        self.rx_ring.next_to_clean = self.er32(RDT(0));
         let mut i = self.rx_ring.next_to_clean;
         let mut pkts_compl = 0;
         let mut bytes_compl = 0;
 
         for _ in 0..max {
-            info!("rx clean {}", i);
+            info!("rx clean T {}  H {}", i, self.er32(RDH(0)));
             let desc = self.rx_ring.mut_volatile(i);
             if (desc.status & RXD_STAT_DD as u8) == 0 {
                 break;
