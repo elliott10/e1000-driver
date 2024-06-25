@@ -1578,6 +1578,8 @@ where
             pkts += 1;
             bytes += len;
 
+            self.tx_ring.as_mut()[i].status = 0;
+
             i += 1;
 
             if i >= self.tx_ring.size {
