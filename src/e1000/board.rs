@@ -197,7 +197,7 @@ impl BoardType {
                 },
                 flags2: Flags2 {
                     has_phy_stats: true,
-                    // has_eee: true,
+                    has_eee: true,
                     ..Default::default()
                 },
                 pba: 26,

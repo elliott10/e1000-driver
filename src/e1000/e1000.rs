@@ -1702,10 +1702,10 @@ where
         rctl &= !(3 << RCTL_MO_SHIFT);
         rctl =
             RCTL_BAM
-            // | RCTL_LBM_NO
-            // | RCTL_RDMTS_HALF
-            // | (hw.mac.mc_filter_type << RCTL_MO_SHIFT);
-            & !(0b11 << 10) // Legacy description type
+            | RCTL_LBM_NO
+            | RCTL_RDMTS_HALF
+            | (hw.mac.mc_filter_type << RCTL_MO_SHIFT);
+            // & !(0b11 << 10) // Legacy description type
             ;
 
         /* Do not Store bad packets */
