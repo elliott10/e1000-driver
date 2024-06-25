@@ -360,7 +360,7 @@ where
     pub fn xmit(&mut self, config: E1000XmitConfig, packet: &[u8]) -> Result<u32> {
         let mut i = self.tx_ring.next_to_use;
 
-        info!("transmit [{}] len {}", i, packet.len());
+        // info!("transmit [{}] len {}", i, packet.len());
         let n = {
             let n = self.tx_ring.one_copy_data_from(i, packet);
 
@@ -377,47 +377,6 @@ where
         self.ew32(TDT(0), i as u32);
 
         Ok(n as u32)
-
-        // let tdh = self.er32(TDH(0));
-        // let mut i = self.er32(TDT(0)) as usize;
-
-        // let mut offset = 0;
-
-        // let mut count = 0;
-
-        // let mut src = packet;
-
-        // loop {
-        //     let n = self.tx_ring.one_copy_data_from(i, src);
-        //     let mut tx_desc = &mut self.tx_ring.as_mut()[i];
-
-        //     let mut txd_lower = 0;
-
-        //     tx_desc.lower =
-        //         (TXD_CMD_EOP | TXD_CMD_IFCS | TXD_CMD_RS | (src.len() as u32 & 0xffff)).to_le();
-        //     tx_desc.status = 0;
-
-        //     fence_w();
-
-        //     // tx_desc.length = n as u16;
-        //     // // tx_desc.cmd = (TXD_CMD_RS | TXD_CMD_EOP | TXD_CMD_IFCS) as u8;
-        //     // tx_desc.cmd = (TXD_CMD_RS | TXD_CMD_IDE | TXD_CMD_EOP | TXD_CMD_IFCS) as u8;
-        //     // tx_desc.status = 0;
-
-        //     count += 1;
-        //     i += 1;
-
-        //     if n >= src.len() {
-        //         break;
-        //     }
-        //     src = &src[n..];
-        // }
-
-        // i %= TX_RING_SIZE;
-        // self.ew32(TDT(0), i as u32);
-        // // sync
-        // fence_w();
-        // Ok(packet.len() as u32)
     }
 
     pub fn clean_rx(&mut self, max: u32) -> Vec<RcvPkt> {
@@ -429,12 +388,12 @@ where
         let mut tail = i;
 
         for _ in 0..max {
-            info!(
-                "clean_rx: max {}, index: {}, head {}",
-                max,
-                i,
-                self.er32(RDH(0))
-            );
+            // info!(
+            //     "clean_rx: max {}, index: {}, head {}",
+            //     max,
+            //     i,
+            //     self.er32(RDH(0))
+            // );
 
             let desc = self.rx_ring.mut_volatile(i);
             if (desc.status & RXD_STAT_DD as u8) == 0 {
@@ -457,7 +416,7 @@ where
 
         if self.rx_ring.next_to_clean != i {
             self.rx_ring.next_to_clean = i;
-            self.ew32(RDT(0), tail as u32);
+            // self.ew32(RDT(0), tail as u32);
         }
 
         out

@@ -163,7 +163,7 @@ static irqreturn_t e1000_intr_msi(int __always_unused irq, void *data) {
     status->total_tx_packets = 0;
     status->total_rx_bytes = 0;
     status->total_rx_packets = 0;
-    pr_info("intr msi __napi_schedule");
+    // pr_info("intr msi __napi_schedule");
     __napi_schedule(&adapter->napi);
   }
   return IRQ_HANDLED;
@@ -618,7 +618,7 @@ static int e1000e_poll(struct napi_struct *napi, int budget) {
 
   int work_done = e1000r_clear_rx(adapter->ptr, budget, cb_on_rcv_pkt, adapter);
 
-  pr_info("e1000e_poll done %d", work_done);
+  // pr_info("e1000e_poll done %d", work_done);
 
   if (!tx_cleand || work_done == budget)
     return budget;
@@ -634,8 +634,8 @@ static int e1000e_poll(struct napi_struct *napi, int budget) {
 }
 static int e1000_set_features(struct net_device *netdev,
                               netdev_features_t features) {
-  pr_info("e1000_set_features");
-  return -1;
+  // pr_info("e1000_set_features");
+  return 0;
 }
 static netdev_features_t e1000_fix_features(struct net_device *netdev,
                                             netdev_features_t features) {
