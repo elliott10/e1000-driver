@@ -590,7 +590,7 @@ void cb_on_rcv_pkt(const void *pdev, struct E1000RcvPkt pkt) {
   skb->protocol = eth_type_trans(skb, adapter->netdev);
   // skb_checksum_none_assert(skb);
 
-  pr_info("rcv pktlen %d skb len %d protocol %d", len, skb->len, skb->protocol);
+  // pr_info("rcv pktlen %d skb len %d protocol %d", len, skb->len, skb->protocol);
 
   napi_gro_receive(&adapter->napi, skb);
 }
