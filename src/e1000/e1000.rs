@@ -421,70 +421,68 @@ where
     }
 
     pub fn clean_rx(&mut self, max: u32) -> Vec<RcvPkt> {
-        // let mut out = Vec::new();
-
-        // self.rx_ring.next_to_clean = self.er32(RDT(0)) as usize;
-        // let mut i = self.rx_ring.next_to_clean;
-        // let mut pkts_compl = 0;
-        // let mut bytes_compl = 0;
-
-        // for _ in 0..max {
-        //     info!("rx clean T {}  H {}", i, self.er32(RDH(0)));
-        //     let desc = self.rx_ring.mut_volatile(i);
-        //     if (desc.status & RXD_STAT_DD as u8) == 0 {
-        //         break;
-        //     }
-        //     self.rx_ring.as_mut()[i].status = 0;
-        //     let len = desc.length as usize;
-        //     let mbuf = unsafe { &*slice_from_raw_parts(self.rx_ring.mbufs[i] as *mut u8, len) };
-        //     let mut data = Vec::try_with_capacity(len).unwrap();
-        //     data.try_extend_from_slice(mbuf);
-        //     out.try_push(RcvPkt { data }).unwrap();
-
-        //     i += 1;
-        //     if i >= self.rx_ring.size {
-        //         i = 0;
-        //     }
-        // }
-
-        // if self.rx_ring.next_to_clean != i {
-        //     self.rx_ring.next_to_clean = i;
-        //     self.ew32(RDT(0), i as u32);
-        // }
-
-        // out
         let mut out = Vec::new();
-        let head = self.er32(RDH(0)) as usize;
-        let mut index = self.er32(RDT(0)) as usize;
+
+        let mut i = self.rx_ring.next_to_clean;
+        let mut pkts_compl = 0;
+        let mut bytes_compl = 0;
 
         for _ in 0..max {
-            index = (index + 1) % RX_RING_SIZE;
-            info!("clean_rx: max {}, index: {}, head {}", max, index, head);
-
-            let status = self.rx_ring.as_mut()[index].status;
-            let addr = self.rx_ring.as_mut()[index].addr;
-            info!("rx status {}, addr {:#X}", status, addr);
-
-            if (status & RXD_STAT_DD as u8) == 0 {
+            let desc = self.rx_ring.mut_volatile(i);
+            if (desc.status & RXD_STAT_DD as u8) == 0 {
                 break;
             }
-
-            self.ew32(RDT(0), index as u32);
-
-            let desc = &mut self.rx_ring.as_mut()[index];
-            desc.status = 0;
+            self.rx_ring.as_mut()[i].status = 0;
             let len = desc.length as usize;
-            info!("rx index: {}, len: {}", index, len);
-            let mbuf = unsafe { &*slice_from_raw_parts(self.rx_ring.mbufs[index] as *mut u8, len) };
+            let mbuf = unsafe { &*slice_from_raw_parts(self.rx_ring.mbufs[i] as *mut u8, len) };
             let mut data = Vec::try_with_capacity(len).unwrap();
-            for b in mbuf {
-                data.try_push(*b).unwrap();
-            }
-
+            data.try_extend_from_slice(mbuf);
             out.try_push(RcvPkt { data }).unwrap();
+
+            i += 1;
+            if i >= self.rx_ring.size {
+                i = 0;
+            }
+        }
+
+        if self.rx_ring.next_to_clean != i {
+            self.rx_ring.next_to_clean = i;
+            self.ew32(RDT(0), i as u32);
         }
 
         out
+        // let mut out = Vec::new();
+        // let head = self.er32(RDH(0)) as usize;
+        // let mut index = self.er32(RDT(0)) as usize;
+
+        // for _ in 0..max {
+        //     index = (index + 1) % RX_RING_SIZE;
+        //     info!("clean_rx: max {}, index: {}, head {}", max, index, head);
+
+        //     let status = self.rx_ring.as_mut()[index].status;
+        //     let addr = self.rx_ring.as_mut()[index].addr;
+        //     info!("rx status {}, addr {:#X}", status, addr);
+
+        //     if (status & RXD_STAT_DD as u8) == 0 {
+        //         break;
+        //     }
+
+        //     self.ew32(RDT(0), index as u32);
+
+        //     let desc = &mut self.rx_ring.as_mut()[index];
+        //     desc.status = 0;
+        //     let len = desc.length as usize;
+        //     info!("rx index: {}, len: {}", index, len);
+        //     let mbuf = unsafe { &*slice_from_raw_parts(self.rx_ring.mbufs[index] as *mut u8, len) };
+        //     let mut data = Vec::try_with_capacity(len).unwrap();
+        //     for b in mbuf {
+        //         data.try_push(*b).unwrap();
+        //     }
+
+        //     out.try_push(RcvPkt { data }).unwrap();
+        // }
+
+        // out
     }
 
     fn is_enable_mng_pass_thru(&mut self) -> bool {
@@ -1641,11 +1639,11 @@ where
         self.ew32(RDLEN(0), rdlen as u32);
         self.ew32(RDH(0), 0);
 
-        // self.rx_ring.next_to_clean = 0;
-        // self.ew32(RDT(0), 0);
-
-        self.ew32(RDT(0), self.rx_ring.size as u32 - 1);
         self.rx_ring.next_to_clean = 0;
+        self.ew32(RDT(0), 0);
+
+        // self.ew32(RDT(0), self.rx_ring.size as u32 - 1);
+        // self.rx_ring.next_to_clean = 0;
         // rx_ring->head = adapter->hw.hw_addr + E1000_RDH(0);
         // rx_ring->tail = adapter->hw.hw_addr + E1000_RDT(0);
 
