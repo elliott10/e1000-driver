@@ -446,14 +446,9 @@ where
             let mbuf = unsafe { &*slice_from_raw_parts(self.rx_ring.mbufs[i] as *mut u8, len) };
             let mut data = Vec::try_with_capacity(len).unwrap();
             data.try_extend_from_slice(mbuf);
-
-            // for b in mbuf {
-                // data.try_push(*b).unwrap();
-            // }
-
             out.try_push(RcvPkt { data }).unwrap();
 
-            self.ew32(RDT(0), i as u32);
+            // self.ew32(RDT(0), i as u32);
             i += 1;
             if i >= self.rx_ring.size {
                 i = 0;
