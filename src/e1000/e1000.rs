@@ -426,6 +426,12 @@ where
         let mut i = self.rx_ring.next_to_clean;
         let mut pkts_compl = 0;
         let mut bytes_compl = 0;
+        info!(
+            "clean_rx: max {}, index: {}, head {}",
+            max,
+            i,
+            self.er32(RDH(0))
+        );
 
         for _ in 0..max {
             let desc = self.rx_ring.mut_volatile(i);
