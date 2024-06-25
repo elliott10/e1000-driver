@@ -185,19 +185,19 @@ impl BoardType {
                 mac: MacType::e1000_pch_adp,
                 flags: Flags {
                     is_ich: true,
-                    has_wol: true,
-                    has_hw_timestamp: true,
+                    // has_wol: true,
+                    // has_hw_timestamp: true,
                     has_ctrlext_on_load: true,
-                    has_amt: true,
+                    // has_amt: true,
                     has_flash: true,
-                    has_jumbo_frames: true,
-                    apme_in_wuc: true,
+                    // has_jumbo_frames: true,
+                    // apme_in_wuc: true,
 
                     ..Default::default()
                 },
                 flags2: Flags2 {
                     has_phy_stats: true,
-                    has_eee: true,
+                    // has_eee: true,
                     ..Default::default()
                 },
                 pba: 26,

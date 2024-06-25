@@ -299,9 +299,10 @@ unsafe extern "C" fn e1000r_trigger_lsc(ptr: usize) {
     dev.dev.trigger_lsc()
 }
 #[no_mangle]
-unsafe extern "C" fn e1000r_task_watchdog(ptr: usize) {
+unsafe extern "C" fn e1000r_task_watchdog(ptr: usize) -> bool {
     let dev = dev_mut(ptr);
-    dev.dev.task_watchdog();
+    let link = dev.dev.task_watchdog().unwrap_or(false);
+    link
 }
 
 #[repr(C)]

@@ -691,7 +691,6 @@ impl DevSpecIch8lan {
         }
     }
     pub(crate) fn setup_copper_link_pch_lpt<K: KernelFunc>(&self, hw: &mut Hw<K>) -> Result {
-        info!("Setup CTRL SLU");
         let mut ctrl = hw.er32(CTRL);
         ctrl |= CTRL_SLU;
         ctrl &= !(CTRL_FRCSPD | CTRL_FRCDPX);

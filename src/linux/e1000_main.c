@@ -4,7 +4,6 @@
 #include "linux/irqreturn.h"
 #include "linux/printk.h"
 #include "linux/skbuff.h"
-#include "linux/stddef.h"
 #include <linux/cpu.h>
 #include <linux/delay.h>
 #include <linux/dma-mapping.h>
@@ -159,8 +158,7 @@ static irqreturn_t e1000_intr_msi(int __always_unused irq, void *data) {
   if (e1000r_irq_handle(e1000, irq)) {
     return IRQ_NONE;
   }
-
-
+  pr_info("intr_msi");
   if (napi_schedule_prep(&adapter->napi)) {
     status->total_tx_bytes = 0;
     status->total_tx_packets = 0;
@@ -399,7 +397,7 @@ static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
   /* The minimum packet size with TCTL.PSP set is 17 bytes so
    * pad skb in order to meet this minimum size requirement
    */
-  if (skb_put_padto(skb, 17))
+  if (skb_put_padto(skb, ETH_ZLEN))
     return NETDEV_TX_OK;
 
   unsigned int len = skb_headlen(skb);
@@ -562,7 +560,24 @@ static irqreturn_t e1000_intr_msix(int __always_unused irq, void *data) {
 static void e1000_netpoll(struct net_device *netdev) {
 
   struct e1000_adapter *adapter = netdev_priv(netdev);
-  e1000_intr_msix(adapter->pdev->irq, netdev);
+  size_t e1000 = e1000e_get_e1000(adapter->netdev);
+  struct E1000Status *status = e1000r_status(e1000);
+
+  switch (status->int_mode) {
+  case E1000E_INT_MODE_MSIX:
+    e1000_intr_msix(adapter->pdev->irq, netdev);
+    break;
+  case E1000E_INT_MODE_MSI:
+    if (disable_hardirq(adapter->pdev->irq))
+      e1000_intr_msi(adapter->pdev->irq, netdev);
+    enable_irq(adapter->pdev->irq);
+    break;
+  default: /* E1000E_INT_MODE_LEGACY */
+    if (disable_hardirq(adapter->pdev->irq))
+      e1000_intr_msi(adapter->pdev->irq, netdev);
+    enable_irq(adapter->pdev->irq);
+    break;
+  }
 }
 
 void cb_on_rcv_pkt(const void *pdev, struct E1000RcvPkt pkt) {
@@ -570,10 +585,6 @@ void cb_on_rcv_pkt(const void *pdev, struct E1000RcvPkt pkt) {
   unsigned int len = pkt.length;
 
   struct sk_buff *skb = napi_alloc_skb(&adapter->napi, len);
-  // skb_copy_to_linear_data_offset(skb, -NET_IP_ALIGN, (pkt.data -
-  // NET_IP_ALIGN),
-  //                                (pkt.length + NET_IP_ALIGN));
-
   /* end copybreak code */
   skb_put_data(skb, pkt.data, len);
 
@@ -599,32 +610,33 @@ void cb_enbale_net(const void *pdev) {
 static int e1000e_poll(struct napi_struct *napi, int budget) {
   struct e1000_adapter *adapter =
       container_of(napi, struct e1000_adapter, napi);
+  pr_info("e1000e_poll");
 
   bool tx_cleand = false;
 
-  if (!adapter->msix_entries) {
-    tx_cleand = e1000r_irq_clean_tx(adapter->ptr);
-  }
+  // if (!adapter->msix_entries) {
+  tx_cleand = e1000r_irq_clean_tx(adapter->ptr);
+  // }
 
   int work_done = e1000r_clear_rx(adapter->ptr, budget, cb_on_rcv_pkt, adapter);
 
   if (!tx_cleand || work_done == budget)
     return budget;
 
-  /* Exit the polling mode, but don't re-enable interrupts if stack might
-   * poll us due to busy-polling
-   */
-  if (likely(napi_complete_done(napi, work_done))) {
-    e1000r_irq_enable(adapter->ptr);
-    //   if (adapter->itr_setting & 3)
-    //     e1000_set_itr(adapter);
-    //   if (!test_bit(__E1000_DOWN, &adapter->state)) {
-    //     if (adapter->msix_entries)
-    //       ew32(IMS, adapter->rx_ring->ims_val);
-    //     else
-    //       e1000_irq_enable(adapter);
-    //   }
-  }
+  // /* Exit the polling mode, but don't re-enable interrupts if stack might
+  //  * poll us due to busy-polling
+  //  */
+  // if (likely(napi_complete_done(napi, work_done))) {
+  //   e1000r_irq_enable(adapter->ptr);
+  //   //   if (adapter->itr_setting & 3)
+  //   //     e1000_set_itr(adapter);
+  //   //   if (!test_bit(__E1000_DOWN, &adapter->state)) {
+  //   //     if (adapter->msix_entries)
+  //   //       ew32(IMS, adapter->rx_ring->ims_val);
+  //   //     else
+  //   //       e1000_irq_enable(adapter);
+  //   //   }
+  // }
 
   return work_done;
 }

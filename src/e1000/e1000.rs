@@ -358,10 +358,9 @@ where
     }
 
     pub fn xmit(&mut self, config: E1000XmitConfig, packet: &[u8]) -> Result<u32> {
-        info!("transmit {}", packet.len());
-
         let mut i = self.tx_ring.next_to_use;
 
+        info!("transmit [{}] len {}", i, packet.len());
         let n = {
             let n = self.tx_ring.one_copy_data_from(i, packet);
 
@@ -917,7 +916,7 @@ where
 
     fn after_open(&mut self) {
         // todo
-        self.update_mc_addr_list_generic();
+        // self.update_mc_addr_list_generic();
         self.ew32(MTA, 0x10);
         // self.clean_uc_addr();
         // self.ew32(RCTL, 0x4008002);
@@ -1357,11 +1356,11 @@ where
         self.ew32(TDT(0), 0);
 
         /* Set the Tx Interrupt Delay register */
-        // self.ew32(TIDV, self.hw.as_ref().status.tx_int_delay);
-        self.ew32(TIDV, 0);
+        self.ew32(TIDV, self.hw.as_ref().status.tx_int_delay);
+        // self.ew32(TIDV, 0);
         /* Tx irq moderation */
-        // self.ew32(TADV, self.hw.as_ref().status.tx_abs_int_delay);
-        self.ew32(TADV, 0);
+        self.ew32(TADV, self.hw.as_ref().status.tx_abs_int_delay);
+        // self.ew32(TADV, 0);
 
         if self.hw.as_ref().flags2.dma_burst {
             let mut txdctl = self.er32(TXDCTL(0));
@@ -1562,14 +1561,14 @@ where
 
         let mut i = self.tx_ring.next_to_clean;
         loop {
-            // info!("tx ok");
             let desc = &self.tx_ring.as_ref()[i];
             if (desc.status & (TXD_STAT_DD as u8)) == 0 {
                 break;
             }
-
+            let len = desc.lower & 0xffff;
+            info!("tx [{}] ok len {}", i, len);
             pkts += 1;
-            bytes += desc.lower & 0xffff;
+            bytes += len;
 
             i += 1;
 
@@ -1614,12 +1613,12 @@ where
         }
 
         /* set the Receive Delay Timer Register */
-        // self.ew32(RDTR, hw.status.rx_int_delay);
-        self.ew32(RDTR, 0);
+        self.ew32(RDTR, hw.status.rx_int_delay);
+        // self.ew32(RDTR, 0);
 
         /* irq moderation */
-        // self.ew32(RADV, hw.status.rx_abs_int_delay);
-        self.ew32(RADV, 0);
+        self.ew32(RADV, hw.status.rx_abs_int_delay);
+        // self.ew32(RADV, 0);
 
         if (hw.status.itr_setting != 0) && (hw.status.itr != 0) {
             self.write_itr(hw.status.itr);
@@ -2173,7 +2172,7 @@ where
         self.hw.as_mut().print_status();
     }
 
-    pub fn task_watchdog(&mut self) -> Result {
+    pub fn task_watchdog(&mut self) -> Result<bool> {
         let link = self.hw.as_mut().has_link();
         if link {
             if !self.is_link_up {
@@ -2184,18 +2183,18 @@ where
 
                 self.kernel().enable_net();
             }
+
+            self.update_adaptive();
+
+            /* Cause software interrupt to ensure Rx ring is cleaned */
+            if (self.hw.as_ref().status.msix_vec_num > 0) {
+                self.ew32(ICS, self.rx_ring.ims_val);
+            } else {
+                self.ew32(ICS, ICS_RXDMT0);
+            }
         }
 
-        self.update_adaptive();
-
-        /* Cause software interrupt to ensure Rx ring is cleaned */
-        if (self.hw.as_ref().status.msix_vec_num > 0) {
-            self.ew32(ICS, self.rx_ring.ims_val);
-        } else {
-            self.ew32(ICS, ICS_RXDMT0);
-        }
-
-        Ok(())
+        Ok(link)
     }
 }
 
@@ -2250,6 +2249,7 @@ impl E1000Status {
         if flags.has_msix {
             self.int_mode = 2;
         } else {
+            //TODO
             self.int_mode = 1;
         }
     }
