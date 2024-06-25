@@ -1038,8 +1038,8 @@ where
     }
 
     fn configure(&mut self) -> Result {
-        // self.set_rx_mode();
-        // self.init_manageability_pt();
+        self.set_rx_mode();
+        self.init_manageability_pt();
         self.configure_tx();
         self.setup_rctl();
         self.configure_rx();
