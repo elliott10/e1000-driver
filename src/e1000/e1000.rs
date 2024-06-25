@@ -416,7 +416,7 @@ where
 
         if self.rx_ring.next_to_clean != i {
             self.rx_ring.next_to_clean = i;
-            // self.ew32(RDT(0), tail as u32);
+            self.ew32(RDT(0), tail as u32);
         }
 
         out
