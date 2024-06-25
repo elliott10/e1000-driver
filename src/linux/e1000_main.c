@@ -258,6 +258,7 @@ static void e1000_io_resume(struct pci_dev *pdev);
  * memory.
  **/
 static void e1000_remove(struct pci_dev *pdev) {
+  pr_info("e1000_remove");
   struct net_device *netdev = pci_get_drvdata(pdev);
   struct e1000_adapter *adapter = netdev_priv(netdev);
 
@@ -385,7 +386,22 @@ err_req_irq:
  **/
 int e1000e_close(struct net_device *netdev) {
   pr_info("e1000e_close");
-  return -1;
+  struct e1000_adapter *adapter = netdev_priv(netdev);
+  struct pci_dev *pdev = adapter->pdev;
+
+  pm_runtime_get_sync(&pdev->dev);
+
+  if (netif_device_present(netdev)) {
+    e1000e_down(adapter, false);
+    /* Link status message must follow this format */
+    netdev_info(netdev, "NIC Link is Down\n");
+  }
+
+  napi_disable(&adapter->napi);
+
+  pm_runtime_put_sync(&pdev->dev);
+
+  return 0;
 }
 
 /**
