@@ -35,7 +35,17 @@ struct KFun {
 
 unsafe impl Sync for KFun {}
 unsafe impl Send for KFun {}
+impl KernelFunc2 for KFun {
+    fn bar_n_remap(&self, bar: usize) -> usize {
+        unsafe { (self.cb_bar_n_remap)(self.adapter, bar) }
+    }
 
+    fn delay(&self, nanos: u64) {
+        unsafe {
+            ((self.cb_udelay)((nanos / 1000) as u32));
+        }
+    }
+}
 impl KernelFunc for KFun {
     fn dma_alloc_coherent(&self, pages: usize) -> (usize, u64) {
         let mut dma = 0;
@@ -150,6 +160,8 @@ extern "C" fn e1000r_new(config: E1000Config) -> usize {
         cb_on_xmit_completed: config.cb_on_xmit_completed,
         cb_enable_net: config.cb_enable_net,
     };
+
+    register_kernel(kfun.clone());
 
     let e1000 = match E1000::new(kfun, config.device_id) {
         Ok(o) => o,

@@ -1,0 +1,39 @@
+use super::mac::MacInfo;
+use crate::BoardInfo;
+use crate::BoardVariant;
+use crate::Flags;
+use crate::Flags2;
+
+mod b82571;
+mod ich8lan;
+
+pub(crate) enum VariantKind {
+    B82571(b82571::Context),
+    Ich8lan(ich8lan::Context),
+}
+
+pub(crate) struct Variant {
+    board_info: BoardInfo,
+    pub(crate) kind: VariantKind,
+}
+
+impl Variant {
+    pub(crate) fn from_board_info(board_info: BoardInfo) -> Self {
+        let kind = match board_info.variant {
+            BoardVariant::B82571 => VariantKind::B82571(Default::default()),
+            BoardVariant::Ich8lan => VariantKind::Ich8lan(Default::default()),
+        };
+        Self { board_info, kind }
+    }
+
+    pub(crate) fn get_variants(&self) -> (MacInfo, Flags, Flags2) {
+        match &self.kind {
+            VariantKind::B82571(ctx) => ctx.get_variants(self.board_info.clone()),
+            VariantKind::Ich8lan(ctx) => ctx.get_variants(self.board_info.clone()),
+        }
+    }
+}
+
+pub(crate) trait VariantCommon {
+    fn get_variants(&self, board_info: BoardInfo) -> (MacInfo, Flags, Flags2);
+}

@@ -527,10 +527,6 @@ pub(crate) const ICS_OTHER: u32 = ICR_OTHER; // Other Interrupt
 
 pub(crate) const IVAR_INT_ALLOC_VALID: u32 = 0x8;
 
-pub(crate) const ICH_FWSM_FW_VALID: u32 = 0x00008000; // FW established a valid mode
-pub(crate) const ICH_FWSM_PCIM2PCI: u32 = 0x01000000; // ME PCIm-to-PCI active
-pub(crate) const ICH_FWSM_PCIM2PCI_COUNT: u32 = 2000; // Timeout count for PCIm-to-PCI state
-
 pub(crate) const STATUS_PCIM_STATE: u32 = 0x40000000; // PCIm function state
 
 pub(crate) const BMSR_ERCAP: u16 = 0x0001; // Extended register capability
@@ -779,3 +775,11 @@ pub(crate) const EXTCNF_CTRL_EXT_CNF_POINTER_SHIFT: u32 = 16;
 
 /* Manageability Operation Mode mask */
 pub(crate) const NVM_INIT_CTRL2_MNGM: u16 = 0x6000;
+
+
+
+pub(crate) const ICH_FWSM_RSPCIPHY: u32 = 0x00000040; // Reset PHY on PCI Reset
+pub(crate) const ICH_FWSM_FW_VALID: u32 = 0x00008000; // FW established a valid mode
+pub(crate) const ICH_FWSM_PCIM2PCI: u32 = 0x01000000; // ME PCIm-to-PCI active
+pub(crate) const ICH_FWSM_PCIM2PCI_COUNT: u32 = 2000;
+pub(crate) const ICH_MNG_IAMT_MODE: u32 = 0x2;

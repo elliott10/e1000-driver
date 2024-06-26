@@ -1882,12 +1882,12 @@ where
 {
     pub(crate) fn new(kfun: K, board: &BoardInfo) -> Self {
         unsafe {
-            let mmio = kfun.bar_n_remap(0);
+            // let mmio = kfun.bar_n_remap(0);
             let layout = Layout::new::<Hw<K>>();
             let ptr = alloc::alloc(layout) as *mut Hw<K>;
             let hw = &mut *ptr;
             hw.kernel = kfun;
-            hw.mmio = mmio;
+            // hw.mmio = mmio;
             hw.flash = None;
             hw.status = Default::default();
             hw.phy = Default::default();
