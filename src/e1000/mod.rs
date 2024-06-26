@@ -19,6 +19,7 @@ pub use board::*;
 use core::{
     fmt::{self, Display},
     ptr::null_mut,
+    time::Duration,
     u16,
 };
 pub use hw::{E1000HWStats, MacInfo, MacType, MediaType, PhyInfo, PhyType};
@@ -28,8 +29,11 @@ const PAGE_SIZE: usize = 4096;
 static mut KERNEL: *mut Box<dyn KernelFunc2> = null_mut();
 
 pub fn register_kernel<K: KernelFunc2 + 'static>(k: K) {
-    let layout = Layout::for_value(&k);
     unsafe {
+        if !KERNEL.is_null() {
+            return;
+        }
+        let layout = Layout::for_value(&k);
         let ptr = alloc::alloc(layout) as *mut K;
         ptr.write(k);
         let boxed: Box<dyn KernelFunc2> = Box::from_raw(ptr);
@@ -42,15 +46,19 @@ pub fn register_kernel<K: KernelFunc2 + 'static>(k: K) {
     }
 }
 pub(crate) fn kfn() -> &'static Box<dyn KernelFunc2> {
-    unsafe { &*KERNEL }
+    unsafe { 
+        if KERNEL.is_null() {
+            panic!("register_kernel not called");
+        }
+        &*KERNEL
+     }
 }
 
 pub trait KernelFunc2 {
     /// BAR remap address
     fn bar_n_remap(&self, bar: usize) -> usize;
 
-    /// TODO linux Duration 无法编译通过
-    fn delay(&self, nanos: u64);
+    fn sleep(&self, duration: Duration);
 }
 pub trait KernelFunc: Send + Sync + Clone {
     /// Page size (usually 4K)

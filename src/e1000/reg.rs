@@ -196,6 +196,8 @@ pub(crate) const fn PCH_RAICC(n: u32) -> u32 {
     0x05F50 + (n * 4)
 }
 
+use core::time::Duration;
+
 use crate::defines::*;
 use crate::kfn;
 
@@ -225,7 +227,7 @@ impl Reg {
         let mut i = ICH_FWSM_PCIM2PCI_COUNT;
 
         while ((self.er32(FWSM) & ICH_FWSM_PCIM2PCI) != 0) && i > 0 {
-            kfn().delay(50_000);
+            kfn().sleep(Duration::from_micros(50));
             i -= 1;
         }
     }

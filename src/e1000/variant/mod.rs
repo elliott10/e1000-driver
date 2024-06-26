@@ -1,4 +1,5 @@
 use super::mac::MacInfo;
+use super::reg::Reg;
 use crate::BoardInfo;
 use crate::BoardVariant;
 use crate::Flags;
@@ -14,16 +15,21 @@ pub(crate) enum VariantKind {
 
 pub(crate) struct Variant {
     board_info: BoardInfo,
+    reg: Reg,
     pub(crate) kind: VariantKind,
 }
 
 impl Variant {
-    pub(crate) fn from_board_info(board_info: BoardInfo) -> Self {
+    pub(crate) fn new(board_info: BoardInfo, reg: Reg) -> Self {
         let kind = match board_info.variant {
             BoardVariant::B82571 => VariantKind::B82571(Default::default()),
             BoardVariant::Ich8lan => VariantKind::Ich8lan(Default::default()),
         };
-        Self { board_info, kind }
+        Self {
+            board_info,
+            kind,
+            reg,
+        }
     }
 
     pub(crate) fn get_variants(&self) -> (MacInfo, Flags, Flags2) {

@@ -6,6 +6,7 @@ mod linux;
 use core::{
     ffi::{self, c_void},
     ptr::slice_from_raw_parts,
+    time::Duration,
 };
 
 use ::alloc::collections;
@@ -40,9 +41,24 @@ impl KernelFunc2 for KFun {
         unsafe { (self.cb_bar_n_remap)(self.adapter, bar) }
     }
 
-    fn delay(&self, nanos: u64) {
+    fn sleep(&self, duration: Duration) {
+        let secs = duration.as_secs();
+        let usecs = duration.subsec_nanos();
         unsafe {
-            ((self.cb_udelay)((nanos / 1000) as u32));
+            if usecs > 1000 {
+                let n = usecs / 1000;
+                for _ in 0..n {
+                    ((self.cb_udelay)(1000));
+                }
+            } else {
+                ((self.cb_udelay)(usecs));
+            }
+
+            let n = secs / 1_000_000;
+
+            for _ in 0..n {
+                ((self.cb_udelay)(1000));
+            }
         }
     }
 }

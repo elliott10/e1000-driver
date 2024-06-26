@@ -13,6 +13,7 @@ use core::iter::Scan;
 use core::mem::{self, align_of_val, size_of};
 use core::ptr::NonNull;
 use core::u32;
+use e1000::reg::Reg;
 use e1000::{board, variant};
 use ffi::CStr;
 use hw_semaphore::HwSemaphore;
@@ -45,9 +46,10 @@ where
         let board_info = board_type.new_default_info();
 
         let mmio = kfn().bar_n_remap(0);
-        info!("new kernel func");
 
-        let variant = variant::Variant::from_board_info(board_info.clone());
+        let reg = Reg::new(mmio);
+
+        let variant = variant::Variant::new(board_info.clone(), reg);
         let (mac) = variant.get_variants();
 
         let mut hw_rc = HwRc::new(kfun.clone(), &board_info);
@@ -2314,4 +2316,3 @@ fn align_to(value: u32, alignment: u32) -> u32 {
 pub struct RcvPkt {
     pub data: Vec<u8>,
 }
-
