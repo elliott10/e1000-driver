@@ -37,7 +37,8 @@ MODULE_PARM_DESC(debug, "Debug level (0=none,...,16=all)");
 
 static char e1000_rs_driver_string[] =
     "Intel(R) PRO/1000 Network Driver (Rust)";
-static const char e1000_rs_copyright[] = "Copyright 2024 泉城实验室 安全操作系统联合创新中心";
+static const char e1000_rs_copyright[] =
+    "Copyright 2024 泉城实验室 安全操作系统联合创新中心";
 
 static int e1000_init_module(void);
 static void e1000_exit_module(void);
@@ -977,7 +978,6 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent) {
   int err;
   struct net_device *netdev;
   struct e1000_adapter *adapter = NULL;
-  static int cards_found;
   //   void *hw_addr = NULL;
   //   void *flash_addr = NULL;
   resource_size_t mmio_start, mmio_len;
@@ -1037,6 +1037,11 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent) {
   config.cb_udelay = cb_udelay;
   config.cb_on_xmit_completed = cb_on_xmit_completed;
   config.cb_enable_net = cb_enbale_net;
+  
+  config.settings.enable_msi = false;
+#ifdef CONFIG_PCI_MSI
+  config.settings.enable_msi = true;
+#endif
 
   size_t e1000 = e1000r_new(config);
   if (!e1000)
@@ -1044,14 +1049,6 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent) {
 
   adapter->ptr = e1000;
   adapter->msg_enable = netif_msg_init(debug, DEFAULT_MSG_ENABLE);
-
-  struct e1000r_info_all info = e1000r_get_info_all(e1000);
-  // struct Flags flags = info.flags;
-  struct Flags2 flags2 = info.flags2;
-
-  /* Set default EEE advertisement */
-  if (flags2.has_eee)
-    adapter->eee_advert = MDIO_EEE_100TX | MDIO_EEE_1000T;
 
   netdev->netdev_ops = &e1000e_netdev_ops;
   // e1000e_set_ethtool_ops(netdev);
@@ -1062,12 +1059,7 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent) {
 
   netdev->mem_start = mmio_start;
   netdev->mem_end = mmio_start + mmio_len;
-  adapter->bd_number = cards_found++;
   u8 mac_addr[6];
-
-  err = e1000r_init(e1000);
-  if (err != 0)
-    goto err_eeprom;
 
   err = e1000_sw_init(adapter);
   if (err)

@@ -1,3 +1,5 @@
+use crate::*;
+
 pub(crate) const DEFAULT_TIDV: u32 = 8;
 pub(crate) const DEFAULT_TADV: u32 = 32;
 pub(crate) const DEFAULT_RDTR: u32 = 0;
@@ -6,8 +8,13 @@ pub(crate) const DEFAULT_RADV: u32 = 8;
 pub(crate) const BURST_RADV: u32 = 0x20;
 pub(crate) const DEFAULT_ITR: u32 = 3;
 
+/* This is the only thing that needs to be changed to adjust the
+ * maximum number of ports that the driver can manage.
+ */
+const MAX_NIC: usize = 32;
+
 #[repr(C)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Flags3 {
     // ---- flags ----
     pub has_amt: bool,
@@ -62,6 +69,106 @@ pub struct Flags3 {
     // ---- flags2 ----
 }
 
+#[repr(C)]
+#[derive(Debug, Clone, Default)]
+pub struct Settings {
+    pub enable_msi: bool,
+}
+
+#[derive(Debug, Clone, Default)]
 pub(crate) struct Params {
+    pub settings: Settings,
     pub flags: Flags3,
+    pub int_mode: InterruptMode,
+
+    /* Interrupt Throttle Rate (interrupts/sec)
+     *
+     * Valid Range: 100-100000 or one of: 0=off, 1=dynamic, 3=dynamic conservative
+     */
+    pub itr: u32,
+    pub itr_settings: u32,
+
+    pub tx_int_delay: u32,
+    pub tx_abs_int_delay: u32,
+
+    pub rx_int_delay: u32,
+    pub rx_abs_int_delay: u32,
+
+    pub card_found: usize,
+}
+
+impl Params {
+    fn check_options(&mut self) {
+        if (self.card_found >= MAX_NIC) {
+            warn!("Warning: no configuration for board #{}", self.card_found);
+            warn!("Using defaults for all values");
+        }
+
+        self.tx_int_delay = DEFAULT_TIDV;
+        self.tx_abs_int_delay = DEFAULT_TADV;
+
+        self.rx_int_delay = DEFAULT_RDTR;
+        self.rx_abs_int_delay = DEFAULT_RADV;
+
+        if self.flags.dma_burst {
+            self.rx_int_delay = BURST_RDTR;
+            self.rx_abs_int_delay = BURST_RADV;
+        }
+        /* Interrupt Throttling Rate */
+        {
+            let opt_name = "Interrupt Throttling Rate (ints/sec)";
+            self.itr = DEFAULT_ITR;
+            self.itr_settings = self.itr;
+
+            match self.itr {
+                0 => {
+                    info!("{} turned off", opt_name);
+                }
+                1 => {
+                    info!("{} set to dynamic mode", opt_name);
+                    self.itr = 20000;
+                }
+                2 => {
+                    info!("{} Invalid mode - setting default", opt_name);
+                    self.itr_settings = DEFAULT_ITR;
+                }
+                3 => {
+                    info!("{} set to dynamic conservative mode", opt_name);
+                    self.itr = 20000;
+                }
+                4 => {
+                    info!("{} set to simplified (2000-8000 ints) mode", opt_name);
+                }
+                _ => {
+                    // Save the setting, because the dynamic bits change itr.
+                    // Clear the lower two bits because they are used as control.
+                    self.itr_settings &= !3;
+                }
+            }
+        }
+
+        if self.settings.enable_msi {
+            if self.flags.has_msix {
+                self.int_mode = InterruptMode::MSIX;
+            } else {
+                self.int_mode = InterruptMode::MSI;
+            }
+        } else {
+            self.int_mode = InterruptMode::Legacy;
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
+pub(crate) enum InterruptMode {
+    Legacy,
+    MSI,
+    MSIX,
+}
+
+impl Default for InterruptMode {
+    fn default() -> Self {
+        Self::Legacy
+    }
 }

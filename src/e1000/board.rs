@@ -4,6 +4,7 @@ use super::dev_id::*;
 pub mod b82571;
 pub mod ich8lan;
 use super::hw::*;
+use crate::params::Flags3;
 use crate::{err::*, KernelFunc, E1000};
 
 const DEFAULT_JUMBO: u32 = 9234;
@@ -108,8 +109,7 @@ pub enum E1000GetVariants {
 #[derive(Debug, Clone)]
 pub struct BoardInfo {
     pub mac: MacType,
-    pub flags: Flags,
-    pub flags2: Flags2,
+    pub flags: Flags3,
     pub pba: u32,
     pub max_hw_frame_size: u32,
     pub variant: BoardVariant,
@@ -123,7 +123,7 @@ impl BoardType {
             BoardType::board_82573 => todo!(),
             BoardType::board_82574 => BoardInfo {
                 mac: MacType::e1000_82574,
-                flags: Flags {
+                flags: Flags3 {
                     has_hw_vlan_filter: true,
                     // has_msix: true,
                     has_jumbo_frames: true,
@@ -133,9 +133,6 @@ impl BoardType {
                     has_smart_power_down: true,
                     has_amt: true,
                     has_ctrlext_on_load: true,
-                    ..Default::default()
-                },
-                flags2: Flags2 {
                     check_phy_hang: true,
                     disable_aspm_l0s: true,
                     disable_aspm_l1: true,
@@ -160,7 +157,7 @@ impl BoardType {
             BoardType::board_pch_cnp => todo!(),
             BoardType::board_pch_tgp => BoardInfo {
                 mac: MacType::e1000_pch_adp,
-                flags: Flags {
+                flags: Flags3 {
                     is_ich: true,
                     has_wol: true,
                     has_hw_timestamp: true,
@@ -169,10 +166,6 @@ impl BoardType {
                     has_flash: true,
                     has_jumbo_frames: true,
                     apme_in_wuc: true,
-
-                    ..Default::default()
-                },
-                flags2: Flags2 {
                     has_phy_stats: true,
                     has_eee: true,
                     ..Default::default()
@@ -183,19 +176,15 @@ impl BoardType {
             },
             BoardType::board_pch_adp => BoardInfo {
                 mac: MacType::e1000_pch_adp,
-                flags: Flags {
+                flags: Flags3 {
                     is_ich: true,
-                    // has_wol: true,
-                    // has_hw_timestamp: true,
+                    has_wol: true,
+                    has_hw_timestamp: true,
                     has_ctrlext_on_load: true,
-                    // has_amt: true,
+                    has_amt: true,
                     has_flash: true,
-                    // has_jumbo_frames: true,
-                    // apme_in_wuc: true,
-
-                    ..Default::default()
-                },
-                flags2: Flags2 {
+                    has_jumbo_frames: true,
+                    apme_in_wuc: true,
                     has_phy_stats: true,
                     has_eee: true,
                     ..Default::default()
@@ -206,7 +195,7 @@ impl BoardType {
             },
             BoardType::board_pch_mtp => BoardInfo {
                 mac: MacType::e1000_pch_mtp,
-                flags: Flags {
+                flags: Flags3 {
                     is_ich: true,
                     has_wol: true,
                     has_hw_timestamp: true,
@@ -215,10 +204,6 @@ impl BoardType {
                     has_flash: true,
                     has_jumbo_frames: true,
                     apme_in_wuc: true,
-
-                    ..Default::default()
-                },
-                flags2: Flags2 {
                     has_phy_stats: true,
                     has_eee: true,
                     ..Default::default()
@@ -251,5 +236,3 @@ pub enum BoardVariant {
     B82571,
     Ich8lan,
 }
-
-

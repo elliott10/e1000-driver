@@ -12,12 +12,16 @@ use core::cmp::min;
 use core::iter::Scan;
 use core::mem::{self, align_of_val, size_of};
 use core::ptr::NonNull;
+
 use core::u32;
 use e1000::reg::Reg;
+use e1000::variant::Variant;
 use e1000::{board, variant};
 use ffi::CStr;
 use hw_semaphore::HwSemaphore;
-use params::Flags3;
+use params::{Flags3, Params, Settings};
+
+static mut CARD_FOUND: usize = 0;
 
 const TX_RING_SIZE: usize = 256;
 const RX_RING_SIZE: usize = 256;
@@ -26,13 +30,14 @@ pub struct E1000<K>
 where
     K: KernelFunc,
 {
-    // pub flags: Flags3,
+    pub(crate) params: Params,
     pub(crate) eiac_mask: u32,
     pub(crate) tx_ring: Ring<TxDesc, K>,
     pub(crate) rx_ring: Ring<RxDesc, K>,
     pub(crate) hw: HwRc<K>,
     pub(crate) dev_spec: DevSpec,
     is_link_up: bool,
+    variant: Variant,
 }
 
 impl<K> E1000<K>
@@ -40,32 +45,31 @@ where
     K: KernelFunc,
 {
     /// new one.
-    pub fn new(kfun: K, device_id: u32) -> Result<Self> {
+    pub fn new(kfun: K, device_id: u32, settings: Settings) -> Result<Self> {
         let board_type: BoardType = BoardType::from_dev_id(device_id).ok_or_else(|| {
             error!("unknown device id: {:#X}", device_id);
             return Error::Unknown("unknown device id");
         })?;
         let board_info = board_type.new_default_info();
+        let card_found = unsafe { CARD_FOUND } + 1;
 
         let mmio = kfn().bar_n_remap(0);
 
         let mut reg = Reg::new(mmio);
 
-        let variant = variant::Variant::new(board_info.clone(), reg);
+        let variant = Variant::new(board_info.clone(), reg);
 
         reg = variant.reg;
 
-        // let mut flags = variant.board_info.flags.clone();
+        let mut flags = variant.board_info.flags.clone();
+        let mut params = Params {
+            settings,
+            flags,
+            card_found,
+            ..Default::default()
+        };
 
         let mut hw_rc = HwRc::new(kfun.clone(), &board_info);
-        // hw_rc.init()?;
-
-        // let mmio = hw_rc.as_ref().mmio;
-
-        info!(
-            "New E1000 rust driver, mmio: {:#X}, device: {:#X}, board: {:?}, variant: {:?}",
-            mmio, device_id, board_type, board_info.variant
-        );
 
         let tx_ring = Ring::new(kfun.clone(), TX_RING_SIZE);
         let rx_ring = Ring::new(kfun.clone(), RX_RING_SIZE);
@@ -76,16 +80,26 @@ where
         };
 
         let mut e1000 = Self {
-            // flags,
+            params,
             hw: hw_rc,
             eiac_mask: 0,
             rx_ring,
             tx_ring,
             dev_spec,
             is_link_up: false,
+            variant,
         };
 
         e1000.check_opention();
+
+        unsafe { CARD_FOUND = card_found };
+
+        info!("New E1000 rust driver, mmio: {:#X}, ", mmio,);
+
+        info!(
+            "device: {:#X}, board: {:?}, variant: {:?}, itr: {:?}",
+            device_id, board_type, board_info.variant, e1000.params.int_mode
+        );
 
         Ok(e1000)
     }

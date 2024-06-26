@@ -1897,8 +1897,8 @@ where
             hw.mng_cookie = Default::default();
             hw.is_down = false;
             hw.mac.kind = board.mac;
-            hw.flags = board.flags;
-            hw.flags2 = board.flags2;
+            // hw.flags = board.flags;
+            // hw.flags2 = board.flags2;
             hw.variant = board.variant;
             hw.status.max_hw_frame_size = board.max_hw_frame_size;
             hw.status.pba = board.pba;

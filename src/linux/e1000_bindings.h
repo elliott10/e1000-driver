@@ -120,6 +120,10 @@ typedef struct e1000r_info_all {
   struct MacInfo mac;
 } e1000r_info_all;
 
+typedef struct Settings {
+  bool enable_msi;
+} Settings;
+
 /**
  * 通过bar获取到映射地址
  * return: 映射地址
@@ -153,6 +157,7 @@ typedef void (*E1000CbEnableNet)(const void *pdev);
 
 typedef struct E1000Config {
   uint32_t device_id;
+  struct Settings settings;
   E1000CbBarNremap cb_bar_n_remap;
   E1000CbIounmap cb_iounmap;
   E1000CbUdelay cb_udelay;
@@ -280,8 +285,6 @@ int32_t e1000r_down(size_t ptr);
 void e1000r_drop(size_t ptr);
 
 struct e1000r_info_all e1000r_get_info_all(size_t ptr);
-
-int32_t e1000r_init(size_t ptr);
 
 bool e1000r_irq_clean_tx(size_t ptr);
 

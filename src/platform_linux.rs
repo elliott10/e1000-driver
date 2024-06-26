@@ -15,6 +15,7 @@ pub(crate) use kernel::prelude::*;
 pub(crate) use linux::print::*;
 pub mod e1000;
 use e1000::*;
+use params::Settings;
 
 pub struct Device {
     dev: E1000<KFun>,
@@ -138,6 +139,7 @@ pub type E1000CbEnableNet = unsafe extern "C" fn(pdev: *const c_void);
 #[repr(C)]
 pub struct E1000Config {
     device_id: u32,
+    settings: Settings,
     cb_bar_n_remap: E1000CbBarNremap,
     cb_iounmap: E1000CbIounmap,
     cb_udelay: E1000CbUdelay,
@@ -179,7 +181,7 @@ extern "C" fn e1000r_new(config: E1000Config) -> usize {
 
     register_kernel(kfun.clone());
 
-    let e1000 = match E1000::new(kfun, config.device_id) {
+    let e1000 = match E1000::new(kfun, config.device_id, config.settings) {
         Ok(o) => o,
         Err(_) => return 0,
     };
@@ -203,15 +205,6 @@ extern "C" fn e1000r_read_mac_addr(ptr: usize, mac: &mut [u8; 6]) {
     let dev = dev_mut(ptr);
     let mac_new = dev.dev.read_mac_addr_generic();
     mac.copy_from_slice(&mac_new.0);
-}
-
-#[no_mangle]
-extern "C" fn e1000r_init(ptr: usize) -> i32 {
-    let dev = dev_mut(ptr);
-    rfn(|| {
-        dev.dev.init()?;
-        Ok(())
-    })
 }
 
 #[no_mangle]
