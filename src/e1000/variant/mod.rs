@@ -14,9 +14,19 @@ pub(crate) enum VariantKind {
 }
 
 pub(crate) struct Variant {
-    board_info: BoardInfo,
-    reg: Reg,
+    pub(crate) board_info: BoardInfo,
+    pub(crate) reg: Reg,
     pub(crate) kind: VariantKind,
+}
+
+pub(crate) struct VariantParam {
+    pub(crate) reg: Reg,
+    pub(crate) board_info: BoardInfo,
+}
+
+pub(crate) struct VariantResult {
+    pub(crate) reg: Reg,
+    pub(crate) board_info: BoardInfo,
 }
 
 impl Variant {
@@ -25,21 +35,33 @@ impl Variant {
             BoardVariant::B82571 => VariantKind::B82571(Default::default()),
             BoardVariant::Ich8lan => VariantKind::Ich8lan(Default::default()),
         };
-        Self {
+        let mut s = Self {
             board_info,
             kind,
             reg,
-        }
+        };
+
+        s.get_variants();
+
+        s
     }
 
-    pub(crate) fn get_variants(&self) -> (MacInfo, Flags, Flags2) {
-        match &self.kind {
-            VariantKind::B82571(ctx) => ctx.get_variants(self.board_info.clone()),
-            VariantKind::Ich8lan(ctx) => ctx.get_variants(self.board_info.clone()),
-        }
+    fn get_variants(&mut self) {
+        let param = VariantParam {
+            reg: self.reg,
+            board_info: self.board_info.clone(),
+        };
+
+        let res = match &self.kind {
+            VariantKind::B82571(ctx) => ctx.get_variants(param),
+            VariantKind::Ich8lan(ctx) => ctx.get_variants(param),
+        };
+
+        self.reg = res.reg;
+        self.board_info = res.board_info;
     }
 }
 
 pub(crate) trait VariantCommon {
-    fn get_variants(&self, board_info: BoardInfo) -> (MacInfo, Flags, Flags2);
+    fn get_variants(&self, param: VariantParam) -> VariantResult;
 }

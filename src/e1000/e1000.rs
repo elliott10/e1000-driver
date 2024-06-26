@@ -17,6 +17,7 @@ use e1000::reg::Reg;
 use e1000::{board, variant};
 use ffi::CStr;
 use hw_semaphore::HwSemaphore;
+use params::Flags3;
 
 const TX_RING_SIZE: usize = 256;
 const RX_RING_SIZE: usize = 256;
@@ -25,6 +26,7 @@ pub struct E1000<K>
 where
     K: KernelFunc,
 {
+    // pub flags: Flags3,
     pub(crate) eiac_mask: u32,
     pub(crate) tx_ring: Ring<TxDesc, K>,
     pub(crate) rx_ring: Ring<RxDesc, K>,
@@ -47,10 +49,13 @@ where
 
         let mmio = kfn().bar_n_remap(0);
 
-        let reg = Reg::new(mmio);
+        let mut reg = Reg::new(mmio);
 
         let variant = variant::Variant::new(board_info.clone(), reg);
-        let (mac) = variant.get_variants();
+
+        reg = variant.reg;
+
+        // let mut flags = variant.board_info.flags.clone();
 
         let mut hw_rc = HwRc::new(kfun.clone(), &board_info);
         // hw_rc.init()?;
@@ -70,14 +75,19 @@ where
             BoardVariant::Ich8lan => DevSpec::Ich8lan(Default::default()),
         };
 
-        Ok(Self {
+        let mut e1000 = Self {
+            // flags,
             hw: hw_rc,
             eiac_mask: 0,
             rx_ring,
             tx_ring,
             dev_spec,
             is_link_up: false,
-        })
+        };
+
+        e1000.check_opention();
+
+        Ok(e1000)
     }
 
     fn kernel(&self) -> &K {

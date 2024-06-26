@@ -201,6 +201,7 @@ use core::time::Duration;
 use crate::defines::*;
 use crate::kfn;
 
+#[derive(Clone, Copy)]
 pub(crate) struct Reg {
     mmio: usize,
     pcim2pci_arbiter_wa: bool,
