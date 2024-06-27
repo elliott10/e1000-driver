@@ -8,6 +8,7 @@ pub enum Error {
     Notsupport,
     Config(&'static str),
     Nvm(&'static str),
+    Phy(&'static str),
     TryReserveError,
 }
 
@@ -18,6 +19,7 @@ impl fmt::Display for Error {
             Error::Notsupport => write!(f, "error: not support"),
             Error::Config(e) => write!(f, "error: config error: {}", e),
             Error::Nvm(e) => write!(f, "nvm error: {}", e),
+            Error::Phy(e) => write!(f, "phy error: {}", e),
             Error::TryReserveError => write!(f, "try reserve error"),
         }
     }

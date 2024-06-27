@@ -32,6 +32,7 @@ where
 {
     pub(crate) params: Params,
     pub(crate) mac: super::mac::MacInfo,
+    pub(crate) phy: PhyInfo2,
     pub(crate) eiac_mask: u32,
     pub(crate) tx_ring: Ring<TxDesc, K>,
     pub(crate) rx_ring: Ring<RxDesc, K>,
@@ -58,13 +59,14 @@ where
 
         let mut reg = Reg::new(mmio);
 
-        let variant = Variant::new(board_info.clone());
+        let mut variant = Variant::new(&board_info);
 
-        let res = variant.get_variants(reg);
-        let mac = res.mac_info;
+        let res = variant.get_variants(reg, &board_info)?;
+        let mac = res.mac;
         reg = res.reg;
+        let phy = res.phy;
+        let mut flags = res.flags;
 
-        let mut flags = variant.board_info.flags.clone();
         let mut params = Params {
             settings,
             flags,
@@ -87,6 +89,7 @@ where
         let mut e1000 = Self {
             params,
             mac,
+            phy,
             hw: hw_rc,
             eiac_mask: 0,
             rx_ring,

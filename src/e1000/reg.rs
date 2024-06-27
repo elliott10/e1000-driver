@@ -201,10 +201,10 @@ use core::time::Duration;
 use crate::defines::*;
 use crate::kfn;
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy)]
 pub(crate) struct Reg {
     mmio: usize,
-    pcim2pci_arbiter_wa: bool,
+    pub(crate) pcim2pci_arbiter_wa: bool,
 }
 
 impl Reg {
@@ -232,12 +232,12 @@ impl Reg {
             i -= 1;
         }
     }
-    pub(crate) fn ew32(&self, offset: usize, value: u32) {
+    pub(crate) fn ew32(&self, offset: u32, value: u32) {
         if self.pcim2pci_arbiter_wa {
             self.ew32_prepare();
         }
         unsafe {
-            let ptr = (self.mmio + offset) as *mut u32;
+            let ptr = (self.mmio + offset as usize) as *mut u32;
             ptr.write_volatile(value);
         }
     }

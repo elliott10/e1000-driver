@@ -1,6 +1,17 @@
 #![allow(non_snake_case)]
 
-use super::regs::*;
+use core::{
+    cell::{RefCell, UnsafeCell},
+    sync::atomic::AtomicBool,
+};
+
+use super::{
+    reg::Reg,
+    regs::*,
+    variant::{b82571, ich8lan, Variant},
+};
+use crate::err::*;
+use crate::{hw::MsType, MediaType, PhyType};
 
 // IGP01E1000 Specific Registers
 pub(crate) const PHY_PORT_CONFIG: u16 = 0x10; // Port Config
@@ -119,4 +130,84 @@ pub(crate) const I82579_LPI_CTRL: u32 = PHY_REG(772, 20);
 
 pub(crate) const I82579_LPI_CTRL_ENABLE_MASK: u16 = 0x6000;
 
+#[derive(Debug)]
+pub(crate) struct PhyInfo2 {
+    pub kind: PhyType,
+    pub reg: Reg,
+    pub semaphore: PhySemaphore,
+    pub addr: u32,
+    pub id: u32,
+    pub reset_delay_us: u32, // in microseconds
+    pub revision: u32,
 
+    pub media_type: MediaType,
+
+    pub autoneg_advertised: u16,
+    pub autoneg_mask: u16,
+    pub cable_length: u16,
+    pub max_cable_length: u16,
+    pub min_cable_length: u16,
+
+    pub mdix: u8,
+
+    pub disable_polarity_correction: bool,
+    pub is_mdix: bool,
+    pub polarity_correction: bool,
+    pub speed_downgraded: bool,
+    pub autoneg_wait_to_complete: bool,
+
+    pub ms_type: MsType,
+    pub original_ms_type: MsType,
+    pub access_shared_resource: AtomicBool,
+}
+
+impl PhyInfo2 {
+    pub fn acquire(&self) -> Result<PhyGuard<'_>> {
+        match &self.semaphore {
+            PhySemaphore::Ich8lan => todo!(),
+            PhySemaphore::B82571(s) => s.acquire(),
+        }?;
+        unsafe { Ok(PhyGuard { phy: self }) }
+    }
+}
+#[derive(Debug, Clone)]
+pub(crate) enum PhySemaphore {
+    Ich8lan,
+    B82571(b82571::Semaphore),
+}
+
+pub(crate) trait Semaphore {
+    fn acquire(&self) -> Result;
+    fn release(&self);
+}
+
+pub(crate) struct PhyGuard<'a> {
+    phy: &'a PhyInfo2,
+}
+
+impl core::ops::Deref for PhyGuard<'_> {
+    type Target = PhyInfo2;
+
+    fn deref(&self) -> &Self::Target {
+        self.phy
+    }
+}
+
+impl core::ops::DerefMut for PhyGuard<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe {
+            let ptr = self.phy as *const PhyInfo2;
+            let ptr = ptr as *mut PhyInfo2;
+            &mut *ptr
+        }
+    }
+}
+
+impl Drop for PhyGuard<'_> {
+    fn drop(&mut self) {
+        match &self.phy.semaphore {
+            PhySemaphore::Ich8lan => todo!(),
+            PhySemaphore::B82571(s) => s.release(),
+        }
+    }
+}

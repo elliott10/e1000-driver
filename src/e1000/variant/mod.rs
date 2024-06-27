@@ -1,20 +1,25 @@
 use super::mac::MacInfo;
 use super::reg::Reg;
+use crate::hw::NvmInfo;
+use crate::params::Flags3;
+use crate::phy::PhyInfo2;
 use crate::BoardInfo;
 use crate::BoardVariant;
 use crate::Flags;
 use crate::Flags2;
+use crate::{err::*, MacType};
 
-mod b82571;
-mod ich8lan;
+pub(crate) mod b82571;
+pub(crate) mod ich8lan;
 
+#[derive(Debug, Clone)]
 pub(crate) enum VariantKind {
     B82571(b82571::Context),
     Ich8lan(ich8lan::Context),
 }
 
+#[derive(Debug, Clone)]
 pub(crate) struct Variant {
-    pub board_info: BoardInfo,
     pub kind: VariantKind,
 }
 
@@ -24,32 +29,61 @@ pub(crate) struct VariantParam {
 }
 
 pub(crate) struct VariantResult {
-    pub board_info: BoardInfo,
-    pub mac_info: MacInfo,
+    pub mac: MacInfo,
+    pub phy: PhyInfo2,
     pub reg: Reg,
+    pub flags: Flags3,
 }
 
 impl Variant {
-    pub(crate) fn new(board_info: BoardInfo) -> Self {
+    pub(crate) fn new(board_info: &BoardInfo) -> Self {
         let kind = match board_info.variant {
             BoardVariant::B82571 => VariantKind::B82571(Default::default()),
             BoardVariant::Ich8lan => VariantKind::Ich8lan(Default::default()),
         };
-        Self { board_info, kind }
+        Self { kind }
     }
 
-    pub(crate) fn get_variants(&self, reg: Reg) -> VariantResult {
+    pub(crate) fn get_variants(
+        &mut self,
+        mut reg: Reg,
+        board_info: &BoardInfo,
+    ) -> Result<VariantResult> {
         let param = VariantParam {
             reg,
-            board_info: self.board_info.clone(),
+            board_info: board_info.clone(),
         };
-        match &self.kind {
-            VariantKind::B82571(ctx) => ctx.get_variants(param),
-            VariantKind::Ich8lan(ctx) => ctx.get_variants(param),
+
+        match &mut self.kind {
+            VariantKind::B82571(ctx) => ctx.get_variants(param, reg, board_info),
+            VariantKind::Ich8lan(ctx) => ctx.get_variants(param, reg, board_info),
         }
     }
 }
 
 pub(crate) trait VariantCommon {
-    fn get_variants(&self, param: VariantParam) -> VariantResult;
+    fn init_mac_params(&mut self, mac_kind: MacType, reg: Reg) -> Result<MacInfo>;
+    // fn init_nvm_params(&self, mac: &MacInfo)-> NvmInfo;
+    fn init_phy_params(&mut self, mac: &MacInfo, reg: Reg) -> Result<PhyInfo2>;
+
+    fn get_variants(
+        &mut self,
+        param: VariantParam,
+        mut reg: Reg,
+        boad: &BoardInfo,
+    ) -> Result<VariantResult> {
+        let mut flags = boad.flags.clone();
+        let mac = self.init_mac_params(param.board_info.mac, reg)?;
+        self.set_reg(mac.kind, &mut reg);
+
+        let phy = self.init_phy_params(&mac, reg)?;
+
+        Ok(VariantResult {
+            mac,
+            phy,
+            reg,
+            flags,
+        })
+    }
+    fn set_reg(&self, mac_kind: MacType, reg: &mut Reg);
 }
