@@ -5,6 +5,9 @@ pub mod b82571;
 pub mod ich8lan;
 use super::hw::*;
 use crate::params::Flags3;
+use crate::phy::PhyOps;
+use crate::phy::PhyReadWrite;
+use crate::phy::PhySemaphore;
 use crate::{err::*, KernelFunc, E1000};
 
 const DEFAULT_JUMBO: u32 = 9234;
@@ -107,16 +110,30 @@ pub enum E1000GetVariants {
 }
 
 #[derive(Debug, Clone)]
-pub struct BoardInfo {
+pub(crate) struct BoardInfo {
     pub mac: MacType,
     pub flags: Flags3,
     pub pba: u32,
     pub max_hw_frame_size: u32,
     pub variant: BoardVariant,
+    pub phy_ops: PhyOps,
+}
+
+const fn e82_phy_ops_bm() -> PhyOps {
+    PhyOps {
+        semaphore: PhySemaphore::B82571,
+        read_write: PhyReadWrite::Bm2,
+    }
+}
+const fn ich8_phy_ops() -> PhyOps {
+    PhyOps {
+        semaphore: PhySemaphore::Ich8lan,
+        read_write: PhyReadWrite::Hv,
+    }
 }
 
 impl BoardType {
-    pub fn new_default_info(&self) -> BoardInfo {
+    pub(crate) fn new_default_info(&self) -> BoardInfo {
         match self {
             BoardType::board_82571 => todo!(),
             BoardType::board_82572 => todo!(),
@@ -144,6 +161,7 @@ impl BoardType {
                 pba: 32,
                 max_hw_frame_size: DEFAULT_JUMBO,
                 variant: BoardVariant::B82571,
+                phy_ops: e82_phy_ops_bm(),
             },
             BoardType::board_82583 => todo!(),
             BoardType::board_80003es2lan => todo!(),
@@ -173,6 +191,7 @@ impl BoardType {
                 pba: 26,
                 max_hw_frame_size: 9022,
                 variant: BoardVariant::Ich8lan,
+                phy_ops: ich8_phy_ops(),
             },
             BoardType::board_pch_adp => BoardInfo {
                 mac: MacType::e1000_pch_adp,
@@ -192,6 +211,7 @@ impl BoardType {
                 pba: 26,
                 max_hw_frame_size: 9022,
                 variant: BoardVariant::Ich8lan,
+                phy_ops: ich8_phy_ops(),
             },
             BoardType::board_pch_mtp => BoardInfo {
                 mac: MacType::e1000_pch_mtp,
@@ -211,6 +231,7 @@ impl BoardType {
                 pba: 26,
                 max_hw_frame_size: 9022,
                 variant: BoardVariant::Ich8lan,
+                phy_ops: ich8_phy_ops(),
             },
         }
     }

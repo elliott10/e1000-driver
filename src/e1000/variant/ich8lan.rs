@@ -4,7 +4,7 @@ use crate::defines::*;
 use crate::e1000::mac::MacInfo;
 use crate::e1000::reg::{Reg, FWSM};
 use crate::phy::PhyInfo2;
-use crate::{err::*, Flags, Flags2, MacType, MediaType};
+use crate::{err::*, Flags, Flags2, MacType, MediaType, BoardInfo};
 
 #[derive(Debug, Default, Clone)]
 pub(crate) struct Context {}
@@ -22,7 +22,7 @@ impl VariantCommon for Context {
         todo!()
     }
 
-    fn init_phy_params(&mut self, mac: &MacInfo, reg: Reg) -> Result<PhyInfo2> {
+    fn init_phy_params(&mut self, mac: &MacInfo, board: &BoardInfo, reg: Reg) -> Result<PhyInfo2> {
         let media_type = MediaType::media_type_copper;
         todo!()
     }

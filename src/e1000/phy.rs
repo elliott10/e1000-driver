@@ -3,14 +3,14 @@
 use core::{
     cell::{RefCell, UnsafeCell},
     sync::atomic::AtomicBool,
+    time::Duration,
 };
 
 use super::{
-    reg::Reg,
-    regs::*,
+    reg::*,
     variant::{b82571, ich8lan, Variant},
 };
-use crate::err::*;
+use crate::{defines::*, err::*, kfn, MacType};
 use crate::{hw::MsType, MediaType, PhyType};
 
 // IGP01E1000 Specific Registers
@@ -75,6 +75,11 @@ pub(crate) const BM_WUC_ENABLE_BIT: u16 = 1 << 2;
 pub(crate) const BM_WUC_HOST_WU_BIT: u16 = 1 << 4;
 pub(crate) const BM_WUC_ME_WU_BIT: u16 = 1 << 5;
 
+pub(crate) const fn PHY_REG(page: u32, reg: u32) -> u32 {
+    // Use bitwise shift and AND operation to combine page and register
+    (page << PHY_PAGE_SHIFT) | (reg & MAX_PHY_REG_ADDRESS)
+}
+
 pub(crate) const BM_PORT_GEN_CFG: u32 = PHY_REG(BM_PORT_CTRL_PAGE, 17);
 
 pub(crate) const PHY_UPPER_SHIFT: u32 = 21;
@@ -132,9 +137,11 @@ pub(crate) const I82579_LPI_CTRL_ENABLE_MASK: u16 = 0x6000;
 
 #[derive(Debug)]
 pub(crate) struct PhyInfo2 {
+    pub mac_kind: MacType,
     pub kind: PhyType,
     pub reg: Reg,
     pub semaphore: PhySemaphore,
+    pub read_write: PhyReadWrite,
     pub addr: u32,
     pub id: u32,
     pub reset_delay_us: u32, // in microseconds
@@ -165,15 +172,81 @@ impl PhyInfo2 {
     pub fn acquire(&self) -> Result<PhyGuard<'_>> {
         match &self.semaphore {
             PhySemaphore::Ich8lan => todo!(),
-            PhySemaphore::B82571(s) => s.acquire(),
+            PhySemaphore::B82571 => b82571::Semaphore::new(self.reg).acquire(),
         }?;
         unsafe { Ok(PhyGuard { phy: self }) }
     }
+
+    
+
+    pub fn read_phy_reg_mdic(&mut self, offset: u32) -> Result<u16> {
+        if (offset > MAX_PHY_REG_ADDRESS) {
+            error!("PHY Address {} is out of range", offset);
+            return Err(Error::Phy("PHY Address"));
+        }
+        let reg = &self.reg;
+        /* Set up Op-code, Phy Address, and register offset in the MDI
+         * Control register.  The MAC will take care of interfacing with the
+         * PHY to retrieve the desired data.
+         */
+        let mut mdic =
+            ((offset << MDIC_REG_SHIFT) | (self.addr << MDIC_PHY_SHIFT) | (MDIC_OP_READ));
+
+        reg.ew32(MDIC, mdic);
+
+        for _ in 0..GEN_POLL_TIMEOUT {
+            kfn().sleep(Duration::from_nanos(50));
+            mdic = reg.er32(MDIC);
+            if (mdic & MDIC_READY) > 0 {
+                break;
+            }
+        }
+
+        if (mdic & MDIC_READY) == 0 {
+            error!("MDI Read PHY Reg Address {} did not complete", offset);
+            return Err(Error::Phy("MDI Read PHY Reg Address did not complete"));
+        }
+        if (mdic & MDIC_ERROR) > 0 {
+            error!("MDI Read PHY Reg Address {} Error", offset);
+            return Err(Error::Phy("MDI Read PHY Reg Address Error"));
+        }
+        if (((mdic & MDIC_REG_MASK) >> MDIC_REG_SHIFT) != offset) {
+            error!(
+                "MDI Read offset error - requested {}, returned {}",
+                offset,
+                (mdic & MDIC_REG_MASK) >> MDIC_REG_SHIFT,
+            );
+
+            return Err(Error::Phy("PHY"));
+        }
+
+        /* Allow some time after each MDIC transaction to avoid
+         * reading duplicate data in the next MDIC transaction.
+         */
+        if (self.mac_kind == MacType::e1000_pch2lan) {
+            kfn().sleep(Duration::from_micros(100));
+        }
+
+        Ok((mdic & 0xFFFF) as u16)
+    }
 }
+
+#[derive(Debug, Clone)]
+pub(crate) struct PhyOps {
+    pub semaphore: PhySemaphore,
+    pub read_write: PhyReadWrite,
+}
+
 #[derive(Debug, Clone)]
 pub(crate) enum PhySemaphore {
     Ich8lan,
-    B82571(b82571::Semaphore),
+    B82571,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum PhyReadWrite {
+    Bm2,
+    Hv,
 }
 
 pub(crate) trait Semaphore {
@@ -207,7 +280,7 @@ impl Drop for PhyGuard<'_> {
     fn drop(&mut self) {
         match &self.phy.semaphore {
             PhySemaphore::Ich8lan => todo!(),
-            PhySemaphore::B82571(s) => s.release(),
+            PhySemaphore::B82571 => b82571::Semaphore::new(self.phy.reg).release(),
         }
     }
 }

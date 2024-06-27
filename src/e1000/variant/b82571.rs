@@ -3,7 +3,7 @@ use crate::e1000::mac::MacInfo;
 use crate::e1000::reg::*;
 use crate::phy::{self, PhyInfo2, PhySemaphore};
 use crate::{defines::*, err::*, MacType};
-use crate::{Flags, Flags2, MediaType};
+use crate::{BoardInfo, Flags, Flags2, MediaType};
 
 #[derive(Default, Debug, Clone)]
 pub(crate) struct Context {
@@ -61,16 +61,18 @@ impl VariantCommon for Context {
         Ok(mac)
     }
 
-    fn init_phy_params(&mut self, mac: &MacInfo, reg: Reg) -> Result<PhyInfo2> {
+    fn init_phy_params(&mut self, mac: &MacInfo, board: &BoardInfo, reg: Reg) -> Result<PhyInfo2> {
         let media_type = MediaType::media_type_copper;
+        let mac_kind = mac.kind;
         let mut id = 0;
         let autoneg_mask = AUTONEG_ADVERTISE_SPEED_DEFAULT;
 
         Ok(PhyInfo2 {
+            mac_kind,
             reg,
             media_type,
             kind: todo!(),
-            semaphore: PhySemaphore::B82571(Semaphore { reg }),
+            semaphore: PhySemaphore::B82571,
             addr: 1,
             id,
             reset_delay_us: 100,
@@ -89,6 +91,7 @@ impl VariantCommon for Context {
             ms_type: todo!(),
             original_ms_type: todo!(),
             access_shared_resource: Default::default(),
+            read_write: todo!(),
         })
     }
 }
