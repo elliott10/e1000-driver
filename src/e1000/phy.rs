@@ -183,12 +183,20 @@ impl PhyInfo2 {
             PhyReadWrite::Hv => todo!(),
         }
     }
-
-    pub fn e1e_rphy(&mut self, offset: u32) -> Result<u16> {
+    pub fn e1e_wphy_locked(&mut self, offset: u32, value: u16) -> Result {
+        match &self.read_write {
+            PhyReadWrite::Bm2 => self.write_phy_reg_bm2(offset, value),
+            PhyReadWrite::Hv => todo!(),
+        }
+    }
+    pub fn e1e_rphy(&self, offset: u32) -> Result<u16> {
         let mut g = self.acquire()?;
         g.e1e_rphy_locked(offset)
     }
-
+    pub fn e1e_wphy(&self, offset: u32, value: u16) -> Result {
+        let mut g = self.acquire()?;
+        g.e1e_wphy_locked(offset, value)
+    }
     fn read_phy_reg_bm2(&mut self, offset: u32) -> Result<u16> {
         let page = (offset >> IGP_PAGE_SHIFT) as u16;
 
@@ -208,6 +216,26 @@ impl PhyInfo2 {
         }
 
         self.read_phy_reg_mdic(MAX_PHY_REG_ADDRESS & offset)
+    }
+    fn write_phy_reg_bm2(&mut self, offset: u32, value: u16) -> Result {
+        let page = (offset >> IGP_PAGE_SHIFT) as u16;
+
+        /* Page 800 works differently than the rest so it has its own func */
+        if (page == BM_WUC_PAGE) {
+            // TODO
+            // ret_val = e1000_access_phy_wakeup_reg_bm(hw, offset, data, true,
+            // 					 false);
+            // goto release;
+        }
+
+        self.addr = 1;
+
+        if (offset > MAX_PHY_MULTI_PAGE_REG) {
+            /* Page is shifted left, PHY expects (page x 32) */
+            self.write_phy_reg_mdic(BM_PHY_PAGE_SELECT, page)?;
+        }
+
+        self.write_phy_reg_mdic(MAX_PHY_REG_ADDRESS & offset, value)
     }
 
     /**
