@@ -1,8 +1,9 @@
 use super::{VariantCommon, VariantParam, VariantResult};
 use crate::e1000::mac::MacInfo;
 use crate::e1000::reg::*;
+use crate::hw::{NvmInfo, NvmOverride, NvmType};
 use crate::phy::{self, PhyInfo2, PhySemaphore};
-use crate::{defines::*, err::*, MacType};
+use crate::{defines::*, err::*, MacType, PhyType};
 use crate::{BoardInfo, Flags, Flags2, MediaType};
 
 #[derive(Default, Debug, Clone)]
@@ -66,33 +67,92 @@ impl VariantCommon for Context {
         let mac_kind = mac.kind;
         let mut id = 0;
         let autoneg_mask = AUTONEG_ADVERTISE_SPEED_DEFAULT;
+        let reset_delay_us = 100;
+
+        let kind = match mac.kind {
+            MacType::e1000_82571 | MacType::e1000_82572 => PhyType::Igp2,
+            MacType::e1000_82573 => PhyType::M88,
+            MacType::e1000_82574 | MacType::e1000_82583 => PhyType::Bm,
+            _ => return Err(Error::Phy("Error getting PHY")),
+        };
 
         Ok(PhyInfo2 {
             mac_kind,
             reg,
             media_type,
-            kind: todo!(),
-            semaphore: PhySemaphore::B82571,
+            kind,
+            semaphore: board.phy_ops.semaphore.clone(),
             addr: 1,
             id,
-            reset_delay_us: 100,
-            revision: todo!(),
-            autoneg_advertised: todo!(),
-            autoneg_mask: todo!(),
-            cable_length: todo!(),
-            max_cable_length: todo!(),
-            min_cable_length: todo!(),
-            mdix: todo!(),
-            disable_polarity_correction: todo!(),
-            is_mdix: todo!(),
-            polarity_correction: todo!(),
-            speed_downgraded: todo!(),
-            autoneg_wait_to_complete: todo!(),
-            ms_type: todo!(),
-            original_ms_type: todo!(),
+            reset_delay_us,
+            revision: 0,
+            autoneg_advertised: 0,
+            autoneg_mask,
+            cable_length: 0,
+            max_cable_length: 0,
+            min_cable_length: 0,
+            mdix: 0,
+            disable_polarity_correction: false,
+            is_mdix: false,
+            polarity_correction: false,
+            speed_downgraded: false,
+            autoneg_wait_to_complete: false,
+            ms_type: Default::default(),
+            original_ms_type: Default::default(),
             access_shared_resource: Default::default(),
-            read_write: todo!(),
+            read_write: board.phy_ops.read_write.clone(),
         })
+    }
+
+    fn init_nvm_params(&self, mac: &MacInfo, reg: Reg) -> Result<NvmInfo> {
+        let mut nvm = NvmInfo::default();
+        let mut eecd = reg.er32(EECD);
+        nvm.opcode_bits = 8;
+        nvm.delay_usec = 1;
+
+        match nvm.nvm_override {
+            NvmOverride::SpiSmall => {
+                nvm.page_size = 8;
+                nvm.address_bits = 8;
+            }
+            NvmOverride::SpiLarge => {
+                nvm.page_size = 32;
+                nvm.address_bits = 16;
+            }
+            _ => {
+                nvm.page_size = if eecd & EECD_ADDR_BITS != 0 { 32 } else { 8 };
+                nvm.address_bits = if eecd & EECD_ADDR_BITS != 0 { 16 } else { 8 };
+            }
+        }
+        let mut is_set = false;
+        match mac.kind {
+            MacType::e1000_82573 | MacType::e1000_82574 | MacType::e1000_82583 => {
+                if (eecd >> 15) & 0x3 == 0x3 {
+                    nvm.kind = NvmType::FlashHw;
+                    nvm.word_size = 2048;
+                    // Clear the Autonomous Flash update bit due to Flash update issue.
+                    eecd &= !EECD_AUPDEN;
+                    reg.ew32(EECD, eecd); // Assuming ew32! is a macro for writing to a register
+                    is_set = true;
+                }
+            }
+            _ => {}
+        }
+
+        if !is_set {
+            nvm.kind = NvmType::EepromSpi;
+            let size = ((eecd & EECD_SIZE_EX_MASK) >> EECD_SIZE_EX_SHIFT) as u16;
+            // Adding to a constant, "size" becomes the left-shift value for setting word_size.
+            let mut size = size + NVM_WORD_SIZE_BASE_SHIFT;
+
+            // EEPROM access above 16k is unsupported
+            if size > 14 {
+                size = 14;
+            }
+            nvm.word_size = 1 << size;
+        }
+
+        Ok(nvm)
     }
 }
 

@@ -410,7 +410,7 @@ impl DevSpec82571 {
 
         return self.laa_is_present;
     }
-
+    
     fn init_phy_params<K: KernelFunc>(&mut self, hw: &mut Hw<K>) -> Result {
         if (hw.phy.media_type != MediaType::media_type_copper) {
             hw.phy.kind = PhyType::None;

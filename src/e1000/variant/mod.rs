@@ -63,7 +63,7 @@ impl Variant {
 
 pub(crate) trait VariantCommon {
     fn init_mac_params(&mut self, mac_kind: MacType, reg: Reg) -> Result<MacInfo>;
-    // fn init_nvm_params(&self, mac: &MacInfo)-> NvmInfo;
+    fn init_nvm_params(&self, mac: &MacInfo, reg: Reg) -> Result<NvmInfo>;
     fn init_phy_params(&mut self, mac: &MacInfo, board: &BoardInfo, reg: Reg) -> Result<PhyInfo2>;
 
     fn get_variants(
@@ -75,7 +75,7 @@ pub(crate) trait VariantCommon {
         let mut flags = boad.flags.clone();
         let mac = self.init_mac_params(param.board_info.mac, reg)?;
         self.set_reg(mac.kind, &mut reg);
-
+        let nvm = self.init_nvm_params(&mac, reg)?;
         let phy = self.init_phy_params(&mac, boad, reg)?;
 
         Ok(VariantResult {

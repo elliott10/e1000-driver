@@ -198,21 +198,39 @@ pub(crate) const fn PCH_RAICC(n: u32) -> u32 {
 
 use core::time::Duration;
 
-use crate::defines::*;
 use crate::kfn;
+use crate::BoardInfo;
+use crate::MacType;
+use crate::{defines::*, err::*};
 
 #[derive(Debug, Default, Clone, Copy)]
 pub(crate) struct Reg {
-    mmio: usize,
-    pub(crate) pcim2pci_arbiter_wa: bool,
+    pub mmio: usize,
+    pub flash: Option<usize>,
+    pub pcim2pci_arbiter_wa: bool,
 }
 
 impl Reg {
-    pub(crate) fn new(mmio: usize) -> Self {
-        Self {
+    pub(crate) fn new(board: &BoardInfo) -> Result<Self> {
+        let mmio = kfn().bar_n_remap(0);
+        let mut flash = None;
+
+        if board.flags.has_flash && board.mac < MacType::e1000_pch_spt {
+            let addr = kfn().bar_n_remap(1);
+            if addr > 0 {
+                info!("flash: {:#X}", addr);
+                flash = Some(addr);
+            } else {
+                error!("remap bar1 failed");
+                return Err(Error::Unknown("remap bar1 failed"));
+            }
+        };
+
+        Ok(Self {
             mmio,
+            flash,
             pcim2pci_arbiter_wa: false,
-        }
+        })
     }
 
     fn read<T>(&self, offset: u32) -> T {

@@ -55,9 +55,7 @@ where
         let board_info = board_type.new_default_info();
         let card_found = unsafe { CARD_FOUND } + 1;
 
-        let mmio = kfn().bar_n_remap(0);
-
-        let mut reg = Reg::new(mmio);
+        let mut reg = Reg::new(&board_info)?;
 
         let mut variant = Variant::new(&board_info);
 
@@ -101,7 +99,7 @@ where
 
         unsafe { CARD_FOUND = card_found };
 
-        info!("New E1000 rust driver, mmio: {:#X}, ", mmio,);
+        info!("New E1000 rust driver, mmio: {:#X}, ", reg.mmio);
 
         info!(
             "device: {:#X}, board: {:?}, variant: {:?}, itr: {:?}",
