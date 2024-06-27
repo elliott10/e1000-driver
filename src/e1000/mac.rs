@@ -1,6 +1,7 @@
 use alloc::vec::Vec;
 
-use crate::MacType;
+use super::reg::*;
+use crate::{defines::*, err::*, phy::PhyInfo2, MacAddress, MacType};
 
 #[derive(Default)]
 pub(crate) struct MacInfo {
@@ -38,4 +39,126 @@ pub(crate) struct MacInfo {
     pub(crate) in_ifs_mode: bool,
     pub(crate) serdes_has_link: bool,
     pub(crate) tx_pkt_filtering: bool,
+}
+
+impl MacInfo {
+    pub fn read_mac_addr_generic(&mut self, reg: Reg) -> Result {
+        let rar_high = reg.er32(RAH(0));
+        let rar_low = reg.er32(RAL(0));
+
+        for i in 0..RAL_MAC_ADDR_LEN {
+            self.perm_addr[i] = (rar_low >> (i * 8)) as u8;
+        }
+
+        for i in 0..RAH_MAC_ADDR_LEN {
+            self.perm_addr[i + 4] = (rar_high >> (i * 8)) as u8;
+        }
+
+        for i in 0..6 {
+            self.addr[i] = self.perm_addr[i];
+        }
+        Ok(())
+    }
+
+    /**
+     *  e1000e_rar_set_generic - Set receive address register
+     *  @hw: pointer to the HW structure
+     *  @addr: pointer to the receive address
+     *  @index: receive address array register
+     *
+     *  Sets the receive address array register at index to the address passed
+     *  in by addr.
+     **/
+    pub fn rar_set_pch_lpt(
+        &self,
+        addr: MacAddress,
+        index: usize,
+        reg: Reg,
+        phy: &PhyInfo2,
+    ) -> Result {
+        let index = index as u32;
+        let rar_low = u32::from_le_bytes([addr.0[0], addr.0[1], addr.0[2], addr.0[3]]);
+        let mut rar_high = u16::from_le_bytes([addr.0[4], addr.0[5]]) as u32;
+        /* HW expects these in little endian so we reverse the byte order
+         * from network order (big endian) to little endian
+         */
+
+        /* If MAC address zero, no need to set the AV bit */
+
+        if rar_low > 0 || rar_high > 0 {
+            rar_high |= RAH_AV;
+        }
+
+        if index == 0 {
+            reg.ew32(RAL(index), rar_low);
+            reg.e1e_flush();
+            reg.ew32(RAH(index), rar_high);
+            reg.e1e_flush();
+            return Ok(());
+        }
+        if index < self.rar_entry_count as u32 {
+            let mut wlock_mac = reg.er32(FWSM) & FWSM_WLOCK_MAC_MASK;
+            wlock_mac >>= FWSM_WLOCK_MAC_SHIFT;
+
+            // Check if all SHRAR registers are locked
+            if wlock_mac == 1 {
+                return Err(Error::Config("Failed to write receive address"));
+            }
+
+            if wlock_mac == 0 || index <= wlock_mac  {
+                {
+                    let g = phy.acquire()?;
+
+                    reg.ew32(SHRAL_PCH_LPT(index - 1), rar_low);
+                    reg.e1e_flush();
+                    reg.ew32(SHRAH_PCH_LPT(index - 1), rar_high);
+                    reg.e1e_flush();
+
+                    drop(g);
+                }
+
+                // Verify the register updates
+                if reg.er32(SHRAL_PCH_LPT(index - 1)) == rar_low
+                    && reg.er32(SHRAH_PCH_LPT(index - 1)) == rar_high
+                {
+                    return Ok(()); // Success
+                }
+            }
+        }
+        Err(Error::Config("Failed to write receive address"))
+    }
+
+    /**
+     *  e1000e_rar_set_generic - Set receive address register
+     *  @hw: pointer to the HW structure
+     *  @addr: pointer to the receive address
+     *  @index: receive address array register
+     *
+     *  Sets the receive address array register at index to the address passed
+     *  in by addr.
+     **/
+    pub fn rar_set_generic(&self, addr: MacAddress, index: usize, reg: Reg) -> Result {
+        let index = index as u32;
+        let rar_low = u32::from_le_bytes([addr.0[0], addr.0[1], addr.0[2], addr.0[3]]);
+        let mut rar_high = u16::from_le_bytes([addr.0[4], addr.0[5]]) as u32;
+        /* HW expects these in little endian so we reverse the byte order
+         * from network order (big endian) to little endian
+         */
+
+        /* If MAC address zero, no need to set the AV bit */
+        if rar_low > 0 || rar_high > 0 {
+            rar_high |= RAH_AV;
+        }
+
+        /* Some bridges will combine consecutive 32-bit writes into
+         * a single burst write, which will malfunction on some parts.
+         * The flushes avoid this.
+         */
+        reg.ew32(RAL(index), rar_low);
+        reg.e1e_flush();
+        reg.ew32(RAH(index), rar_high);
+        reg.e1e_flush();
+
+        Ok(())
+    }
 }

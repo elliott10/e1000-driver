@@ -183,6 +183,23 @@ pub(crate) const KABGTXD: u32 = 0x03004; // AFE Band Gap Transmit Ref Data
 
 pub(crate) const EXTCNF_CTRL: u32 = 0x00F00; // Extended Configuration Control
 pub(crate) const EXTCNF_SIZE: u32 = 0x00F08; // Extended Configuration Size
+pub(crate) const RCTL: u32 = 0x00100; // RX Control - RW
+pub(crate) const RDTR1: u32 = 0x02820; // RX Delay Timer (1) - RW
+pub(crate) const RDBAL1: u32 = 0x02900; // RX Descriptor Base Address Low (1) - RW
+pub(crate) const RDBAH1: u32 = 0x02904; // RX Descriptor Base Address High (1) - RW
+pub(crate) const RDLEN1: u32 = 0x02908; // RX Descriptor Length (1) - RW
+pub(crate) const RDH1: u32 = 0x02910; // RX Descriptor Head (1) - RW
+pub(crate) const RDT1: u32 = 0x02918; // RX Descriptor Tail (1) - RW
+pub(crate) const FCTTV: u32 = 0x00170; // Flow Control Transmit Timer Value - RW
+pub(crate) const TXCW: u32 = 0x00178; // TX Configuration Word - RW
+pub(crate) const RXCW: u32 = 0x00180; // RX Configuration Word - RO
+pub(crate) const TCTL: u32 = 0x00400; // TX Control - RW
+pub(crate) const TCTL_EXT: u32 = 0x00404; // Extended TX Control - RW
+pub(crate) const TIPG: u32 = 0x00410; // TX Inter-packet gap - RW
+pub(crate) const TBT: u32 = 0x00448; // TX Burst Timer - RW
+pub(crate) const AIT: u32 = 0x00458; // Adaptive Interframe Spacing Throttle - RW
+
+pub(crate) const MANC2H: u32 = 0x05860; // Management Control To Host - RW
 
 pub(crate) fn RAL(index: u32) -> u32 {
     RA + index * 8
@@ -211,7 +228,7 @@ pub(crate) struct Reg {
 }
 
 impl Reg {
-    pub(crate) fn new(board: &BoardInfo) -> Result<Self> {
+    pub fn new(board: &BoardInfo) -> Result<Self> {
         let mmio = kfn().bar_n_remap(0);
         let mut flash = None;
 
@@ -239,7 +256,7 @@ impl Reg {
             ptr.read_volatile()
         }
     }
-    pub(crate) fn er32(&self, offset: u32) -> u32 {
+    pub fn er32(&self, offset: u32) -> u32 {
         self.read(offset)
     }
     fn ew32_prepare(&self) {
@@ -250,7 +267,7 @@ impl Reg {
             i -= 1;
         }
     }
-    pub(crate) fn ew32(&self, offset: u32, value: u32) {
+    pub fn ew32(&self, offset: u32, value: u32) {
         if self.pcim2pci_arbiter_wa {
             self.ew32_prepare();
         }
@@ -260,7 +277,12 @@ impl Reg {
         }
     }
 
-    pub(crate) fn e1e_flush(&self) {
+    pub fn e1e_flush(&self) {
         self.er32(STATUS);
+    }
+
+    pub fn write_reg_array(&self, reg: u32, offset: u32, value: u32) {
+        let address = reg + (offset << 2);
+        self.ew32(address, value);
     }
 }

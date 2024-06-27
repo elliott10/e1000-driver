@@ -15,11 +15,12 @@ pub(crate) use kernel::prelude::*;
 pub(crate) use linux::print::*;
 pub mod e1000;
 use e1000::*;
-use params::Settings;
+use params::{InterruptMode, Settings};
 
 pub struct Device {
-    dev: E1000<KFun>,
+    dev: E1000,
 }
+
 #[derive(Clone)]
 struct KFun {
     cb_bar_n_remap: E1000CbBarNremap,
@@ -32,6 +33,7 @@ struct KFun {
     cb_pci_read_config_word: E1000CbPciReadConfigWord,
     cb_on_xmit_completed: E1000CbOnXmitCompleted,
     cb_enable_net: E1000CbEnableNet,
+    cb_pcie_cap_offset: E1000CbPcieCapOffset,
     adapter: *const c_void,
 }
 
@@ -61,6 +63,14 @@ impl KernelFunc2 for KFun {
                 ((self.cb_udelay)(1000));
             }
         }
+    }
+
+    fn pci_read_config_word(&self, where_: i32) -> u16 {
+        unsafe { (self.cb_pci_read_config_word)(self.adapter, where_) }
+    }
+
+    fn pci_cap_offset(&self) -> i32 {
+        unsafe { (self.cb_pcie_cap_offset)(self.adapter) }
     }
 }
 impl KernelFunc for KFun {
@@ -136,6 +146,7 @@ pub type E1000CbOnXmitCompleted = unsafe extern "C" fn(pdev: *const c_void, pkts
 pub type E1000CbOnRcv = unsafe extern "C" fn(pdev: *const c_void, pkt: E1000RcvPkt);
 
 pub type E1000CbEnableNet = unsafe extern "C" fn(pdev: *const c_void);
+pub type E1000CbPcieCapOffset = unsafe extern "C" fn(pdev: *const c_void) -> i32;
 #[repr(C)]
 pub struct E1000Config {
     device_id: u32,
@@ -150,6 +161,7 @@ pub struct E1000Config {
     cb_pci_read_config_word: E1000CbPciReadConfigWord,
     cb_on_xmit_completed: E1000CbOnXmitCompleted,
     cb_enable_net: E1000CbEnableNet,
+    cb_pcie_cap_offset: E1000CbPcieCapOffset,
     adapter: *const c_void,
 }
 
@@ -177,11 +189,12 @@ extern "C" fn e1000r_new(config: E1000Config) -> usize {
         cb_pci_read_config_word: config.cb_pci_read_config_word,
         cb_on_xmit_completed: config.cb_on_xmit_completed,
         cb_enable_net: config.cb_enable_net,
+        cb_pcie_cap_offset: config.cb_pcie_cap_offset,
     };
 
-    register_kernel(kfun.clone());
+    register_kernel(kfun);
 
-    let e1000 = match E1000::new(kfun, config.device_id, config.settings) {
+    let e1000 = match E1000::new(config.device_id, config.settings) {
         Ok(o) => o,
         Err(_) => return 0,
     };
@@ -205,12 +218,6 @@ extern "C" fn e1000r_read_mac_addr(ptr: usize, mac: &mut [u8; 6]) {
     let dev = dev_mut(ptr);
     let mac_new = dev.dev.read_mac_addr_generic();
     mac.copy_from_slice(&mac_new.0);
-}
-
-#[no_mangle]
-unsafe extern "C" fn e1000r_status<'a>(ptr: usize) -> &'static mut E1000Status {
-    let dev = dev_mut(ptr);
-    dev.dev.status_mut()
 }
 
 #[no_mangle]
@@ -238,14 +245,15 @@ unsafe extern "C" fn e1000r_transmit(
 #[no_mangle]
 unsafe extern "C" fn e1000r_irq_handle(ptr: usize, irq: i32) -> i32 {
     let dev = dev_mut(ptr);
-    rfn(|| dev.dev.irq_handle(irq))
+    // rfn(|| dev.dev.irq_handle(irq))
+    0
 }
 
 #[no_mangle]
 unsafe extern "C" fn e1000r_irq_handle_msix_tx(ptr: usize, irq: i32) -> i32 {
     let dev = dev_mut(ptr);
 
-    dev.dev.irq_handle_msix_tx();
+    // dev.dev.irq_handle_msix_tx();
     0
 }
 
@@ -253,13 +261,20 @@ unsafe extern "C" fn e1000r_irq_handle_msix_tx(ptr: usize, irq: i32) -> i32 {
 unsafe extern "C" fn e1000r_irq_clean_tx(ptr: usize) -> bool {
     let dev = dev_mut(ptr);
 
-    dev.dev.clean_tx_irq()
+    // dev.dev.clean_tx_irq()
+
+    true
+}
+#[no_mangle]
+extern "C" fn e1000r_irq_set_mode(ptr: usize, mode: InterruptMode) {
+    let dev = dev_mut(ptr);
+    dev.dev.set_interrupt_mode(mode)
 }
 
 #[no_mangle]
-unsafe extern "C" fn e1000r_set_flags(ptr: usize, flags: Flags) {
+extern "C" fn e1000r_irq_get_mode(ptr: usize) -> InterruptMode {
     let dev = dev_mut(ptr);
-    dev.dev.set_flags(flags);
+    dev.dev.get_interrupt_mode()
 }
 
 #[no_mangle]
@@ -275,19 +290,7 @@ extern "C" fn e1000r_irq_enable(ptr: usize) {
 #[no_mangle]
 extern "C" fn e1000r_configure_msix(ptr: usize) {
     let dev = dev_mut(ptr);
-    dev.dev.configure_msix();
-}
-
-#[no_mangle]
-extern "C" fn e1000r_get_info_all(ptr: usize) -> e1000r_info_all {
-    let dev = dev_mut(ptr);
-    let e1000 = &dev.dev;
-
-    e1000r_info_all {
-        flags: e1000.flags(),
-        flags2: e1000.flags2(),
-        mac: e1000.mac_info(),
-    }
+    // dev.dev.configure_msix();
 }
 
 #[no_mangle]
@@ -301,7 +304,7 @@ extern "C" fn e1000r_open(ptr: usize) -> i32 {
 #[no_mangle]
 extern "C" fn e1000r_down(ptr: usize) -> i32 {
     let dev = dev_mut(ptr);
-    dev.dev.down();
+    // dev.dev.down();
 
     return 0;
 }
@@ -312,18 +315,10 @@ extern "C" fn e1000_print_device_info(ptr: usize) {
     e1000.print_info();
 }
 
-#[allow(non_camel_case_types)]
-#[repr(C)]
-pub struct e1000r_info_all {
-    pub flags: Flags,
-    pub flags2: Flags2,
-    pub mac: MacInfo,
-}
-
 #[no_mangle]
 unsafe extern "C" fn e1000r_trigger_lsc(ptr: usize) {
     let dev = dev_mut(ptr);
-    dev.dev.trigger_lsc()
+    // dev.dev.trigger_lsc()
 }
 #[no_mangle]
 unsafe extern "C" fn e1000r_task_watchdog(ptr: usize) -> bool {

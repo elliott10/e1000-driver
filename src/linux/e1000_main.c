@@ -83,13 +83,10 @@ static void e1000_watchdog(struct timer_list *t) {
 }
 static irqreturn_t e1000_intr_msix_rx(int __always_unused irq, void *data) {
   struct net_device *netdev = data;
-  size_t e1000 = e1000e_get_e1000(netdev);
+  // size_t e1000 = e1000e_get_e1000(netdev);
   struct e1000_adapter *adapter = netdev_priv(netdev);
 
   if (napi_schedule_prep(&adapter->napi)) {
-    struct E1000Status *status = e1000r_status(e1000);
-    status->total_rx_bytes = 0;
-    status->total_rx_packets = 0;
     __napi_schedule(&adapter->napi);
   }
   return IRQ_HANDLED;
@@ -155,16 +152,10 @@ static irqreturn_t e1000_intr_msi(int __always_unused irq, void *data) {
   struct net_device *netdev = data;
   struct e1000_adapter *adapter = netdev_priv(netdev);
   size_t e1000 = e1000e_get_e1000(netdev);
-  struct E1000Status *status = e1000r_status(e1000);
   if (e1000r_irq_handle(e1000, irq)) {
     return IRQ_NONE;
   }
   if (napi_schedule_prep(&adapter->napi)) {
-    status->total_tx_bytes = 0;
-    status->total_tx_packets = 0;
-    status->total_rx_bytes = 0;
-    status->total_rx_packets = 0;
-    // pr_info("intr msi __napi_schedule");
     __napi_schedule(&adapter->napi);
   }
   return IRQ_HANDLED;
@@ -180,9 +171,7 @@ static irqreturn_t e1000_intr_msi(int __always_unused irq, void *data) {
 static int e1000_request_irq(struct e1000_adapter *adapter) {
   struct net_device *netdev = adapter->netdev;
   size_t e1000 = e1000e_get_e1000(adapter->netdev);
-  struct E1000Status *status = e1000r_status(e1000);
-  struct e1000r_info_all info = e1000r_get_info_all(e1000);
-  struct Flags flags = info.flags;
+
   int err;
 
   if (adapter->msix_entries) {
@@ -191,10 +180,10 @@ static int e1000_request_irq(struct e1000_adapter *adapter) {
       return err;
     /* fall back to MSI */
     e1000e_reset_interrupt_capability(adapter);
-    status->int_mode = E1000E_INT_MODE_MSI;
+    e1000r_irq_set_mode(e1000, MSI);
     e1000e_set_interrupt_capability(adapter);
   }
-  if (flags.msi_enabled) {
+  if (adapter->msi_enabled) {
     err = request_irq(adapter->pdev->irq, e1000_intr_msi, 0, netdev->name,
                       netdev);
     if (!err)
@@ -202,7 +191,8 @@ static int e1000_request_irq(struct e1000_adapter *adapter) {
 
     /* fall back to legacy interrupt */
     e1000e_reset_interrupt_capability(adapter);
-    status->int_mode = E1000E_INT_MODE_LEGACY;
+
+    e1000r_irq_set_mode(e1000, Legacy);
   }
 
   err = request_irq(adapter->pdev->irq, e1000_intr_msi, IRQF_SHARED,
@@ -751,18 +741,16 @@ static netdev_features_t e1000_fix_features(struct net_device *netdev,
 }
 void e1000e_reset_interrupt_capability(struct e1000_adapter *adapter) {
   size_t e1000 = e1000e_get_e1000(adapter->netdev);
-  struct e1000r_info_all info = e1000r_get_info_all(e1000);
   struct E1000Status *status = e1000r_status(e1000);
   struct Flags flags = info.flags;
   if (adapter->msix_entries) {
     pci_disable_msix(adapter->pdev);
-    status->msix_vec_num = 0;
+    adapter->msix_vec_num = 0;
     kfree(adapter->msix_entries);
     adapter->msix_entries = NULL;
-  } else if (flags.msi_enabled) {
+  } else if (adapter->msi_enabled) {
     pci_disable_msi(adapter->pdev);
-    flags.msi_enabled = false;
-    e1000r_set_flags(e1000, flags);
+    adapter->msi_enabled = false;
   }
 }
 /**
@@ -776,52 +764,46 @@ void e1000e_set_interrupt_capability(struct e1000_adapter *adapter) {
   int err;
   int i;
   size_t e1000 = e1000e_get_e1000(adapter->netdev);
-  struct e1000r_info_all info = e1000r_get_info_all(e1000);
-  struct Flags flags = info.flags;
-  struct E1000Status *status = e1000r_status(e1000);
 
-  switch (status->int_mode) {
-  case E1000E_INT_MODE_MSIX:
-    if (flags.has_msix) {
-      status->num_vectors = 3; /* RxQ0, TxQ0 and other */
-      status->msix_vec_num = status->num_vectors;
-      adapter->msix_entries =
-          kcalloc(status->num_vectors, sizeof(struct msix_entry), GFP_KERNEL);
-      if (adapter->msix_entries) {
-        struct e1000_adapter *a = adapter;
+  switch (e1000r_irq_get_mode(e1000)) {
+  case MSIX:
+    adapter->num_vectors = 3;
+    adapter->msix_entries =
+        kcalloc(adapter->num_vectors, sizeof(struct msix_entry), GFP_KERNEL);
+    if (adapter->msix_entries) {
+      struct e1000_adapter *a = adapter;
 
-        for (i = 0; i < status->num_vectors; i++)
-          adapter->msix_entries[i].entry = i;
+      for (i = 0; i < status->num_vectors; i++)
+        adapter->msix_entries[i].entry = i;
 
-        err = pci_enable_msix_range(a->pdev, a->msix_entries,
-                                    status->num_vectors, status->num_vectors);
-        if (err > 0)
-          return;
-      }
+      err = pci_enable_msix_range(a->pdev, a->msix_entries, status->num_vectors,
+                                  status->num_vectors);
+      if (err > 0)
+        return;
+
       /* MSI-X failed, so fall through and try MSI */
       e_err("Failed to initialize MSI-X interrupts.  Falling back to MSI "
             "interrupts.\n");
       e1000e_reset_interrupt_capability(adapter);
     }
-    status->int_mode = E1000E_INT_MODE_MSI;
+    e1000r_irq_set_mode(e1000, MSI);
     fallthrough;
-  case E1000E_INT_MODE_MSI:
+  case MSI:
     if (!pci_enable_msi(adapter->pdev)) {
-      flags.msi_enabled = true;
-      e1000r_set_flags(e1000, flags);
+      adapter->msi_enabled = true;
     } else {
-      status->int_mode = E1000E_INT_MODE_LEGACY;
+      e1000r_irq_set_mode(e1000, Legacy);
       e_err("Failed to initialize MSI interrupts.  Falling back to legacy "
             "interrupts.\n");
     }
     fallthrough;
-  case E1000E_INT_MODE_LEGACY:
+  case Legacy:
     /* Don't do anything; this is the system default */
     break;
   }
 
   /* store the number of vectors being used */
-  status->num_vectors = 1;
+  adapter->num_vectors = 1;
 }
 /**
  * e1000_irq_disable - Mask off interrupt generation on the NIC
@@ -913,7 +895,12 @@ bool cb_mtu_bg_eth(const void *data) {
 
   return adapter->netdev->mtu > ETH_DATA_LEN;
 }
+int cb_pcie_cap_offset(const void *data) {
 
+  struct e1000_adapter *adapter = (struct e1000_adapter *)data;
+
+  return adapter->pdev->pcie_cap;
+}
 size_t cb_dma_alloc(const void *data, size_t pages, u64 *dma) {
   struct e1000_adapter *adapter = (struct e1000_adapter *)data;
   struct pci_dev *pdev = adapter->pdev;
@@ -1037,7 +1024,8 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent) {
   config.cb_udelay = cb_udelay;
   config.cb_on_xmit_completed = cb_on_xmit_completed;
   config.cb_enable_net = cb_enbale_net;
-  
+  config.cb_pcie_cap_offset = cb_pcie_cap_offset;
+
   config.settings.enable_msi = false;
 #ifdef CONFIG_PCI_MSI
   config.settings.enable_msi = true;
@@ -1065,47 +1053,6 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent) {
   if (err)
     goto err_sw_init;
 
-  // struct E1000Status *status = e1000r_status(e1000);
-
-  /* Set initial default active device features */
-  // netdev->features = (NETIF_F_SG | NETIF_F_HW_CSUM);
-
-  // netdev->features = (NETIF_F_SG | NETIF_F_HW_VLAN_CTAG_RX |
-  //                     NETIF_F_HW_VLAN_CTAG_TX | NETIF_F_TSO | NETIF_F_TSO6 |
-  //                     NETIF_F_RXHASH | NETIF_F_RXCSUM | NETIF_F_HW_CSUM);
-
-  /* disable TSO for pcie and 10/100 speeds to avoid
-   * some hardware issues and for i219 to fix transfer
-   * speed being capped at 60%
-   */
-  // if (!flags.tso_force) {
-  //   switch (status->link_speed) {
-  //   case SPEED_10:
-  //   case SPEED_100:
-  //     e_info("10/100 speed: disabling TSO\n");
-  //     netdev->features &= ~NETIF_F_TSO;
-  //     netdev->features &= ~NETIF_F_TSO6;
-  //     break;
-  //   case SPEED_1000:
-  //     netdev->features |= NETIF_F_TSO;
-  //     netdev->features |= NETIF_F_TSO6;
-  //     break;
-  //   default:
-  //     /* oops */
-  //     break;
-  //   }
-  //   if (info.mac.kind == e1000_pch_spt) {
-  //     netdev->features &= ~NETIF_F_TSO;
-  //     netdev->features &= ~NETIF_F_TSO6;
-  //   }
-  // }
-
-  // netdev->features &= ~NETIF_F_TSO;
-  // netdev->features &= ~NETIF_F_TSO6;
-
-  /* Set user-changeable features (subset of all device features) */
-  // netdev->hw_features = netdev->features;
-  // netdev->hw_features |= NETIF_F_RXFCS;
   netdev->priv_flags |= IFF_SUPP_NOFCS;
   // netdev->hw_features |= NETIF_F_RXALL;
 

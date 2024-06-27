@@ -356,6 +356,14 @@ impl PhyInfo2 {
 
         Ok((mdic & 0xFFFF) as u16)
     }
+
+    pub(crate) fn copper_options(&mut self) {
+        if self.media_type == MediaType::media_type_copper {
+            self.mdix = AUTO_ALL_MODES;
+            self.disable_polarity_correction = false;
+            self.ms_type = MsType::HwDefault;
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

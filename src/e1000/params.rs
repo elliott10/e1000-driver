@@ -95,6 +95,13 @@ pub(crate) struct Params {
     pub rx_abs_int_delay: u32,
 
     pub card_found: usize,
+
+    pub link_speed: u16,
+    pub link_duplex: u16,
+    pub max_hw_frame_size: u32,
+    pub eeprom_wol: u32,
+    pub wol: u32,
+    pub pba: u32,
 }
 
 impl Params {

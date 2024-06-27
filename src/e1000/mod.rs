@@ -6,7 +6,6 @@ pub(crate) mod dev_id;
 mod e1000;
 pub mod err;
 pub(crate) mod hw;
-pub(crate) mod hw_semaphore;
 mod mac;
 pub(crate) mod params;
 pub(crate) mod phy;
@@ -46,12 +45,12 @@ pub fn register_kernel<K: KernelFunc2 + 'static>(k: K) {
     }
 }
 pub(crate) fn kfn() -> &'static Box<dyn KernelFunc2> {
-    unsafe { 
+    unsafe {
         if KERNEL.is_null() {
             panic!("register_kernel not called");
         }
         &*KERNEL
-     }
+    }
 }
 
 pub trait KernelFunc2 {
@@ -59,6 +58,11 @@ pub trait KernelFunc2 {
     fn bar_n_remap(&self, bar: usize) -> usize;
 
     fn sleep(&self, duration: Duration);
+
+    /// Pcie 读取
+    fn pci_read_config_word(&self, where_: i32) -> u16;
+
+    fn pci_cap_offset(&self)->i32;
 }
 pub trait KernelFunc: Send + Sync + Clone {
     /// Page size (usually 4K)

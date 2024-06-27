@@ -202,7 +202,7 @@ pub(crate) fn DMA_BIT_MASK(n: u32) -> u64 {
     }
 }
 
-pub(crate) fn TDLEN(n: usize) -> usize {
+pub(crate) fn TDLEN(n: u32) -> u32 {
     if n < 4 {
         0x03808 + (n * 0x100)
     } else {
@@ -210,7 +210,7 @@ pub(crate) fn TDLEN(n: usize) -> usize {
     }
 }
 
-pub(crate) fn TDH(n: usize) -> usize {
+pub(crate) fn TDH(n: u32) -> u32 {
     if n < 4 {
         0x03810 + (n * 0x100)
     } else {
@@ -218,7 +218,7 @@ pub(crate) fn TDH(n: usize) -> usize {
     }
 }
 
-pub(crate) fn TDT(n: usize) -> usize {
+pub(crate) fn TDT(n: u32) -> u32 {
     if n < 4 {
         0x03818 + (n * 0x100)
     } else {
@@ -226,7 +226,7 @@ pub(crate) fn TDT(n: usize) -> usize {
     }
 }
 
-pub(crate) fn TXDCTL(n: usize) -> usize {
+pub(crate) fn TXDCTL(n: u32) -> u32 {
     if n < 4 {
         0x03828 + (n * 0x100)
     } else {
@@ -235,7 +235,7 @@ pub(crate) fn TXDCTL(n: usize) -> usize {
 }
 
 /* Receive Descriptor Base Address Low, High, Length, Head, Tail, and Control */
-pub fn RDBAL(n: usize) -> usize {
+pub fn RDBAL(n: u32) -> u32 {
     if n < 4 {
         0x02800 + (n * 0x100)
     } else {
@@ -243,7 +243,7 @@ pub fn RDBAL(n: usize) -> usize {
     }
 }
 
-pub fn RDBAH(n: usize) -> usize {
+pub fn RDBAH(n: u32) -> u32 {
     if n < 4 {
         0x02804 + (n * 0x100)
     } else {
@@ -251,7 +251,7 @@ pub fn RDBAH(n: usize) -> usize {
     }
 }
 
-pub fn RDLEN(n: usize) -> usize {
+pub fn RDLEN(n: u32) -> u32 {
     if n < 4 {
         0x02808 + (n * 0x100)
     } else {
@@ -259,7 +259,7 @@ pub fn RDLEN(n: usize) -> usize {
     }
 }
 
-pub fn RDH(n: usize) -> usize {
+pub fn RDH(n: u32) -> u32 {
     if n < 4 {
         0x02810 + (n * 0x100)
     } else {
@@ -267,7 +267,7 @@ pub fn RDH(n: usize) -> usize {
     }
 }
 
-pub fn RDT(n: usize) -> usize {
+pub fn RDT(n: u32) -> u32 {
     if n < 4 {
         0x02818 + (n * 0x100)
     } else {
@@ -275,7 +275,7 @@ pub fn RDT(n: usize) -> usize {
     }
 }
 
-pub fn RXDCTL(n: usize) -> usize {
+pub fn RXDCTL(n: u32) -> u32 {
     if n < 4 {
         0x02828 + (n * 0x100)
     } else {
@@ -334,21 +334,7 @@ pub(crate) const TCTL_SWXOFF: u32 = 0x00400000; // SW Xoff transmission
 pub(crate) const TCTL_PBE: u32 = 0x00800000; // Packet Burst Enable
 pub(crate) const TCTL_NRTU: u32 = 0x02000000; // No re-transmit on underrun
 
-pub(crate) const RCTL: usize = 0x00100; // RX Control - RW
-pub(crate) const RDTR1: usize = 0x02820; // RX Delay Timer (1) - RW
-pub(crate) const RDBAL1: usize = 0x02900; // RX Descriptor Base Address Low (1) - RW
-pub(crate) const RDBAH1: usize = 0x02904; // RX Descriptor Base Address High (1) - RW
-pub(crate) const RDLEN1: usize = 0x02908; // RX Descriptor Length (1) - RW
-pub(crate) const RDH1: usize = 0x02910; // RX Descriptor Head (1) - RW
-pub(crate) const RDT1: usize = 0x02918; // RX Descriptor Tail (1) - RW
-pub(crate) const FCTTV: usize = 0x00170; // Flow Control Transmit Timer Value - RW
-pub(crate) const TXCW: usize = 0x00178; // TX Configuration Word - RW
-pub(crate) const RXCW: usize = 0x00180; // RX Configuration Word - RO
-pub(crate) const TCTL: usize = 0x00400; // TX Control - RW
-pub(crate) const TCTL_EXT: usize = 0x00404; // Extended TX Control - RW
-pub(crate) const TIPG: usize = 0x00410; // TX Inter-packet gap - RW
-pub(crate) const TBT: usize = 0x00448; // TX Burst Timer - RW
-pub(crate) const AIT: usize = 0x00458; // Adaptive Interframe Spacing Throttle - RW
+
 
 /* Receive Control Flags */
 pub(crate) const RCTL_EN: u32 = 0x00000002; // enable
@@ -516,7 +502,6 @@ pub(crate) const BMCR_LOOPBACK: u16 = 0x4000; // TXD loopback bits
 pub(crate) const BMCR_RESET: u16 = 0x8000; // Reset to default state
 pub(crate) const BMCR_SPEED10: u16 = 0x0000; // Select 10Mbps
 
-pub(crate) const MANC2H: usize = 0x05860; // Management Control To Host - RW
 pub(crate) const HALF_DUPLEX: u16 = 1;
 pub(crate) const FULL_DUPLEX: u16 = 2;
 
@@ -685,15 +670,15 @@ pub(crate) const FWSM_ULP_CFG_DONE: u32 = 0x00000400;
 pub(crate) const EXFWSM_DPG_EXIT_DONE: u32 = 0x00000001;
 
 /* Shared Receive Address Registers */
-pub(crate) const fn SHRAL_PCH_LPT(i: usize) -> usize {
+pub(crate) const fn SHRAL_PCH_LPT(i: u32) -> u32 {
     0x05408 + (i * 8)
 }
 
-pub(crate) fn SHRAH_PCH_LPT(i: usize) -> usize {
+pub(crate) fn SHRAH_PCH_LPT(i: u32) -> u32 {
     0x0540C + (i * 8)
 }
 
-pub(crate) fn MDEF(n: usize) -> usize {
+pub(crate) fn MDEF(n: u32) -> u32 {
     0x05890 + (4 * n)
 }
 
@@ -776,10 +761,11 @@ pub(crate) const EXTCNF_CTRL_EXT_CNF_POINTER_SHIFT: u32 = 16;
 /* Manageability Operation Mode mask */
 pub(crate) const NVM_INIT_CTRL2_MNGM: u16 = 0x6000;
 
-
-
 pub(crate) const ICH_FWSM_RSPCIPHY: u32 = 0x00000040; // Reset PHY on PCI Reset
 pub(crate) const ICH_FWSM_FW_VALID: u32 = 0x00008000; // FW established a valid mode
 pub(crate) const ICH_FWSM_PCIM2PCI: u32 = 0x01000000; // ME PCIm-to-PCI active
 pub(crate) const ICH_FWSM_PCIM2PCI_COUNT: u32 = 2000;
 pub(crate) const ICH_MNG_IAMT_MODE: u32 = 0x2;
+
+pub(crate) const RAL_MAC_ADDR_LEN: usize = 4;
+pub(crate) const RAH_MAC_ADDR_LEN: usize = 2;
