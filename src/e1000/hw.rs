@@ -1065,13 +1065,13 @@ where
     }
 
     fn write_phy_reg_igp(&mut self, offset: u32, value: u16) -> Result {
-        if (offset as u16 > MAX_PHY_MULTI_PAGE_REG) {
+        if (offset > MAX_PHY_MULTI_PAGE_REG) {
             self.write_phy_reg_mdic(IGP01E1000_PHY_PAGE_SELECT, offset as u16)?;
         }
         self.write_phy_reg_mdic(MAX_PHY_REG_ADDRESS & offset, value)
     }
     fn read_phy_reg_igp(&mut self, offset: u32) -> Result<u16> {
-        if (offset as u16 > MAX_PHY_MULTI_PAGE_REG) {
+        if (offset > MAX_PHY_MULTI_PAGE_REG) {
             self.write_phy_reg_mdic(IGP01E1000_PHY_PAGE_SELECT, offset as u16)?;
         }
         self.read_phy_reg_mdic(MAX_PHY_REG_ADDRESS & offset)

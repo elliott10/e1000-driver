@@ -20,7 +20,7 @@ pub(crate) const PHY_PORT_CTRL: u16 = 0x12; // Control
 pub(crate) const PHY_LINK_HEALTH: u16 = 0x13; // PHY Link Health
 pub(crate) const PHY_POWER_MGMT_IGP02: u16 = 0x19; // Power Management
 pub(crate) const PHY_PAGE_SELECT_IGP01: u16 = 0x1F; // Page Select
-pub(crate) const BM_PHY_PAGE_SELECT: u16 = 22; // Page Select for BM
+pub(crate) const BM_PHY_PAGE_SELECT: u32 = 22; // Page Select for BM
 pub(crate) const PHY_REG_MASK: u16 = 0x1F;
 
 // BM/HV Specific Registers
@@ -96,10 +96,10 @@ pub(crate) fn BM_PHY_REG_PAGE(offset: u32) -> u16 {
     ((offset >> PHY_PAGE_SHIFT) as u16) & 0xFFFF
 }
 
-pub(crate) fn BM_PHY_REG_NUM(offset: u32) -> u16 {
+pub(crate) fn BM_PHY_REG_NUM(offset: u32) -> u32 {
     // Extract the register number from the given offset
-    ((offset & MAX_PHY_REG_ADDRESS as u32) as u16)
-        | (((offset >> (PHY_UPPER_SHIFT - PHY_PAGE_SHIFT)) & !MAX_PHY_REG_ADDRESS as u32) as u16)
+    (offset & MAX_PHY_REG_ADDRESS)
+        | ((offset >> (PHY_UPPER_SHIFT - PHY_PAGE_SHIFT)) & !MAX_PHY_REG_ADDRESS)
 }
 
 pub(crate) const CV_SMB_CTRL: u32 = PHY_REG(769, 23);
@@ -177,7 +177,106 @@ impl PhyInfo2 {
         unsafe { Ok(PhyGuard { phy: self }) }
     }
 
-    
+    pub fn e1e_rphy_locked(&mut self, offset: u32) -> Result<u16> {
+        match &self.read_write {
+            PhyReadWrite::Bm2 => self.read_phy_reg_bm2(offset),
+            PhyReadWrite::Hv => todo!(),
+        }
+    }
+
+    pub fn e1e_rphy(&mut self, offset: u32) -> Result<u16> {
+        let mut g = self.acquire()?;
+        g.e1e_rphy_locked(offset)
+    }
+
+    fn read_phy_reg_bm2(&mut self, offset: u32) -> Result<u16> {
+        let page = (offset >> IGP_PAGE_SHIFT) as u16;
+
+        /* Page 800 works differently than the rest so it has its own func */
+        if (page == BM_WUC_PAGE) {
+            // TODO
+            // ret_val = e1000_access_phy_wakeup_reg_bm(hw, offset, data, true,
+            // 					 false);
+            // goto release;
+        }
+
+        self.addr = 1;
+
+        if (offset > MAX_PHY_MULTI_PAGE_REG) {
+            /* Page is shifted left, PHY expects (page x 32) */
+            self.write_phy_reg_mdic(BM_PHY_PAGE_SELECT, page)?;
+        }
+
+        self.read_phy_reg_mdic(MAX_PHY_REG_ADDRESS & offset)
+    }
+
+    /**
+     *  e1000_set_page_igp - Set page as on IGP-like PHY(s)
+     *  @hw: pointer to the HW structure
+     *  @page: page to set (shifted left when necessary)
+     *
+     *  Sets PHY page required for PHY register access.  Assumes semaphore is
+     *  already acquired.  Note, this function sets phy.addr to 1 so the caller
+     *  must set it appropriately (if necessary) after this function returns.
+     **/
+    fn set_page_igp(&mut self, page: u16) -> Result {
+        info!("Setting page {:#X}", page);
+
+        self.addr = 1;
+
+        self.write_phy_reg_mdic(IGP01E1000_PHY_PAGE_SELECT, page)
+    }
+    pub fn write_phy_reg_mdic(&mut self, offset: u32, value: u16) -> Result {
+        if (offset > MAX_PHY_REG_ADDRESS) {
+            error!("PHY Address {} is out of range", offset);
+            return Err(Error::Phy("PHY Address"));
+        }
+        /* Set up Op-code, Phy Address, and register offset in the MDI
+         * Control register.  The MAC will take care of interfacing with the
+         * PHY to retrieve the desired data.
+         */
+        let mut mdic = ((value as u32)
+            | (offset << MDIC_REG_SHIFT)
+            | (self.addr << MDIC_PHY_SHIFT)
+            | (MDIC_OP_WRITE));
+
+        self.reg.ew32(MDIC, mdic);
+
+        for _ in 0..GEN_POLL_TIMEOUT * 3 {
+            kfn().sleep(Duration::from_nanos(50));
+            mdic = self.reg.er32(MDIC);
+            if (mdic & MDIC_READY) > 0 {
+                break;
+            }
+        }
+
+        if (mdic & MDIC_READY) == 0 {
+            error!("MDI Read PHY Reg Address {} did not complete", offset);
+            return Err(Error::Phy("PHY"));
+        }
+        if (mdic & MDIC_ERROR) > 0 {
+            error!("MDI Read PHY Reg Address {} Error", offset);
+            return Err(Error::Phy("PHY"));
+        }
+        if (((mdic & MDIC_REG_MASK) >> MDIC_REG_SHIFT) != offset) {
+            error!(
+                "MDI Read offset error - requested {}, returned {}",
+                offset,
+                (mdic & MDIC_REG_MASK) >> MDIC_REG_SHIFT,
+            );
+
+            return Err(Error::Phy("PHY"));
+        }
+
+        /* Allow some time after each MDIC transaction to avoid
+         * reading duplicate data in the next MDIC transaction.
+         */
+        if (self.mac_kind == MacType::e1000_pch2lan) {
+            kfn().sleep(Duration::from_nanos(100));
+        }
+
+        Ok(())
+    }
 
     pub fn read_phy_reg_mdic(&mut self, offset: u32) -> Result<u16> {
         if (offset > MAX_PHY_REG_ADDRESS) {
@@ -194,7 +293,7 @@ impl PhyInfo2 {
 
         reg.ew32(MDIC, mdic);
 
-        for _ in 0..GEN_POLL_TIMEOUT {
+        for _ in 0..GEN_POLL_TIMEOUT * 3 {
             kfn().sleep(Duration::from_nanos(50));
             mdic = reg.er32(MDIC);
             if (mdic & MDIC_READY) > 0 {
@@ -224,7 +323,7 @@ impl PhyInfo2 {
          * reading duplicate data in the next MDIC transaction.
          */
         if (self.mac_kind == MacType::e1000_pch2lan) {
-            kfn().sleep(Duration::from_micros(100));
+            kfn().sleep(Duration::from_nanos(100));
         }
 
         Ok((mdic & 0xFFFF) as u16)
