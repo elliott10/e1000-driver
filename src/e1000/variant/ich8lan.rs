@@ -12,6 +12,10 @@ impl VariantCommon for Context {
         let mut board_info = param.board_info.clone();
         let reg = param.reg;
 
-        VariantResult { reg, board_info }
+        VariantResult {
+            reg,
+            board_info,
+            mac_info,
+        }
     }
 }

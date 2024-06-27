@@ -31,6 +31,7 @@ where
     K: KernelFunc,
 {
     pub(crate) params: Params,
+    pub(crate) mac: super::mac::MacInfo,
     pub(crate) eiac_mask: u32,
     pub(crate) tx_ring: Ring<TxDesc, K>,
     pub(crate) rx_ring: Ring<RxDesc, K>,
@@ -57,9 +58,11 @@ where
 
         let mut reg = Reg::new(mmio);
 
-        let variant = Variant::new(board_info.clone(), reg);
+        let variant = Variant::new(board_info.clone());
 
-        reg = variant.reg;
+        let res = variant.get_variants(reg);
+        let mac = res.mac_info;
+        reg = res.reg;
 
         let mut flags = variant.board_info.flags.clone();
         let mut params = Params {
@@ -79,8 +82,11 @@ where
             BoardVariant::Ich8lan => DevSpec::Ich8lan(Default::default()),
         };
 
+        params.check_options();
+
         let mut e1000 = Self {
             params,
+            mac,
             hw: hw_rc,
             eiac_mask: 0,
             rx_ring,
@@ -89,8 +95,6 @@ where
             is_link_up: false,
             variant,
         };
-
-        e1000.check_opention();
 
         unsafe { CARD_FOUND = card_found };
 
@@ -124,7 +128,7 @@ where
         self.print_status();
         // self.simple_reset();
 
-        self.check_opention();
+        // self.check_opention();
         self.read_mac_addr_generic();
         self.get_variants()?;
 
@@ -219,15 +223,6 @@ where
     }
     pub fn flags2(&self) -> Flags2 {
         self.hw.as_ref().flags2.clone()
-    }
-
-    fn check_opention(&mut self) {
-        let flags = self.hw.as_ref().flags.clone();
-        let flags2 = self.hw.as_ref().flags2.clone();
-
-        self.hw.as_mut().status.check_opention(&flags, &flags2);
-        self.hw.as_mut().crc_stripping();
-        self.hw.as_mut().write_protect_nvm();
     }
 
     pub fn set_flags(&mut self, flags: Flags) {

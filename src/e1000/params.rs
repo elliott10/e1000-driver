@@ -98,7 +98,7 @@ pub(crate) struct Params {
 }
 
 impl Params {
-    fn check_options(&mut self) {
+    pub fn check_options(&mut self) {
         if (self.card_found >= MAX_NIC) {
             warn!("Warning: no configuration for board #{}", self.card_found);
             warn!("Using defaults for all values");
@@ -114,39 +114,16 @@ impl Params {
             self.rx_int_delay = BURST_RDTR;
             self.rx_abs_int_delay = BURST_RADV;
         }
-        /* Interrupt Throttling Rate */
-        {
-            let opt_name = "Interrupt Throttling Rate (ints/sec)";
-            self.itr = DEFAULT_ITR;
-            self.itr_settings = self.itr;
+        self.check_interrupt_throttling_rate();
 
-            match self.itr {
-                0 => {
-                    info!("{} turned off", opt_name);
-                }
-                1 => {
-                    info!("{} set to dynamic mode", opt_name);
-                    self.itr = 20000;
-                }
-                2 => {
-                    info!("{} Invalid mode - setting default", opt_name);
-                    self.itr_settings = DEFAULT_ITR;
-                }
-                3 => {
-                    info!("{} set to dynamic conservative mode", opt_name);
-                    self.itr = 20000;
-                }
-                4 => {
-                    info!("{} set to simplified (2000-8000 ints) mode", opt_name);
-                }
-                _ => {
-                    // Save the setting, because the dynamic bits change itr.
-                    // Clear the lower two bits because they are used as control.
-                    self.itr_settings &= !3;
-                }
-            }
-        }
+        self.check_interrupt_mode();
 
+        self.check_crc_stripping();
+
+        self.write_protect_nvm();
+    }
+
+    fn check_interrupt_mode(&mut self) {
         if self.settings.enable_msi {
             if self.flags.has_msix {
                 self.int_mode = InterruptMode::MSIX;
@@ -155,6 +132,51 @@ impl Params {
             }
         } else {
             self.int_mode = InterruptMode::Legacy;
+        }
+    }
+
+    fn check_interrupt_throttling_rate(&mut self) {
+        {
+            let opt_name = "Interrupt Throttling Rate (ints/sec)";
+            self.itr = DEFAULT_ITR;
+            self.itr_settings = self.itr;
+
+            match self.itr {
+                0 => {
+                    debug!("{} turned off", opt_name);
+                }
+                1 => {
+                    debug!("{} set to dynamic mode", opt_name);
+                    self.itr = 20000;
+                }
+                2 => {
+                    debug!("{} Invalid mode - setting default", opt_name);
+                    self.itr_settings = DEFAULT_ITR;
+                }
+                3 => {
+                    debug!("{} set to dynamic conservative mode", opt_name);
+                    self.itr = 20000;
+                }
+                4 => {
+                    debug!("{} set to simplified (2000-8000 ints) mode", opt_name);
+                }
+                _ => {
+                    // Save the setting, because the dynamic bits change itr.
+                    // Clear the lower two bits because they are used as control.
+                    self.itr_settings &= !3;
+                }
+            }
+        }
+    }
+
+    fn check_crc_stripping(&mut self) {
+        self.flags.crc_stripping = true;
+        self.flags.dflt_crc_stripping = true;
+    }
+
+    fn write_protect_nvm(&mut self) {
+        if self.flags.is_ich {
+            self.flags.read_only_nvm = true;
         }
     }
 }
