@@ -105,7 +105,7 @@ impl MacInfo {
                 return Err(Error::Config("Failed to write receive address"));
             }
 
-            if wlock_mac == 0 || index <= wlock_mac  {
+            if wlock_mac == 0 || index <= wlock_mac {
                 {
                     let g = phy.acquire()?;
 
