@@ -1,7 +1,38 @@
 use alloc::vec::Vec;
-
 use super::reg::*;
-use crate::{defines::*, err::*, phy::PhyInfo2, MacAddress, MacType};
+use crate::{defines::*, err::*, phy::PhyInfo2, MacAddress};
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[repr(u32)]
+pub enum MacType {
+    e1000_82571,
+    e1000_82572,
+    e1000_82573,
+    e1000_82574,
+    e1000_82583,
+    e1000_80003es2lan,
+    e1000_ich8lan,
+    e1000_ich9lan,
+    e1000_ich10lan,
+    e1000_pchlan,
+    e1000_pch2lan,
+    e1000_pch_lpt,
+    e1000_pch_spt,
+    e1000_pch_cnp,
+    e1000_pch_tgp,
+    e1000_pch_adp,
+    e1000_pch_mtp,
+    e1000_pch_lnp,
+    e1000_pch_ptp,
+    e1000_pch_nvp,
+}
+
+impl Default for MacType {
+    fn default() -> Self {
+        Self::e1000_82574
+    }
+}
 
 #[derive(Default)]
 pub(crate) struct MacInfo {

@@ -1,11 +1,11 @@
 use super::{VariantCommon, VariantParam, VariantResult};
 
 use crate::defines::*;
-use crate::e1000::mac::MacInfo;
+use crate::e1000::mac::*;
 use crate::e1000::nvm::*;
 use crate::e1000::reg::{Reg, FWSM};
 use crate::phy::PhyInfo2;
-use crate::{err::*, BoardInfo, Flags, Flags2, MacType, MediaType};
+use crate::{err::*, BoardInfo, Flags, Flags2, MediaType};
 
 #[derive(Debug, Default, Clone)]
 pub(crate) struct Context {}

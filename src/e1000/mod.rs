@@ -7,8 +7,8 @@ mod e1000;
 pub mod err;
 pub(crate) mod hw;
 pub(crate) mod lock;
-mod mac;
-mod nvm;
+pub(crate) mod mac;
+pub(crate) mod nvm;
 pub(crate) mod params;
 pub(crate) mod phy;
 mod reg;
@@ -24,8 +24,7 @@ use core::{
     u16,
 };
 
-pub use hw::{E1000HWStats, MacInfo, MacType, MediaType, PhyInfo, PhyType};
-pub use ring::{RxDescExt, TxDesc};
+pub use hw::{E1000HWStats, MediaType, PhyInfo, PhyType};
 const PAGE_SIZE: usize = 4096;
 
 static mut KERNEL: *mut Box<dyn KernelFunc2> = null_mut();

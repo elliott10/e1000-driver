@@ -11,7 +11,7 @@ use super::{
     variant::{e82571, ich8lan, Variant},
 };
 use crate::e1000::lock::Semaphore;
-use crate::{defines::*, err::*, kfn, MacType};
+use crate::{defines::*, err::*, kfn, mac::MacType};
 use crate::{hw::MsType, MediaType, PhyType};
 
 // IGP01E1000 Specific Registers

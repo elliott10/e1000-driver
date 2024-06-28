@@ -2,10 +2,11 @@ use core::ptr::NonNull;
 
 use super::dev_id::*;
 use super::hw::*;
-use super::nvm::{NvmOps, NvmReadWrite, NvmSemaphore};
+use super::mac::*;
+use super::nvm::*;
+use crate::err::*;
 use crate::params::Flags3;
-use crate::phy::{PhyOps, PhyReadWrite, PhySemaphore};
-use crate::{err::*, KernelFunc, E1000};
+use crate::phy::*;
 
 const DEFAULT_JUMBO: u32 = 9234;
 
@@ -93,11 +94,7 @@ pub struct Flags2 {
     pub enable_s0ix_flows: bool,
 }
 
-impl Default for MacType {
-    fn default() -> Self {
-        Self::e1000_82571
-    }
-}
+
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]

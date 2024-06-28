@@ -38,72 +38,8 @@ pub enum MediaType {
     media_type_internal_serdes = 3,
     num_media_types,
 }
-#[allow(non_camel_case_types)]
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-#[repr(u32)]
-pub enum MacType {
-    e1000_82571,
-    e1000_82572,
-    e1000_82573,
-    e1000_82574,
-    e1000_82583,
-    e1000_80003es2lan,
-    e1000_ich8lan,
-    e1000_ich9lan,
-    e1000_ich10lan,
-    e1000_pchlan,
-    e1000_pch2lan,
-    e1000_pch_lpt,
-    e1000_pch_spt,
-    e1000_pch_cnp,
-    e1000_pch_tgp,
-    e1000_pch_adp,
-    e1000_pch_mtp,
-    e1000_pch_lnp,
-    e1000_pch_ptp,
-    e1000_pch_nvp,
-}
+
 const MAX_MTA_REG: usize = 128;
-
-#[repr(C)]
-#[derive(Debug, Clone, Default)]
-pub struct MacInfo {
-    pub addr: [u8; 6],
-    pub perm_addr: [u8; 6],
-
-    pub kind: MacType,
-
-    pub collision_delta: u32,
-    pub ledctl_default: u32,
-    pub ledctl_mode1: u32,
-    pub ledctl_mode2: u32,
-    pub mc_filter_type: u32,
-    pub tx_packet_delta: u32,
-    pub txcw: u32,
-
-    pub current_ifs_val: u16,
-    pub ifs_max_val: u16,
-    pub ifs_min_val: u16,
-    pub ifs_ratio: u16,
-    pub ifs_step_size: u16,
-    pub mta_reg_count: u16,
-
-    // Maximum size of the MTA register table in all supported adapters
-    // pub mta_shadow: [u32; MAX_MTA_REG],
-    pub rar_entry_count: u16,
-
-    pub forced_speed_duplex: u8,
-
-    pub adaptive_ifs: bool,
-    pub has_fwsm: bool,
-    pub arc_subsystem_valid: bool,
-    pub autoneg: bool,
-    pub autoneg_failed: bool,
-    pub get_link_status: bool,
-    pub in_ifs_mode: bool,
-    pub serdes_has_link: bool,
-    pub tx_pkt_filtering: bool,
-}
 
 #[repr(C)]
 #[derive(Debug, Default, Clone)]
@@ -308,8 +244,6 @@ impl Default for FcMode {
         Self::None
     }
 }
-
-
 
 pub(crate) struct BusInfo {
     pub(crate) width: BusWidth,

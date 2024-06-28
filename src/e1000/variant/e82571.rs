@@ -1,9 +1,10 @@
 use super::{VariantCommon, VariantParam, VariantResult};
-use crate::e1000::mac::MacInfo;
+
+use crate::e1000::mac::*;
 use crate::e1000::nvm::*;
 use crate::e1000::reg::*;
 use crate::phy::{self, PhyInfo2};
-use crate::{defines::*, err::*, MacType, PhyType};
+use crate::{defines::*, err::*, PhyType};
 use crate::{BoardInfo, Flags, Flags2, MediaType};
 
 #[derive(Default, Debug, Clone)]
@@ -13,9 +14,9 @@ pub(crate) struct Context {
 }
 
 impl VariantCommon for Context {
-    fn set_reg(&self, _mac_kind: crate::MacType, _reg: &mut Reg) {}
+    fn set_reg(&self, _mac_kind: MacType, _reg: &mut Reg) {}
 
-    fn init_mac_params(&mut self, mac_kind: crate::MacType, reg: Reg) -> Result<MacInfo> {
+    fn init_mac_params(&mut self, mac_kind: MacType, reg: Reg) -> Result<MacInfo> {
         let mut mac = MacInfo::default();
         /* Set mta register count */
         mac.mta_reg_count = 128;

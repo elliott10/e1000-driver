@@ -3,15 +3,14 @@ use super::hw::{self, *};
 use super::reg::*;
 use super::ring::*;
 use crate::err::{Error, Result};
+use crate::mac::*;
+use crate::nvm::*;
 use crate::phy::*;
 use crate::*;
 use core::alloc::Layout;
-use core::borrow::Borrow;
 use core::cmp::min;
-use core::iter::Scan;
 use core::mem::{self, align_of_val, size_of};
 use core::ptr::NonNull;
-use core::u32;
 use e1000::variant::{self, Variant};
 use ffi::CStr;
 use params::{Flags3, InterruptMode, Params, Settings};
@@ -24,8 +23,9 @@ const RX_RING_SIZE: usize = 256;
 pub struct E1000 {
     reg: Reg,
     pub(crate) params: Params,
-    pub(crate) mac: super::mac::MacInfo,
+    pub(crate) mac: MacInfo,
     pub(crate) phy: PhyInfo2,
+    pub(crate) nvm: NvmInfo,
     pub(crate) bus: BusInfo,
     pub(crate) eiac_mask: u32,
     hw_stats: E1000HWStats,
@@ -51,6 +51,7 @@ impl E1000 {
         let mac = res.mac;
         reg = res.reg;
         let phy = res.phy;
+        let nvm = res.nvm;
         let mut flags = res.flags;
 
         let mut params = Params {
@@ -71,6 +72,7 @@ impl E1000 {
             params,
             mac,
             phy,
+            nvm,
             bus,
             eiac_mask: 0,
             is_link_up: false,
@@ -81,7 +83,14 @@ impl E1000 {
         unsafe { CARD_FOUND = card_found };
 
         e1000.mac.read_mac_addr_generic(reg);
+        e1000.phy.autoneg_wait_to_complete = false;
         e1000.phy.copper_options();
+
+        //TODO ptp_init
+
+        e1000.reset()?;
+
+        //TODO AMT
 
         info!(
             "New E1000 rust driver, mmio: {:#X}, flash: {:?} bus: {:?}",
@@ -142,6 +151,21 @@ impl E1000 {
         }
 
         self.e1e_flush();
+    }
+
+    /**
+     * reset - bring the hardware into a known good state
+     *
+     * This function boots the hardware and enables some settings that
+     * require a configuration cycle of the hardware - those cannot be
+     * set/changed during runtime. After reset the device needs to be
+     * properly configured for Rx, Tx etc.
+     */
+    fn reset(&mut self) -> Result {
+
+
+
+        Ok(())
     }
 
     fn write_reg(&self, offset: u32, value: u32) {
@@ -208,77 +232,76 @@ impl E1000 {
                 "1000"
             }
         );
-        info!("MAC: {:?}, PHY: {:?}", mac_kind, phy_kind);
-        // let pba = self.read_pba_string_generic().unwrap();
-        // let p = if pba.len() > 0 {
-        //     let s = CStr::from_bytes_until_nul(&pba).unwrap();
-        //     s.to_str().unwrap()
-        // } else {
-        //     "unknown"
-        // };
+        // info!("MAC: {:?}, PHY: {:?}", mac_kind, phy_kind);
+        let pba = self.read_pba_string_generic().unwrap();
+        let p = if pba.len() > 0 {
+            let s = CStr::from_bytes_until_nul(&pba).unwrap();
+            s.to_str().unwrap()
+        } else {
+            "unknown"
+        };
 
-        // info!("MAC: {:?}, PHY: {:?}, PBA No: {}", mac_kind, phy_kind, p);
+        info!("MAC: {:?}, PHY: {:?}, PBA No: {}", mac_kind, phy_kind, p);
     }
 
-    // fn read_pba_string_generic(&mut self) -> Result<[u8; PBANUM_LENGTH]> {
-    //     let hw = self.hw.as_mut();
-    //     let mut pba_num = [0; PBANUM_LENGTH];
-    //     let mut nvm_data = self.dev_spec.read_nvm(hw, NVM_PBA_OFFSET_0, 1)?[0];
-    //     let mut pba_ptr = self.dev_spec.read_nvm(hw, NVM_PBA_OFFSET_1, 1)?[0];
+    fn read_pba_string_generic(&mut self) -> Result<[u8; PBANUM_LENGTH]> {
+        let mut pba_num = [0; PBANUM_LENGTH];
+        let mut nvm_data = self.nvm.read_nvm(NVM_PBA_OFFSET_0, 1)?[0];
+        let mut pba_ptr = self.nvm.read_nvm(NVM_PBA_OFFSET_1, 1)?[0];
 
-    //     if (nvm_data != NVM_PBA_PTR_GUARD) {
-    //         info!("NVM PBA number is not stored as string");
-    //         /* extract hex string from data and pba_ptr */
-    //         pba_num[0] = ((nvm_data >> 12) & 0xF) as u8;
-    //         pba_num[1] = ((nvm_data >> 8) & 0xF) as u8;
-    //         pba_num[2] = ((nvm_data >> 4) & 0xF) as u8;
-    //         pba_num[3] = (nvm_data & 0xF) as u8;
-    //         pba_num[4] = ((pba_ptr >> 12) & 0xF) as u8;
-    //         pba_num[5] = ((pba_ptr >> 8) & 0xF) as u8;
-    //         pba_num[6] = b'-';
-    //         pba_num[7] = 0;
-    //         pba_num[8] = ((pba_ptr >> 4) & 0xf) as u8;
-    //         pba_num[9] = (pba_ptr & 0xF) as u8;
+        if (nvm_data != NVM_PBA_PTR_GUARD) {
+            info!("NVM PBA number is not stored as string");
+            /* extract hex string from data and pba_ptr */
+            pba_num[0] = ((nvm_data >> 12) & 0xF) as u8;
+            pba_num[1] = ((nvm_data >> 8) & 0xF) as u8;
+            pba_num[2] = ((nvm_data >> 4) & 0xF) as u8;
+            pba_num[3] = (nvm_data & 0xF) as u8;
+            pba_num[4] = ((pba_ptr >> 12) & 0xF) as u8;
+            pba_num[5] = ((pba_ptr >> 8) & 0xF) as u8;
+            pba_num[6] = b'-';
+            pba_num[7] = 0;
+            pba_num[8] = ((pba_ptr >> 4) & 0xf) as u8;
+            pba_num[9] = (pba_ptr & 0xF) as u8;
 
-    //         /* put a null character on the end of our string */
-    //         pba_num[10] = b'\0';
+            /* put a null character on the end of our string */
+            pba_num[10] = b'\0';
 
-    //         /* switch all the data but the '-' to hex char */
-    //         for offset in 0..10 {
-    //             if pba_num[offset] < 0xA {
-    //                 pba_num[offset] += b'0';
-    //             } else if pba_num[offset] < 0x10 {
-    //                 pba_num[offset] += b'A' - 0xA;
-    //             }
-    //         }
-    //         return Ok(pba_num);
-    //     }
+            /* switch all the data but the '-' to hex char */
+            for offset in 0..10 {
+                if pba_num[offset] < 0xA {
+                    pba_num[offset] += b'0';
+                } else if pba_num[offset] < 0x10 {
+                    pba_num[offset] += b'A' - 0xA;
+                }
+            }
+            return Ok(pba_num);
+        }
 
-    //     let mut length: u16 = self.dev_spec.read_nvm(hw, pba_ptr, 1)?[0];
+        let mut length: u16 = self.nvm.read_nvm(pba_ptr, 1)?[0];
 
-    //     if length == 0xFFFF || length == 0 {
-    //         error!("NVM PBA number section invalid length\n");
-    //         return Err(Error::Nvm("NVM PBA number section invalid length"));
-    //     }
-    //     /* check if pba_num buffer is big enough */
-    //     if (pba_num.len() < ((length as usize * 2) - 1)) {
-    //         error!("PBA string buffer too small\n");
-    //         return Err(Error::TryReserveError);
-    //     }
+        if length == 0xFFFF || length == 0 {
+            error!("NVM PBA number section invalid length\n");
+            return Err(Error::Nvm("NVM PBA number section invalid length"));
+        }
+        /* check if pba_num buffer is big enough */
+        if (pba_num.len() < ((length as usize * 2) - 1)) {
+            error!("PBA string buffer too small\n");
+            return Err(Error::TryReserveError);
+        }
 
-    //     /* trim pba length from start of string */
-    //     pba_ptr += 1;
-    //     length -= 1;
+        /* trim pba length from start of string */
+        pba_ptr += 1;
+        length -= 1;
 
-    //     for offset in 0..length {
-    //         nvm_data = self.dev_spec.read_nvm(hw, pba_ptr + offset, 1)?[0];
-    //         pba_num[offset as usize * 2] = (nvm_data >> 8) as u8;
-    //         pba_num[(offset as usize * 2) + 1] = (nvm_data & 0xFF) as u8;
-    //     }
-    //     pba_num[(length - 1) as usize * 2] = b'\0';
+        for offset in 0..length {
+            nvm_data = self.nvm.read_nvm(pba_ptr + offset, 1)?[0];
+            pba_num[offset as usize * 2] = (nvm_data >> 8) as u8;
+            pba_num[(offset as usize * 2) + 1] = (nvm_data & 0xFF) as u8;
+        }
+        pba_num[(length - 1) as usize * 2] = b'\0';
 
-    //     Ok(pba_num)
-    // }
+        Ok(pba_num)
+    }
 
     pub fn xmit(&mut self, config: E1000XmitConfig, packet: &[u8]) -> Result<u32> {
         // let mut i = self.tx_ring.next_to_use;

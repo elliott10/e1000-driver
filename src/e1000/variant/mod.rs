@@ -1,13 +1,7 @@
-use super::mac::MacInfo;
 use super::reg::Reg;
-use crate::e1000::nvm::*;
-use crate::params::Flags3;
-use crate::phy::PhyInfo2;
 use crate::BoardInfo;
 use crate::BoardVariant;
-use crate::Flags;
-use crate::Flags2;
-use crate::{err::*, MacType};
+use crate::{err::*, mac::*, nvm::*, params::*, phy::*};
 
 pub(crate) mod e82571;
 pub(crate) mod ich8lan;
@@ -31,6 +25,7 @@ pub(crate) struct VariantParam {
 pub(crate) struct VariantResult {
     pub mac: MacInfo,
     pub phy: PhyInfo2,
+    pub nvm: NvmInfo,
     pub reg: Reg,
     pub flags: Flags3,
 }
@@ -80,6 +75,7 @@ pub(crate) trait VariantCommon {
 
         Ok(VariantResult {
             mac,
+            nvm,
             phy,
             reg,
             flags,

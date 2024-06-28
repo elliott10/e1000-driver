@@ -217,8 +217,7 @@ use core::time::Duration;
 
 use crate::kfn;
 use crate::BoardInfo;
-use crate::MacType;
-use crate::{defines::*, err::*};
+use crate::{defines::*, err::*, mac::MacType};
 
 #[derive(Debug, Default, Clone, Copy)]
 pub(crate) struct Reg {
