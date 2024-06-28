@@ -7,7 +7,7 @@
 #include <linux/cpu.h>
 #include <linux/delay.h>
 #include <linux/dma-mapping.h>
-#include <linux/ethtool.h>
+// #include <linux/ethtool.h>
 #include <linux/if_vlan.h>
 #include <linux/init.h>
 #include <linux/interrupt.h>
@@ -642,13 +642,12 @@ static void e1000_netpoll(struct net_device *netdev) {
 
   struct e1000_adapter *adapter = netdev_priv(netdev);
   size_t e1000 = e1000e_get_e1000(adapter->netdev);
-  struct E1000Status *status = e1000r_status(e1000);
 
-  switch (status->int_mode) {
-  case E1000E_INT_MODE_MSIX:
+  switch (e1000r_irq_get_mode(e1000)) {
+  case MSIX:
     e1000_intr_msix(adapter->pdev->irq, netdev);
     break;
-  case E1000E_INT_MODE_MSI:
+  case MSI:
     if (disable_hardirq(adapter->pdev->irq))
       e1000_intr_msi(adapter->pdev->irq, netdev);
     enable_irq(adapter->pdev->irq);
@@ -740,9 +739,6 @@ static netdev_features_t e1000_fix_features(struct net_device *netdev,
   return features;
 }
 void e1000e_reset_interrupt_capability(struct e1000_adapter *adapter) {
-  size_t e1000 = e1000e_get_e1000(adapter->netdev);
-  struct E1000Status *status = e1000r_status(e1000);
-  struct Flags flags = info.flags;
   if (adapter->msix_entries) {
     pci_disable_msix(adapter->pdev);
     adapter->msix_vec_num = 0;
@@ -773,11 +769,11 @@ void e1000e_set_interrupt_capability(struct e1000_adapter *adapter) {
     if (adapter->msix_entries) {
       struct e1000_adapter *a = adapter;
 
-      for (i = 0; i < status->num_vectors; i++)
+      for (i = 0; i < adapter->num_vectors; i++)
         adapter->msix_entries[i].entry = i;
 
-      err = pci_enable_msix_range(a->pdev, a->msix_entries, status->num_vectors,
-                                  status->num_vectors);
+      err = pci_enable_msix_range(a->pdev, a->msix_entries,
+                                  adapter->num_vectors, adapter->num_vectors);
       if (err > 0)
         return;
 
@@ -812,12 +808,11 @@ void e1000e_set_interrupt_capability(struct e1000_adapter *adapter) {
 static void e1000_irq_disable(struct e1000_adapter *adapter) {
   size_t e1000 = e1000e_get_e1000(adapter->netdev);
   e1000r_irq_disable(e1000);
-  struct E1000Status *status = e1000r_status(e1000);
 
   if (adapter->msix_entries) {
     int i;
 
-    for (i = 0; i < status->num_vectors; i++)
+    for (i = 0; i < adapter->num_vectors; i++)
       synchronize_irq(adapter->msix_entries[i].vector);
   } else {
     synchronize_irq(adapter->pdev->irq);
@@ -851,9 +846,7 @@ size_t e1000_get_e1000r(struct net_device *netdev) {
   return adapter->ptr;
 }
 
-struct E1000Status *e1000_status(struct net_device *netdev) {
-  return e1000r_status(e1000_get_e1000r(netdev));
-}
+
 
 size_t cb_bar_n_remap(const void *data, size_t bar) {
   struct e1000_adapter *adapter = (struct e1000_adapter *)data;

@@ -190,7 +190,7 @@ impl Params {
 
 #[repr(C)]
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
-pub(crate) enum InterruptMode {
+pub enum InterruptMode {
     Legacy,
     MSI,
     MSIX,
