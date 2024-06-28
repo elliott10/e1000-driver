@@ -284,4 +284,39 @@ impl Reg {
         let address = reg + (offset << 2);
         self.ew32(address, value);
     }
+
+    pub fn disable_pcie_master(&self) -> Result {
+        let mut ctrl = self.er32(CTRL);
+        ctrl |= CTRL_GIO_MASTER_DISABLE;
+
+        self.ew32(CTRL, ctrl);
+
+        for _ in 0..MASTER_DISABLE_TIMEOUT {
+            if self.er32(STATUS) & STATUS_GIO_MASTER_ENABLE == 0 {
+                return Ok(());
+            }
+
+            kfn().sleep(Duration::from_nanos(100));
+        }
+
+        return Err(Error::Unknown("Master requests are pending."));
+    }
+
+    /**
+     *  get_auto_rd_done - Check for auto read completion
+     *  @hw: pointer to the HW structure
+     *
+     *  Check EEPROM for Auto Read done bit.
+     **/
+    pub fn get_auto_rd_done(&mut self) -> Result {
+        for _ in 0..AUTO_READ_DONE_TIMEOUT {
+            if (self.er32(EECD) & EECD_AUTO_RD) > 0 {
+                return Ok(());
+            }
+            kfn().sleep(Duration::from_nanos(1000));
+        }
+
+        error!("Auto read by HW from NVM has not completed.");
+        Err(Error::Nvm("Auto read by HW from NVM has not completed."))
+    }
 }

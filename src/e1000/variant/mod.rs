@@ -1,6 +1,7 @@
 use super::reg::Reg;
 use crate::BoardInfo;
 use crate::BoardVariant;
+use crate::E1000;
 use crate::{err::*, mac::*, nvm::*, params::*, phy::*};
 
 pub(crate) mod e82571;
@@ -54,12 +55,20 @@ impl Variant {
             VariantKind::Ich8lan(ctx) => ctx.get_variants(param, reg, board_info),
         }
     }
+
+    pub(crate) fn reset_hw(&self, e1000: &E1000)->Result{
+        match self.kind {
+                        VariantKind::B82571(ctx) => ctx.reset_hw(e1000),
+            VariantKind::Ich8lan(ctx) => todo!(),
+        }
+    }
 }
 
 pub(crate) trait VariantCommon {
     fn init_mac_params(&mut self, mac_kind: MacType, reg: Reg) -> Result<MacInfo>;
     fn init_nvm_params(&self, mac: &MacInfo, board: &BoardInfo, reg: Reg) -> Result<NvmInfo>;
     fn init_phy_params(&mut self, mac: &MacInfo, board: &BoardInfo, reg: Reg) -> Result<PhyInfo2>;
+    fn reset_hw(&self, e1000: &E1000) -> Result;
 
     fn get_variants(
         &mut self,

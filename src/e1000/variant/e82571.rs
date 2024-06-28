@@ -1,9 +1,14 @@
+use core::time::Duration;
+
 use super::{VariantCommon, VariantParam, VariantResult};
 
 use crate::e1000::mac::*;
 use crate::e1000::nvm::*;
+use crate::e1000::reg;
 use crate::e1000::reg::*;
+use crate::kfn;
 use crate::phy::{self, PhyInfo2};
+use crate::E1000;
 use crate::{defines::*, err::*, PhyType};
 use crate::{BoardInfo, Flags, Flags2, MediaType};
 
@@ -155,6 +160,71 @@ impl VariantCommon for Context {
         }
 
         Ok(nvm)
+    }
+
+    fn reset_hw(&self, e1000: &E1000) -> Result {
+        let reg = e1000.reg;
+        let mut res = reg.disable_pcie_master();
+        if res.is_err() {
+            error!("PCI-E Master disable polling has failed.");
+        }
+        debug!("Masking off all interrupts");
+
+        reg.ew32(IMC, 0xffffffff);
+
+        reg.ew32(RCTL, 0);
+
+        let mut tctl = reg.er32(TCTL);
+
+        tctl &= !TCTL_EN;
+
+        reg.ew32(TCTL, tctl);
+
+        reg.e1e_flush();
+
+        kfn().sleep(Duration::from_nanos(10000));
+
+        res = match e1000.mac.kind {
+            MacType::e1000_82573 => self.get_hw_semaphore_82573(hw),
+            MacType::e1000_82574 | MacType::e1000_82583 => self.get_hw_semaphore_82574(hw),
+            _ => Ok(()), // Default case - no action needed or handle error
+        };
+
+        let ctrl = reg.er32(CTRL);
+
+        debug!("Issuing a global reset to MAC");
+
+        reg.ew32(CTRL, ctrl | CTRL_RST);
+
+        if e1000.nvm.kind == NvmType::FlashHw {
+            kfn().sleep(Duration::from_nanos(10));
+            let mut ctrl_ext = reg.er32(CTRL_EXT);
+            ctrl_ext |= CTRL_EXT_EE_RST;
+            reg.ew32(CTRL_EXT, ctrl_ext);
+            reg.e1e_flush();
+        }
+
+        reg.get_auto_rd_done()?;
+
+        // Assuming ew32 andreg.er32 are functions defined elsewhere to write and read from the given register addresses respectively.
+
+        match e1000.mac.kind {
+            MacType::e1000_82571 | MacType::e1000_82572 => {
+                // REQ and GNT bits need to be cleared when using AUTO_RD to access the EEPROM.
+                let mut eecd = reg.er32(EECD);
+                eecd &= !(EECD_REQ | EECD_GNT);
+                reg.ew32(EECD, eecd);
+            }
+            MacType::e1000_82573 | MacType::e1000_82574 | MacType::e1000_82583 => {
+                // Delay for 25 milliseconds to allow Phy configuration to complete.
+                kfn().sleep(Duration::from_millis(25));
+            }
+            _ => {} // Handle other cases or do nothing
+        }
+
+        /* Clear any pending interrupt events. */
+        reg.ew32(IMC, 0xffffffff);
+        reg.er32(ICR);
     }
 }
 

@@ -21,7 +21,7 @@ const TX_RING_SIZE: usize = 256;
 const RX_RING_SIZE: usize = 256;
 
 pub struct E1000 {
-    reg: Reg,
+    pub(crate)reg: Reg,
     pub(crate) params: Params,
     pub(crate) mac: MacInfo,
     pub(crate) phy: PhyInfo2,
@@ -75,8 +75,8 @@ impl E1000 {
         let bus = BusInfo::new();
         let fc = FcInfo::default();
 
-        let tx_ring = Ring::new(align_to(params.max_frame_size, 2048) as usize)?;
-        let rx_ring = Ring::new(align_to(params.max_frame_size, 2048) as usize)?;
+        let tx_ring = Ring::new(2048)?;
+        let rx_ring = Ring::new(2048)?;
 
         let mut e1000 = Self {
             reg,
@@ -93,11 +93,15 @@ impl E1000 {
             variant,
             hw_stats: Default::default(),
         };
+        e1000.irq_disable();
 
         unsafe { CARD_FOUND = card_found };
 
         e1000.mac.read_mac_addr_generic(reg);
         e1000.phy.autoneg_wait_to_complete = false;
+
+        
+
         e1000.phy.copper_options();
 
         /* Initialize link parameters. User can change them with ethtool */
@@ -110,7 +114,9 @@ impl E1000 {
 
         e1000.reset()?;
 
-        //TODO AMT
+        if e1000.params.flags.has_amt{
+            e1000.get_hw_control();
+        }
 
         info!(
             "New E1000 rust driver, mmio: {:#X}, flash: {:?} bus: {:?}",
@@ -121,7 +127,10 @@ impl E1000 {
             "device: {:#X}, board: {:?}, variant: {:?}, itr: {:?}",
             device_id, board_type, board_info.variant, e1000.params.int_mode
         );
-
+        info!(
+            "tx frame size: {}, rx frame size {}",
+            e1000.tx_ring.buff_len, e1000.rx_ring.buff_len
+        );
         Ok(e1000)
     }
 
@@ -298,16 +307,15 @@ impl E1000 {
             }
         }
 
-        let limit = unsafe {
-            min(
-                ((self.er32(PBA).wrapping_shr(16)) << 10).wrapping_mul(96),
-                24 << 10,
-            )
-        };
+        pba = self.er32(PBA);
+        let mut limit = pba.wrapping_shr(16) << 10;
+        limit = limit.wrapping_sub(96);
+        limit = limit.min(24 << 10);
 
         self.params.tx_fifo_limit = limit;
 
-        info!("fifo limit: {}", self.params.tx_fifo_limit);
+        info!("pba: {}, fifo limit: {:#X}", pba, self.params.tx_fifo_limit);
+
         /* Disable Adaptive Interrupt Moderation if 2 full packets cannot
          * fit in receive buffer.
          */
@@ -334,6 +342,12 @@ impl E1000 {
         self.ew32(WUC, 0);
 
         Ok(())
+    }
+
+    fn reset_hw(&self)->Result{
+        match self.variant {
+            
+        }
     }
     /**
      * get_hw_control - get control of the h/w from f/w
