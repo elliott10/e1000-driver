@@ -2,8 +2,8 @@ use super::{VariantCommon, VariantParam, VariantResult};
 
 use crate::defines::*;
 use crate::e1000::mac::MacInfo;
+use crate::e1000::nvm::*;
 use crate::e1000::reg::{Reg, FWSM};
-use crate::hw::NvmInfo;
 use crate::phy::PhyInfo2;
 use crate::{err::*, BoardInfo, Flags, Flags2, MacType, MediaType};
 
@@ -28,7 +28,7 @@ impl VariantCommon for Context {
         todo!()
     }
 
-    fn init_nvm_params(&self, mac: &MacInfo, reg: Reg) -> Result<NvmInfo> {
+    fn init_nvm_params(&self, mac: &MacInfo, board: &BoardInfo, reg: Reg) -> Result<NvmInfo> {
         todo!()
     }
 }

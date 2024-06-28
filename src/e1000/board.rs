@@ -2,10 +2,9 @@ use core::ptr::NonNull;
 
 use super::dev_id::*;
 use super::hw::*;
+use super::nvm::{NvmOps, NvmReadWrite, NvmSemaphore};
 use crate::params::Flags3;
-use crate::phy::PhyOps;
-use crate::phy::PhyReadWrite;
-use crate::phy::PhySemaphore;
+use crate::phy::{PhyOps, PhyReadWrite, PhySemaphore};
 use crate::{err::*, KernelFunc, E1000};
 
 const DEFAULT_JUMBO: u32 = 9234;
@@ -115,6 +114,7 @@ pub(crate) struct BoardInfo {
     pub max_hw_frame_size: u32,
     pub variant: BoardVariant,
     pub phy_ops: PhyOps,
+    pub nvm_ops: NvmOps,
 }
 
 const fn e82_phy_ops_bm() -> PhyOps {
@@ -127,6 +127,20 @@ const fn ich8_phy_ops() -> PhyOps {
     PhyOps {
         semaphore: PhySemaphore::Ich8lan,
         read_write: PhyReadWrite::Hv,
+    }
+}
+
+const fn spt_nvm_ops() -> NvmOps {
+    NvmOps {
+        semaphore: NvmSemaphore::Spt,
+        read_write: NvmReadWrite::Ich8lan,
+    }
+}
+
+const fn e82571_nvm_ops() -> NvmOps {
+    NvmOps {
+        semaphore: NvmSemaphore::E82571,
+        read_write: NvmReadWrite::E82571,
     }
 }
 
@@ -160,6 +174,7 @@ impl BoardType {
                 max_hw_frame_size: DEFAULT_JUMBO,
                 variant: BoardVariant::B82571,
                 phy_ops: e82_phy_ops_bm(),
+                nvm_ops: e82571_nvm_ops(),
             },
             BoardType::board_82583 => todo!(),
             BoardType::board_80003es2lan => todo!(),
@@ -190,6 +205,7 @@ impl BoardType {
                 max_hw_frame_size: 9022,
                 variant: BoardVariant::Ich8lan,
                 phy_ops: ich8_phy_ops(),
+                nvm_ops: spt_nvm_ops(),
             },
             BoardType::board_pch_adp => BoardInfo {
                 mac: MacType::e1000_pch_adp,
@@ -210,6 +226,7 @@ impl BoardType {
                 max_hw_frame_size: 9022,
                 variant: BoardVariant::Ich8lan,
                 phy_ops: ich8_phy_ops(),
+                nvm_ops: spt_nvm_ops(),
             },
             BoardType::board_pch_mtp => BoardInfo {
                 mac: MacType::e1000_pch_mtp,
@@ -230,6 +247,7 @@ impl BoardType {
                 max_hw_frame_size: 9022,
                 variant: BoardVariant::Ich8lan,
                 phy_ops: ich8_phy_ops(),
+                nvm_ops: spt_nvm_ops(),
             },
         }
     }

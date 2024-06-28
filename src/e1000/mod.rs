@@ -6,7 +6,9 @@ pub(crate) mod dev_id;
 mod e1000;
 pub mod err;
 pub(crate) mod hw;
+pub(crate) mod lock;
 mod mac;
+mod nvm;
 pub(crate) mod params;
 pub(crate) mod phy;
 mod reg;
@@ -21,6 +23,7 @@ use core::{
     time::Duration,
     u16,
 };
+
 pub use hw::{E1000HWStats, MacInfo, MacType, MediaType, PhyInfo, PhyType};
 pub use ring::{RxDescExt, TxDesc};
 const PAGE_SIZE: usize = 4096;
@@ -62,7 +65,7 @@ pub trait KernelFunc2 {
     /// Pcie 读取
     fn pci_read_config_word(&self, where_: i32) -> u16;
 
-    fn pci_cap_offset(&self)->i32;
+    fn pci_cap_offset(&self) -> i32;
 }
 pub trait KernelFunc: Send + Sync + Clone {
     /// Page size (usually 4K)

@@ -8,8 +8,9 @@ use core::{
 
 use super::{
     reg::*,
-    variant::{b82571, ich8lan, Variant},
+    variant::{e82571, ich8lan, Variant},
 };
+use crate::e1000::lock::Semaphore;
 use crate::{defines::*, err::*, kfn, MacType};
 use crate::{hw::MsType, MediaType, PhyType};
 
@@ -140,8 +141,8 @@ pub(crate) struct PhyInfo2 {
     pub mac_kind: MacType,
     pub kind: PhyType,
     pub reg: Reg,
-    pub semaphore: PhySemaphore,
-    pub read_write: PhyReadWrite,
+    pub ops: PhyOps,
+
     pub addr: u32,
     pub id: u32,
     pub reset_delay_us: u32, // in microseconds
@@ -170,21 +171,21 @@ pub(crate) struct PhyInfo2 {
 
 impl PhyInfo2 {
     pub fn acquire(&self) -> Result<PhyGuard<'_>> {
-        match &self.semaphore {
+        match &self.ops.semaphore {
             PhySemaphore::Ich8lan => todo!(),
-            PhySemaphore::B82571 => b82571::Semaphore::new(self.reg).acquire(),
+            PhySemaphore::B82571 => e82571::PhySemaphore::new(self.reg).acquire(),
         }?;
         unsafe { Ok(PhyGuard { phy: self }) }
     }
 
     pub fn e1e_rphy_locked(&mut self, offset: u32) -> Result<u16> {
-        match &self.read_write {
+        match &self.ops.read_write {
             PhyReadWrite::Bm2 => self.read_phy_reg_bm2(offset),
             PhyReadWrite::Hv => todo!(),
         }
     }
     pub fn e1e_wphy_locked(&mut self, offset: u32, value: u16) -> Result {
-        match &self.read_write {
+        match &self.ops.read_write {
             PhyReadWrite::Bm2 => self.write_phy_reg_bm2(offset, value),
             PhyReadWrite::Hv => todo!(),
         }
@@ -384,11 +385,6 @@ pub(crate) enum PhyReadWrite {
     Hv,
 }
 
-pub(crate) trait Semaphore {
-    fn acquire(&self) -> Result;
-    fn release(&self);
-}
-
 pub(crate) struct PhyGuard<'a> {
     phy: &'a PhyInfo2,
 }
@@ -413,9 +409,9 @@ impl core::ops::DerefMut for PhyGuard<'_> {
 
 impl Drop for PhyGuard<'_> {
     fn drop(&mut self) {
-        match &self.phy.semaphore {
+        match &self.phy.ops.semaphore {
             PhySemaphore::Ich8lan => todo!(),
-            PhySemaphore::B82571 => b82571::Semaphore::new(self.phy.reg).release(),
+            PhySemaphore::B82571 => e82571::PhySemaphore::new(self.phy.reg).release(),
         }
     }
 }

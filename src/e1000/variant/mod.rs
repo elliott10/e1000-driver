@@ -1,6 +1,6 @@
 use super::mac::MacInfo;
 use super::reg::Reg;
-use crate::hw::NvmInfo;
+use crate::e1000::nvm::*;
 use crate::params::Flags3;
 use crate::phy::PhyInfo2;
 use crate::BoardInfo;
@@ -9,12 +9,12 @@ use crate::Flags;
 use crate::Flags2;
 use crate::{err::*, MacType};
 
-pub(crate) mod b82571;
+pub(crate) mod e82571;
 pub(crate) mod ich8lan;
 
 #[derive(Debug, Clone)]
 pub(crate) enum VariantKind {
-    B82571(b82571::Context),
+    B82571(e82571::Context),
     Ich8lan(ich8lan::Context),
 }
 
@@ -63,7 +63,7 @@ impl Variant {
 
 pub(crate) trait VariantCommon {
     fn init_mac_params(&mut self, mac_kind: MacType, reg: Reg) -> Result<MacInfo>;
-    fn init_nvm_params(&self, mac: &MacInfo, reg: Reg) -> Result<NvmInfo>;
+    fn init_nvm_params(&self, mac: &MacInfo, board: &BoardInfo, reg: Reg) -> Result<NvmInfo>;
     fn init_phy_params(&mut self, mac: &MacInfo, board: &BoardInfo, reg: Reg) -> Result<PhyInfo2>;
 
     fn get_variants(
@@ -75,7 +75,7 @@ pub(crate) trait VariantCommon {
         let mut flags = boad.flags.clone();
         let mac = self.init_mac_params(param.board_info.mac, reg)?;
         self.set_reg(mac.kind, &mut reg);
-        let nvm = self.init_nvm_params(&mac, reg)?;
+        let nvm = self.init_nvm_params(&mac, boad, reg)?;
         let phy = self.init_phy_params(&mac, boad, reg)?;
 
         Ok(VariantResult {

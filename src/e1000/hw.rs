@@ -9,19 +9,12 @@ use core::ptr::NonNull;
 use core::ptr::{slice_from_raw_parts, slice_from_raw_parts_mut};
 use core::str;
 
-pub(crate) const E1000_ICH_FWSM_RSPCIPHY: u32 = 0x00000040; // Reset PHY on PCI Reset
-pub(crate) const E1000_ICH_FWSM_FW_VALID: u32 = 0x00008000; // FW established a valid mode
-pub(crate) const E1000_ICH_FWSM_PCIM2PCI: u32 = 0x01000000; // ME PCIm-to-PCI active
-pub(crate) const E1000_ICH_FWSM_PCIM2PCI_COUNT: u32 = 2000;
-pub(crate) const E1000_ICH_MNG_IAMT_MODE: u32 = 0x2;
-
 #[repr(C)]
 #[derive(Clone, Default)]
 pub(crate) struct MsixEntry {
     pub vector: u32, /* Kernel uses to write allocated vector */
     pub entry: u32,  /* Driver uses to specify entry, OS writes */
 }
-
 
 #[derive(Default, Clone)]
 #[repr(C)]
@@ -316,45 +309,7 @@ impl Default for FcMode {
     }
 }
 
-#[derive(Debug, PartialEq)]
-pub(crate) enum NvmType {
-    Unknown = 0,
-    None,
-    EepromSpi,
-    FlashHw,
-    FlashSw,
-}
-impl Default for NvmType {
-    fn default() -> Self {
-        Self::Unknown
-    }
-}
 
-#[derive(Default)]
-pub(crate) struct NvmInfo {
-    pub(crate) kind: NvmType,
-    pub(crate) nvm_override: NvmOverride,
-
-    pub(crate) flash_bank_size: u32,
-    pub(crate) flash_base_addr: u32,
-
-    pub(crate) word_size: u16,
-    pub(crate) delay_usec: u16,
-    pub(crate) address_bits: u16,
-    pub(crate) opcode_bits: u16,
-    pub(crate) page_size: u16,
-}
-#[derive(Debug, PartialEq, Eq)]
-pub(crate) enum NvmOverride {
-    None = 0,
-    SpiSmall,
-    SpiLarge,
-}
-impl Default for NvmOverride {
-    fn default() -> Self {
-        Self::None
-    }
-}
 
 pub(crate) struct BusInfo {
     pub(crate) width: BusWidth,

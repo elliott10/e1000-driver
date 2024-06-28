@@ -1,8 +1,8 @@
 use super::{VariantCommon, VariantParam, VariantResult};
 use crate::e1000::mac::MacInfo;
+use crate::e1000::nvm::*;
 use crate::e1000::reg::*;
-use crate::hw::{NvmInfo, NvmOverride, NvmType};
-use crate::phy::{self, PhyInfo2, PhySemaphore};
+use crate::phy::{self, PhyInfo2};
 use crate::{defines::*, err::*, MacType, PhyType};
 use crate::{BoardInfo, Flags, Flags2, MediaType};
 
@@ -79,9 +79,9 @@ impl VariantCommon for Context {
         Ok(PhyInfo2 {
             mac_kind,
             reg,
+            ops: board.phy_ops.clone(),
             media_type,
             kind,
-            semaphore: board.phy_ops.semaphore.clone(),
             addr: 1,
             id,
             reset_delay_us,
@@ -100,12 +100,13 @@ impl VariantCommon for Context {
             ms_type: Default::default(),
             original_ms_type: Default::default(),
             access_shared_resource: Default::default(),
-            read_write: board.phy_ops.read_write.clone(),
         })
     }
 
-    fn init_nvm_params(&self, mac: &MacInfo, reg: Reg) -> Result<NvmInfo> {
+    fn init_nvm_params(&self, mac: &MacInfo, board: &BoardInfo, reg: Reg) -> Result<NvmInfo> {
         let mut nvm = NvmInfo::default();
+        nvm.ops = board.nvm_ops.clone();
+        nvm.reg = reg;
         let mut eecd = reg.er32(EECD);
         nvm.opcode_bits = 8;
         nvm.delay_usec = 1;
@@ -157,17 +158,36 @@ impl VariantCommon for Context {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct Semaphore {
+pub(crate) struct PhySemaphore {
     reg: Reg,
 }
 
-impl Semaphore {
+impl PhySemaphore {
     pub(crate) fn new(reg: Reg) -> Self {
         Self { reg }
     }
 }
 
-impl phy::Semaphore for Semaphore {
+impl crate::lock::Semaphore for PhySemaphore {
+    fn acquire(&self) -> crate::err::Result {
+        Ok(())
+    }
+
+    fn release(&self) {}
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct NvmSemaphore {
+    reg: Reg,
+}
+
+impl NvmSemaphore {
+    pub(crate) fn new(reg: Reg) -> Self {
+        Self { reg }
+    }
+}
+
+impl crate::lock::Semaphore for NvmSemaphore {
     fn acquire(&self) -> crate::err::Result {
         Ok(())
     }

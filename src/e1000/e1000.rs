@@ -195,7 +195,7 @@ impl E1000 {
         let phy_kind = self.phy.kind;
 
         info!(
-            "(PCI Express:2.5GT/s:{:?}) {}M",
+            "(PCI Express:2.5GT/s:{:?}) {}",
             self.bus.width,
             MacAddress(self.mac.addr)
         );
