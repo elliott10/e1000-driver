@@ -27,7 +27,10 @@ pub struct E1000 {
     pub(crate) phy: PhyInfo2,
     pub(crate) nvm: NvmInfo,
     pub(crate) bus: BusInfo,
+    pub(crate) fc: FcInfo,
     pub(crate) eiac_mask: u32,
+    rx_ring: Ring<RxDescExt>,
+    tx_ring: Ring<TxDesc>,
     hw_stats: E1000HWStats,
     is_link_up: bool,
     variant: Variant,
@@ -40,6 +43,7 @@ impl E1000 {
             error!("unknown device id: {:#X}", device_id);
             return Error::Unknown("unknown device id");
         })?;
+        let mtu = if settings.mtu > 0 { settings.mtu } else { 1500 };
         let board_info = board_type.new_default_info();
         let card_found = unsafe { CARD_FOUND } + 1;
 
@@ -60,22 +64,32 @@ impl E1000 {
             card_found,
             pba: board_info.pba,
             max_hw_frame_size: board_info.max_hw_frame_size,
+            mtu,
+            max_frame_size: (mtu + VLAN_ETH_DATA_LEN + ETH_FCS_LEN) as _,
+            min_frame_size: (ETH_ZLEN + ETH_FCS_LEN) as _,
             ..Default::default()
         };
 
         params.check_options();
 
         let bus = BusInfo::new();
+        let fc = FcInfo::default();
+
+        let tx_ring = Ring::new(align_to(params.max_frame_size, 2048) as usize)?;
+        let rx_ring = Ring::new(align_to(params.max_frame_size, 2048) as usize)?;
 
         let mut e1000 = Self {
             reg,
             params,
             mac,
+            fc,
             phy,
             nvm,
             bus,
             eiac_mask: 0,
             is_link_up: false,
+            rx_ring,
+            tx_ring,
             variant,
             hw_stats: Default::default(),
         };
@@ -85,6 +99,12 @@ impl E1000 {
         e1000.mac.read_mac_addr_generic(reg);
         e1000.phy.autoneg_wait_to_complete = false;
         e1000.phy.copper_options();
+
+        /* Initialize link parameters. User can change them with ethtool */
+        e1000.mac.autoneg = true;
+        e1000.fc.requested_mode = FcMode::Default;
+        e1000.fc.current_mode = FcMode::Default;
+        e1000.phy.autoneg_advertised = 0x2f;
 
         //TODO ptp_init
 
@@ -162,10 +182,318 @@ impl E1000 {
      * properly configured for Rx, Tx etc.
      */
     fn reset(&mut self) -> Result {
+        let mut pba = self.params.pba;
+        let mut tx_space = 0;
+        let mut min_tx_space = 0;
+        let mut min_rx_space = 0;
 
+        self.ew32(PBA, pba);
 
+        if self.params.max_hw_frame_size > (VLAN_ETH_FRAME_LEN + ETH_FCS_LEN) as u32 {
+            pba = self.er32(PBA);
+            tx_space = pba.wrapping_shr(16);
+            pba &= 0xffff;
+            /* the Tx fifo also stores 16 bytes of information about the Tx
+             * but don't include ethernet FCS because hardware appends it
+             */
+            min_tx_space = (self.params.max_frame_size + mem::size_of::<TxDesc>() as u32
+                - ETH_FCS_LEN as u32)
+                * 2;
+            min_tx_space = align_to(min_tx_space, 1024);
+            min_tx_space >>= 10;
+            /* software strips receive CRC, so leave room for it */
+            min_rx_space = self.params.max_frame_size;
+            min_rx_space = align_to(min_rx_space, 1024);
+            min_rx_space >>= 10;
+
+            /* If current Tx allocation is less than the min Tx FIFO size,
+             * and the min Tx FIFO size is less than the current Rx FIFO
+             * allocation, take space away from current Rx allocation
+             */
+            if ((tx_space < min_tx_space) && ((min_tx_space - tx_space) < pba)) {
+                pba -= min_tx_space - tx_space;
+
+                /* if short on Rx space, Rx wins and must trump Tx
+                 * adjustment
+                 */
+                if (pba < min_rx_space) {
+                    pba = min_rx_space;
+                }
+            }
+
+            self.ew32(PBA, pba);
+        }
+
+        /* flow control settings
+         *
+         * The high water mark must be low enough to fit one full frame
+         * (or the size used for early receive) above it in the Rx FIFO.
+         * Set it to the lower of:
+         * - 90% of the Rx FIFO size, and
+         * - the full Rx FIFO size minus one full frame
+         */
+        if self.params.flags.disable_fc_pause_time {
+            self.fc.pause_time = 0xFFFF;
+        } else {
+            self.fc.pause_time = FC_PAUSE_TIME;
+        }
+        self.fc.send_xon = true;
+        self.fc.current_mode = self.fc.requested_mode;
+
+        let is_mtu_bg_than_data = self.params.mtu > ETH_DATA_LEN;
+
+        match self.mac.kind {
+            MacType::e1000_pchlan => {
+                /* Workaround PCH LOM adapter hangs with certain network
+                 * loads.  If hangs persist, try disabling Tx flow control.
+                 */
+                if is_mtu_bg_than_data {
+                    self.fc.high_water = 0x3500;
+                    self.fc.low_water = 0x1500;
+                } else {
+                    self.fc.high_water = 0x5000;
+                    self.fc.low_water = 0x3000;
+                }
+                self.fc.refresh_time = 0x1000;
+            }
+            MacType::e1000_pch2lan
+            | MacType::e1000_pch_lpt
+            | MacType::e1000_pch_spt
+            | MacType::e1000_pch_cnp
+            | MacType::e1000_pch_tgp
+            | MacType::e1000_pch_adp
+            | MacType::e1000_pch_mtp
+            | MacType::e1000_pch_lnp
+            | MacType::e1000_pch_ptp
+            | MacType::e1000_pch_nvp => {
+                self.fc.refresh_time = 0xFFFF;
+                self.fc.pause_time = 0xFFFF;
+
+                if is_mtu_bg_than_data {
+                    let pba = 14;
+                    self.ew32(PBA, pba);
+                    self.fc.high_water = ((pba << 10) * 9 / 10) & FCRTH_RTH;
+                    self.fc.low_water = ((pba << 10) * 8 / 10) & FCRTL_RTL;
+                } else {
+                    self.fc.high_water = 0x05C20;
+                    self.fc.low_water = 0x05048;
+                }
+            }
+            _ => {
+                if let MacType::e1000_ich9lan | MacType::e1000_ich10lan = self.mac.kind {
+                    if self.params.mtu > ETH_DATA_LEN {
+                        let pba = 14;
+                        self.ew32(PBA, pba);
+                        self.fc.high_water = 0x2800;
+                        self.fc.low_water = self.fc.high_water - 8;
+                    }
+                }
+
+                let hwm = min(
+                    ((pba << 10) * 9 / 10),
+                    ((pba << 10) - self.params.max_frame_size),
+                );
+                self.fc.high_water = hwm & FCRTH_RTH; /* 8-byte granularity */
+                self.fc.low_water = self.fc.high_water - 8;
+            }
+        }
+
+        let limit = unsafe {
+            min(
+                ((self.er32(PBA).wrapping_shr(16)) << 10).wrapping_mul(96),
+                24 << 10,
+            )
+        };
+
+        self.params.tx_fifo_limit = limit;
+
+        info!("fifo limit: {}", self.params.tx_fifo_limit);
+        /* Disable Adaptive Interrupt Moderation if 2 full packets cannot
+         * fit in receive buffer.
+         */
+        if self.params.itr_settings & 0x3 > 0 {
+            let max_frame_size = self.params.max_frame_size * 2;
+            let pba_value = pba << 10;
+
+            if max_frame_size > pba_value {
+                if !self.params.flags.disable_aim {
+                    info!("Interrupt Throttle Rate off");
+                    self.params.flags.disable_aim = true;
+                }
+            } else if self.params.flags.disable_aim {
+                info!("Interrupt Throttle Rate on");
+                self.params.flags.disable_aim = false;
+                self.params.itr = 20000;
+                self.write_itr(self.params.itr);
+            }
+        }
+        if self.mac.kind >= MacType::e1000_pch_spt {
+            self.flush_desc_ring();
+        }
+
+        self.ew32(WUC, 0);
 
         Ok(())
+    }
+    /**
+     * get_hw_control - get control of the h/w from f/w
+     *
+     * get_hw_control sets {CTRL_EXT|SWSM}:DRV_LOAD bit.
+     * For ASF and Pass Through versions of f/w this means that
+     * the driver is loaded. For AMT version (only with 82573)
+     * of the f/w this means that the network i/f is open.
+     **/
+    fn get_hw_control(&mut self) {
+        if self.params.flags.has_swsm_on_load {
+            let swsm = self.er32(SWSM);
+            self.ew32(SWSM, swsm | SWSM_DRV_LOAD);
+        } else if self.params.flags.has_ctrlext_on_load {
+            let ctrl_ext = self.er32(CTRL_EXT);
+            self.ew32(CTRL_EXT, ctrl_ext | CTRL_EXT_DRV_LOAD);
+        }
+    }
+    /**
+     * release_hw_control - release control of the h/w to f/w
+     *
+     * release_hw_control resets {CTRL_EXT|SWSM}:DRV_LOAD bit.
+     * For ASF and Pass Through versions of f/w this means that the
+     * driver is no longer loaded. For AMT version (only with 82573) i
+     * of the f/w this means that the network i/f is closed.
+     *
+     **/
+    fn release_hw_control(&mut self) {
+        if self.params.flags.has_swsm_on_load {
+            let swsm = self.er32(SWSM);
+            self.ew32(SWSM, swsm & !SWSM_DRV_LOAD);
+        } else if self.params.flags.has_ctrlext_on_load {
+            let ctrl_ext = self.er32(CTRL_EXT);
+            self.ew32(CTRL_EXT, ctrl_ext & !CTRL_EXT_DRV_LOAD);
+        }
+    }
+
+    /**
+     * flush_tx_ring - remove all descriptors from the tx_ring
+     *
+     * We want to clear all pending descriptors from the TX ring.
+     * zeroing happens when the HW reads the regs. We  assign the ring itself as
+     * the data of the next descriptor. We don't care about the data we are about
+     * to reset the HW.
+     */
+    fn flush_tx_ring(&mut self) {
+        let txd_lower = TXD_CMD_IFCS;
+        let size = 512;
+
+        let tctl = self.er32(TCTL);
+        self.ew32(TCTL, tctl | TCTL_EN);
+        let tdt = self.er32(TDT(0));
+        if tdt != self.tx_ring.next_to_use as u32 {
+            panic!("tdt {} != next_to_use {}", tdt, self.tx_ring.next_to_use);
+        }
+
+        {
+            let index = self.tx_ring.next_to_use;
+            self.tx_ring[index].desc_mut().status = 0;
+        }
+
+        /* flush descriptors to memory before notifying the HW */
+        fence();
+        self.tx_ring.next_to_use += 1;
+        if (self.tx_ring.next_to_use == self.tx_ring.len()) {
+            self.tx_ring.next_to_use = 0;
+        }
+        self.ew32(TDT(0), self.tx_ring.next_to_use as u32);
+
+        kfn().sleep(Duration::from_nanos(200));
+    }
+
+    /**
+     * flush_tx_ring - remove all descriptors from the tx_ring
+     *
+     * We want to clear all pending descriptors from the TX ring.
+     * zeroing happens when the HW reads the regs. We  assign the ring itself as
+     * the data of the next descriptor. We don't care about the data we are about
+     * to reset the HW.
+     */
+    fn flush_rx_ring(&mut self) {
+        let rctl = self.er32(RCTL);
+
+        self.ew32(RCTL, rctl & !RCTL_EN);
+
+        self.e1e_flush();
+
+        kfn().sleep(Duration::from_nanos(100));
+
+        let mut rxdctl = self.er32(RXDCTL(0));
+        /* zero the lower 14 bits (prefetch and host thresholds) */
+        rxdctl &= 0xffffc000;
+
+        /* update thresholds: prefetch threshold to 31, host threshold to 1
+         * and make sure the granularity is "descriptors" and not "cache lines"
+         */
+        rxdctl |= (0x1F | (1 << 8) | RXDCTL_THRESH_UNIT_DESC);
+
+        self.ew32(RXDCTL(0), rxdctl);
+
+        /* momentarily enable the RX ring for the changes to take effect */
+        self.ew32(RCTL, rctl | RCTL_EN);
+        self.e1e_flush();
+
+        kfn().sleep(Duration::from_nanos(100));
+
+        self.ew32(RCTL, rctl & (!RCTL_EN));
+    }
+
+    /**
+     * flush_desc_rings - remove all descriptors from the descriptor rings
+     * @adapter: board private structure
+     *
+     * In i219, the descriptor rings must be emptied before resetting the HW
+     * or before changing the device state to D3 during runtime (runtime PM).
+     *
+     * Failure to do this will cause the HW to enter a unit hang state which can
+     * only be released by PCI reset on the device
+     *
+     */
+
+    fn flush_desc_ring(&mut self) {
+        /* First, disable MULR fix in FEXTNVM11 */
+        let mut fext_nvm11 = self.er32(FEXTNVM11);
+        fext_nvm11 |= FEXTNVM11_DISABLE_MULR_FIX;
+        self.ew32(FEXTNVM11, fext_nvm11);
+        /* do nothing if we're not in faulty state, or if the queue is empty */
+        let tdlen = self.er32(TDLEN(0));
+        let mut hang_state = kfn().pci_read_config_word(PCICFG_DESC_RING_STATUS);
+        if ((hang_state & FLUSH_DESC_REQUIRED) == 0 || tdlen == 0) {
+            return;
+        }
+        self.flush_tx_ring();
+
+        /* recheck, maybe the fault is caused by the rx ring */
+        hang_state = kfn().pci_read_config_word(PCICFG_DESC_RING_STATUS);
+
+        if (hang_state & FLUSH_DESC_REQUIRED) > 0 {
+            self.flush_rx_ring();
+        }
+    }
+
+    /**
+     * write_itr - write the ITR value to the appropriate registers
+     * @itr: new ITR value to program
+     *
+     * write_itr determines if the adapter is in MSI-X mode
+     * and, if so, writes the EITR registers with the ITR value.
+     * Otherwise, it writes the ITR value into the ITR register.
+     **/
+    fn write_itr(&mut self, itr: u32) {
+        let new_itr = if itr > 0 { 1000000000 / (itr * 256) } else { 0 };
+
+        if self.params.int_mode == InterruptMode::MSIX {
+            for vector in 0..3 {
+                self.write_reg(EITR_82574(vector), new_itr);
+            }
+        } else {
+            self.ew32(ITR, new_itr);
+        }
     }
 
     fn write_reg(&self, offset: u32, value: u32) {

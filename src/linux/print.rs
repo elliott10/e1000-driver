@@ -1,6 +1,6 @@
 macro_rules! info {
     ($($arg:tt)*) => (
-        kernel::prelude::pr_info!($($arg)*);
+        kernel::prelude::pr_info!($($arg)*)
     )
 }
 macro_rules! debug (

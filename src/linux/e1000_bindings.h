@@ -16,6 +16,7 @@ typedef void (*E1000CbOnRcv)(const void *pdev, struct E1000RcvPkt pkt);
 
 typedef struct Settings {
   bool enable_msi;
+  size_t mtu;
 } Settings;
 
 /**
@@ -39,9 +40,9 @@ typedef struct E1000rPcieInfo (*E1000CbPcieInfo)(const void *pdev);
 
 typedef bool (*E1000CbMtuBgEth)(const void *pdev);
 
-typedef size_t (*E1000CbDmaAllocCoherent)(const void *pdev, size_t pages, uint64_t *dma);
+typedef size_t (*E1000CbDmaAllocCoherent)(const void *pdev, size_t size, uint64_t *dma);
 
-typedef void (*E1000CbDmaFreeCoherent)(const void *pdev, size_t vaddr, uint64_t dma, size_t pages);
+typedef void (*E1000CbDmaFreeCoherent)(const void *pdev, size_t vaddr, uint64_t dma, size_t size);
 
 typedef uint16_t (*E1000CbPciReadConfigWord)(const void *pdev, int32_t where_);
 

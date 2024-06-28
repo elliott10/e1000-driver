@@ -19,10 +19,11 @@ pub use self::e1000::*;
 pub use board::*;
 use core::{
     fmt::{self, Display},
-    ptr::null_mut,
+    ptr::{null_mut, slice_from_raw_parts_mut},
     time::Duration,
     u16,
 };
+use err::{Error, Result};
 
 pub use hw::{E1000HWStats, MediaType, PhyInfo, PhyType};
 const PAGE_SIZE: usize = 4096;
@@ -55,16 +56,65 @@ pub(crate) fn kfn() -> &'static Box<dyn KernelFunc2> {
     }
 }
 
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct DMAInfo {
+    pub dma_addr: u64,
+    pub cpu_addr: usize,
+    pub size: usize,
+}
+
+pub(crate) struct DMA(DMAInfo);
+
+impl DMA {
+    pub fn try_new(size: usize) -> Result<Self> {
+        let info = kfn().dma_alloc_coherent(size);
+        if info.cpu_addr == 0 {
+            return Err(Error::TryReserveError);
+        }
+        unsafe {
+            let data = &mut *slice_from_raw_parts_mut(info.cpu_addr as *mut u8, size);
+            data.fill(0);
+        }
+        Ok(Self(info))
+    }
+    pub fn dma_addr(&self) -> u64 {
+        self.0.dma_addr
+    }
+
+    pub fn cpu_addr(&self) -> usize {
+        self.0.cpu_addr
+    }
+
+    pub fn size(&self) -> usize {
+        self.0.size
+    }
+}
+
+impl Drop for DMA {
+    fn drop(&mut self) {
+        kfn().dma_free_coherent(self.0)
+    }
+}
+
 pub trait KernelFunc2 {
     /// BAR remap address
     fn bar_n_remap(&self, bar: usize) -> usize;
 
+    /// sleep
     fn sleep(&self, duration: Duration);
 
     /// Pcie 读取
     fn pci_read_config_word(&self, where_: i32) -> u16;
 
+    /// Pcie Capability offset
     fn pci_cap_offset(&self) -> i32;
+
+    /// DMA 分配
+    fn dma_alloc_coherent(&self, size: usize) -> DMAInfo;
+
+    /// DMA 释放
+    fn dma_free_coherent(&self, dma: DMAInfo);
 }
 pub trait KernelFunc: Send + Sync + Clone {
     /// Page size (usually 4K)

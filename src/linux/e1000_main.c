@@ -846,8 +846,6 @@ size_t e1000_get_e1000r(struct net_device *netdev) {
   return adapter->ptr;
 }
 
-
-
 size_t cb_bar_n_remap(const void *data, size_t bar) {
   struct e1000_adapter *adapter = (struct e1000_adapter *)data;
   struct pci_dev *pdev = adapter->pdev;
@@ -894,18 +892,18 @@ int cb_pcie_cap_offset(const void *data) {
 
   return adapter->pdev->pcie_cap;
 }
-size_t cb_dma_alloc(const void *data, size_t pages, u64 *dma) {
+size_t cb_dma_alloc(const void *data, size_t size, u64 *dma) {
   struct e1000_adapter *adapter = (struct e1000_adapter *)data;
   struct pci_dev *pdev = adapter->pdev;
 
-  return (size_t)dma_alloc_coherent(&pdev->dev, pages * 4096, dma, GFP_KERNEL);
+  return (size_t)dma_alloc_coherent(&pdev->dev, size, dma, GFP_KERNEL);
 }
 
-void cb_dma_free(const void *data, size_t cpu_addr, u64 dma, size_t pages) {
+void cb_dma_free(const void *data, size_t cpu_addr, u64 dma, size_t size) {
   struct e1000_adapter *adapter = (struct e1000_adapter *)data;
   struct pci_dev *pdev = adapter->pdev;
 
-  dma_free_coherent(&pdev->dev, pages * 4096, (void *)cpu_addr, dma);
+  dma_free_coherent(&pdev->dev, size, (void *)cpu_addr, dma);
   return;
 }
 
@@ -1018,7 +1016,7 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent) {
   config.cb_on_xmit_completed = cb_on_xmit_completed;
   config.cb_enable_net = cb_enbale_net;
   config.cb_pcie_cap_offset = cb_pcie_cap_offset;
-
+  config.settings.mtu = netdev->mtu;
   config.settings.enable_msi = false;
 #ifdef CONFIG_PCI_MSI
   config.settings.enable_msi = true;

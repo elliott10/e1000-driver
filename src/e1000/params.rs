@@ -73,6 +73,7 @@ pub struct Flags3 {
 #[derive(Debug, Clone, Default)]
 pub struct Settings {
     pub enable_msi: bool,
+    pub mtu: usize,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -102,6 +103,11 @@ pub(crate) struct Params {
     pub eeprom_wol: u32,
     pub wol: u32,
     pub pba: u32,
+    pub tx_fifo_limit: u32,
+
+    pub max_frame_size: u32,
+    pub min_frame_size: u32,
+    pub mtu: usize,
 }
 
 impl Params {

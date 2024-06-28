@@ -72,6 +72,20 @@ impl KernelFunc2 for KFun {
     fn pci_cap_offset(&self) -> i32 {
         unsafe { (self.cb_pcie_cap_offset)(self.adapter) }
     }
+
+    fn dma_alloc_coherent(&self, size: usize) -> DMAInfo {
+        let mut dma_addr = 0;
+        let cpu_addr = unsafe { (self.cb_dma_alloc)(self.adapter, size, &mut dma_addr) };
+        DMAInfo {
+            dma_addr,
+            cpu_addr,
+            size,
+        }
+    }
+
+    fn dma_free_coherent(&self, dma: DMAInfo) {
+        unsafe { (self.cb_dma_free)(self.adapter, dma.cpu_addr, dma.dma_addr, dma.size) }
+    }
 }
 impl KernelFunc for KFun {
     fn dma_alloc_coherent(&self, pages: usize) -> (usize, u64) {
@@ -136,10 +150,10 @@ pub type E1000CbPcieInfo = unsafe extern "C" fn(pdev: *const c_void) -> E1000rPc
 pub type E1000CbMtuBgEth = unsafe extern "C" fn(pdev: *const c_void) -> bool;
 
 pub type E1000CbDmaAllocCoherent =
-    unsafe extern "C" fn(pdev: *const c_void, pages: usize, dma: &mut u64) -> usize;
+    unsafe extern "C" fn(pdev: *const c_void, size: usize, dma: &mut u64) -> usize;
 
 pub type E1000CbDmaFreeCoherent =
-    unsafe extern "C" fn(pdev: *const c_void, vaddr: usize, dma: u64, pages: usize);
+    unsafe extern "C" fn(pdev: *const c_void, vaddr: usize, dma: u64, size: usize);
 
 pub type E1000CbPciReadConfigWord = unsafe extern "C" fn(pdev: *const c_void, where_: i32) -> u16;
 pub type E1000CbOnXmitCompleted = unsafe extern "C" fn(pdev: *const c_void, pkts: u32, bytes: u32);

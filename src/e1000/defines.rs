@@ -136,9 +136,12 @@ pub(crate) const FWSM_MODE_MASK: u32 = 0xE;
 pub(crate) const FWSM_MODE_SHIFT: u8 = 1;
 
 pub(crate) const VLAN_ETH_DATA_LEN: usize = 1500; /* Max. octets in payload */
+pub(crate) const VLAN_ETH_HLEN: usize = 18; 
 pub(crate) const VLAN_ETH_FRAME_LEN: usize = 1518; /* Max. octets in frame sans FCS */
 pub(crate) const VLAN_MAX_DEPTH: usize = 8; /* Max. number of nested VLAN tags parsed */
 pub(crate) const ETH_FCS_LEN: usize = 4; /* Octets in the FCS */
+pub(crate) const ETH_ZLEN: usize = 60;
+pub(crate) const ETH_DATA_LEN: usize = 1500; /* Max. octets in payload */
 
 pub(crate) const FC_PAUSE_TIME: u16 = 0x0680; //  858微秒
 
