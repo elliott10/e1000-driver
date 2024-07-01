@@ -680,6 +680,22 @@ impl PhyInfo2 {
          */
         Ok(())
     }
+
+    pub(crate) fn read_kmrn_reg(&mut self, offset: u32) -> u16 {
+        let mut kmrnctrlsta =
+            ((offset << KMRNCTRLSTA_OFFSET_SHIFT) & KMRNCTRLSTA_OFFSET) | KMRNCTRLSTA_REN;
+        self.reg.ew32(KMRNCTRLSTA, kmrnctrlsta);
+        self.reg.e1e_flush();
+
+        self.reg.er32(KMRNCTRLSTA) as u16
+    }
+    pub(crate) fn write_kmrn_reg(&mut self, offset: u32, data: u16) {
+        let mut kmrnctrlsta =
+            ((offset << KMRNCTRLSTA_OFFSET_SHIFT) & KMRNCTRLSTA_OFFSET) | data as u32;
+        self.reg.ew32(KMRNCTRLSTA, kmrnctrlsta);
+        self.reg.e1e_flush();
+        kfn().delay(Duration::from_micros(2));
+    }
 }
 
 #[derive(Debug, Clone)]

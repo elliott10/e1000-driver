@@ -502,6 +502,7 @@ static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
   if (n < 0) {
     return NETDEV_TX_BUSY;
   }
+  dev_kfree_skb_any(skb);
   return NETDEV_TX_OK;
 }
 /**

@@ -21,7 +21,7 @@ where
     pub next_to_use: usize,
     pub next_to_clean: usize,
     pub ims_val: u32,
-    dma_desc: DMA,
+    pub dma_desc: DMA,
     dma_buff: DMA,
 }
 

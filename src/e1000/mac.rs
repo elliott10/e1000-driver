@@ -202,16 +202,6 @@ impl MacInfo {
 
         Ok(())
     }
-    // fn setup_copper_link_82571(&mut self) -> Result {
-    //     let mut ctrl = self.er32(CTRL);
-    //     ctrl |= CTRL_SLU;
-    //     ctrl &= !(CTRL_FRCSPD | CTRL_FRCDPX);
-    //     self.ew32(CTRL, ctrl);
-
-    //     // self.copper_link_setup_m88()?;
-
-    //     // self.hw.as_mut().setup_copper_link()
-    // }
 
     /**
      *  e1000e_config_collision_dist_generic - Configure collision distance

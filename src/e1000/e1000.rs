@@ -146,6 +146,12 @@ impl E1000 {
 
         self.power_up_phy()?;
 
+        self.set_rx_mode();
+        self.init_manageability_pt();
+        self.configure_tx();
+        self.setup_rctl();
+        self.configure_rx();
+
         Ok(())
     }
 
@@ -161,6 +167,301 @@ impl E1000 {
         Ok(())
     }
 
+    fn set_rx_mode(&mut self) {
+        /* Check for Promiscuous and All Multicast modes */
+        let mut rctl = self.er32(RCTL);
+
+        /* clear the affected bits */
+        rctl &= !(RCTL_UPE | RCTL_MPE);
+
+        rctl |= RCTL_UPE | RCTL_LPE | RCTL_BAM | RCTL_SECRC | RCTL_BSEX;
+
+        self.ew32(RCTL, rctl);
+    }
+    fn init_manageability_pt(&mut self) {
+        if !self.params.flags.mng_pt_enabled {
+            return;
+        }
+        info!("Enabling management packets to the host");
+        let mut manc = self.er32(MANC);
+
+        /* enable receiving management packets to the host. this will probably
+         * generate destination unreachable messages from the host OS, but
+         * the packets will be handled on SMBUS
+         */
+        manc |= MANC_EN_MNG2HOST;
+        let mut manc2h = self.er32(MANC2H);
+
+        match self.mac.kind {
+            // Default case handling
+            _ => {
+                manc2h |= (MANC2H_PORT_623 | MANC2H_PORT_664);
+            }
+            MacType::e1000_82574 | MacType::e1000_82583 => {
+                let mut mdef: u32;
+                let mut j: u32 = 0;
+
+                // Check existing filters and enable if they match IPMI ports.
+                for i in 0..8 {
+                    mdef = self.er32(MDEF(i));
+                    if mdef & !(MANC2H_PORT_623 | MANC2H_PORT_664) != 0 {
+                        continue;
+                    }
+                    if mdef != 0 {
+                        manc2h |= 1 << i;
+                    }
+                    j |= mdef;
+                }
+
+                if j != (MANC2H_PORT_623 | MANC2H_PORT_664) {
+                    // Attempt to create a new filter if none matched.
+                    for i in 0..8 {
+                        if self.er32(MDEF(i)) == 0 {
+                            self.ew32(MDEF(i), MANC2H_PORT_623 | MANC2H_PORT_664);
+                            manc2h |= 1 << 1; // Enabling in MANC2H, assuming BIT(1) was a typo for enabling a different bit.
+                            j += 1;
+                            break;
+                        }
+                    }
+
+                    if j == 0 {
+                        warn!("Unable to create IPMI pass-through filter");
+                    }
+                }
+            }
+        }
+
+        // Write the updated values back to the hardware registers.
+        self.ew32(MANC2H, manc2h);
+        self.ew32(MANC, manc);
+    }
+
+    fn configure_tx(&mut self) {
+        let mut tdba = self.tx_ring.dma_desc.dma_addr();
+        let tdlen = self.tx_ring.len() as u32;
+        self.ew32(TDBAL(0), (tdba & DMA_BIT_MASK(32)) as u32);
+        self.ew32(TDBAH(0), (tdba >> 32) as u32);
+        self.ew32(TDLEN(0), tdlen);
+        self.ew32(TDH(0), 0);
+        self.ew32(TDT(0), 0);
+
+        /* Set the Tx Interrupt Delay register */
+        self.ew32(TIDV, self.params.tx_int_delay);
+        /* Tx irq moderation */
+        self.ew32(TADV, self.params.tx_abs_int_delay);
+
+        if self.params.flags.dma_burst {
+            let mut txdctl = self.er32(TXDCTL(0));
+
+            txdctl &= !(TXDCTL_PTHRESH | TXDCTL_HTHRESH | TXDCTL_WTHRESH);
+            /* set up some performance related parameters to encourage the
+             * hardware to use the bus more efficiently in bursts, depends
+             * on the tx_int_delay to be enabled,
+             * wthresh = 1 ==> burst write is disabled to avoid Tx stalls
+             * hthresh = 1 ==> prefetch when one or more available
+             * pthresh = 0x1f ==> prefetch if internal cache 31 or less
+             * BEWARE: this seems to work but should be considered first if
+             * there are Tx hangs or other Tx related bugs
+             */
+            txdctl |= TXDCTL_DMA_BURST_ENABLE;
+            self.ew32(TXDCTL(0), txdctl);
+        }
+        /* erratum work around: set txdctl the same for both queues */
+        self.ew32(TXDCTL(1), self.er32(TXDCTL(0)));
+
+        /* Program the Transmit Control Register */
+        let mut tctl = self.er32(TCTL);
+        tctl &= !TCTL_CT;
+        tctl |= TCTL_PSP | TCTL_RTLC | (COLLISION_THRESHOLD << CT_SHIFT);
+
+        if self.params.flags.tarc_speed_mode_bit {
+            let mut tarc = self.er32(TARC(0));
+            /* set the speed mode bit, we'll clear it if we're not at
+             * gigabit link later
+             */
+            tarc |= BIT(21);
+            self.ew32(TARC(0), tarc);
+        }
+
+        /* errata: program both queues to unweighted RR */
+        if (self.params.flags.tarc_set_bit_zero) {
+            let mut tarc = self.er32(TARC(0));
+            tarc |= 1;
+            self.ew32(TARC(0), tarc);
+            tarc = self.er32(TARC(1));
+            tarc |= 1;
+            self.ew32(TARC(1), tarc);
+        }
+
+        self.ew32(TCTL, tctl);
+
+        self.mac.config_collision_dist_generic();
+
+        /* SPT and KBL Si errata workaround to avoid data corruption */
+        if self.mac.kind == MacType::e1000_pch_spt {
+            let mut reg_val = self.er32(IOSFPC);
+            reg_val |= RCTL_RDMTS_HEX;
+            self.ew32(IOSFPC, reg_val);
+
+            reg_val = self.er32(TARC(0));
+            /* SPT and KBL Si errata workaround to avoid Tx hang.
+             * Dropping the number of outstanding requests from
+             * 3 to 2 in order to avoid a buffer overrun.
+             */
+            reg_val &= !TARC0_CB_MULTIQ_3_REQ;
+            reg_val |= TARC0_CB_MULTIQ_2_REQ;
+            self.ew32(TARC(0), reg_val);
+        }
+    }
+    fn setup_rctl(&mut self) {
+        /* Workaround Si errata on PCHx - configure jumbo frame flow.
+         * If jumbo frames not set, program related MAC/PHY registers
+         * to h/w defaults
+         */
+        if (self.mac.kind >= MacType::e1000_pch2lan) {
+            let ret = if self.params.mtu > ETH_DATA_LEN {
+                self.lv_jumbo_workaround_ich8lan(true)
+            } else {
+                self.lv_jumbo_workaround_ich8lan(false)
+            };
+
+            if ret.is_err() {
+                error!("failed to enable|disable jumbo frame workaround mode");
+            }
+        }
+
+        /* Program MC offset vector base */
+        let mut rctl = self.er32(RCTL);
+        rctl &= !(3 << RCTL_MO_SHIFT);
+        rctl =
+            RCTL_BAM | RCTL_LBM_NO | RCTL_RDMTS_HALF | (self.mac.mc_filter_type << RCTL_MO_SHIFT);
+
+        rctl &= !(0b11 << 10); // Legacy description type
+
+        /* Do not Store bad packets */
+        rctl &= !RCTL_SBP;
+
+        /* Enable Long Packet receive */
+        if self.params.mtu > ETH_DATA_LEN {
+            rctl |= RCTL_LPE;
+        } else {
+            rctl &= !RCTL_LPE;
+        }
+
+        /* Some systems expect that the CRC is included in SMBUS traffic. The
+         * hardware strips the CRC before sending to both SMBUS (BMC) and to
+         * host memory when this is enabled
+         */
+        if (self.params.flags.crc_stripping) {
+            rctl |= RCTL_SECRC;
+        }
+
+        /* Setup buffer sizes */
+        rctl &= !RCTL_SZ_4096;
+        rctl |= RCTL_BSEX;
+
+        let rx_buffer_len = self.rx_ring.buff_len;
+
+        match rx_buffer_len {
+            2048 | _ => {
+                // For 2048 or any other default/fallback case, disable BSEX and set 2048 size
+                rctl |= RCTL_SZ_2048;
+                rctl &= !RCTL_BSEX;
+            }
+            4096 => {
+                rctl |= RCTL_SZ_4096;
+            }
+            8192 => {
+                rctl |= RCTL_SZ_8192;
+            }
+            16384 => {
+                rctl |= RCTL_SZ_16384;
+            }
+        }
+
+        // Read RFCTL register, enable extended status, and write back
+        let mut rfctl = self.er32(RFCTL);
+        rfctl |= RFCTL_EXTEN;
+        self.ew32(RFCTL, rfctl);
+
+        self.ew32(RCTL, rctl);
+
+        self.params.flags.restart_now = false;
+    }
+    fn configure_rx(&mut self) {
+        //TODO
+
+        let rdlen = self.rx_ring.len() as u32;
+        /* disable receives while setting up the descriptors */
+        let mut rctl = self.er32(RCTL);
+        if !self.params.flags.no_disable_rx {
+            self.ew32(RCTL, rctl & !RCTL_EN);
+        }
+        self.e1e_flush();
+
+        kfn().delay(Duration::from_micros(10000));
+
+        if self.params.flags.dma_burst {
+            /* set the writeback threshold (only takes effect if the RDTR
+             * is set). set GRAN=1 and write back up to 0x4 worth, and
+             * enable prefetching of 0x20 Rx descriptors
+             * granularity = 01
+             * wthresh = 04,
+             * hthresh = 04,
+             * pthresh = 0x20
+             */
+            self.ew32(RXDCTL(0), RXDCTL_DMA_BURST_ENABLE);
+            self.ew32(RXDCTL(1), RXDCTL_DMA_BURST_ENABLE);
+        }
+
+        /* set the Receive Delay Timer Register */
+        self.ew32(RDTR, self.params.rx_int_delay);
+        // self.ew32(RDTR, 0);
+
+        /* irq moderation */
+        self.ew32(RADV, self.params.rx_abs_int_delay);
+        // self.ew32(RADV, 0);
+
+        if (self.params.itr_settings != 0) && (self.params.itr != 0) {
+            self.write_itr(self.params.itr);
+        }
+
+        let mut ctrl_ext = self.er32(CTRL_EXT);
+        /* Auto-Mask interrupts upon ICR access */
+        ctrl_ext |= CTRL_EXT_IAME;
+        self.ew32(IAM, 0xffffffff);
+        self.ew32(CTRL_EXT, ctrl_ext);
+        self.e1e_flush();
+
+        /* Setup the HW Rx Head and Tail Descriptor Pointers and
+         * the Base and Length of the Rx Descriptor Ring
+         */
+        let mut rdba = self.rx_ring.dma_desc.dma_addr();
+        self.ew32(RDBAL(0), (rdba & DMA_BIT_MASK(32)) as u32);
+        self.ew32(RDBAH(0), (rdba >> 32) as u32);
+        self.ew32(RDLEN(0), rdlen);
+        self.ew32(RDH(0), 0);
+
+        // self.rx_ring.next_to_clean = 0;
+        // self.ew32(RDT(0), 0);
+
+        self.ew32(RDT(0), rdlen - 1);
+        self.rx_ring.next_to_clean = 0;
+
+        // writel(0, rx_ring->head);
+        // if (adapter->flags2 & FLAG2_PCIM2PCI_ARBITER_WA)
+        // 	e1000e_update_rdt_wa(rx_ring, 0);
+        // else
+        // 	writel(0, rx_ring->tail);
+
+        /* Enable Receive Checksum Offload for TCP and UDP */
+        let mut rxcsum = self.er32(RXCSUM);
+        rxcsum &= !RXCSUM_IPOFLD;
+        rxcsum &= !RXCSUM_TUOFL;
+        self.ew32(RXCSUM, rxcsum);
+
+        self.ew32(RCTL, rctl);
+    }
     fn setup_default_fc(&mut self) -> Result {
         if (self.fc.requested_mode == FcMode::Default) {
             match &self.variant.kind {
@@ -467,7 +768,141 @@ impl E1000 {
 
         Ok(())
     }
+    /**
+     *  e1000_lv_jumbo_workaround_ich8lan - required for jumbo frame operation
+     *  with 82579 PHY
+     *  @hw: pointer to the HW structure
+     *  @enable: flag to enable/disable workaround when enabling/disabling jumbos
+     **/
+    fn lv_jumbo_workaround_ich8lan(&mut self, enable: bool) -> Result {
+        /* disable Rx path while enabling/disabling workaround */
+        let mut phy_reg = self.e1e_rphy(PHY_REG(769, 20))?;
+        self.e1e_wphy(PHY_REG(769, 20), phy_reg | (BIT(14) as u16))?;
 
+        if (enable) {
+            /* Write Rx addresses (rar_entry_count for RAL/H, and
+             * SHRAL/H) and initial CRC values to the MAC
+             */
+            // for i in 0..self.hw.as_ref().mac.rar_entry_count as usize {
+            //     let mut mac_addr = [0u8; 6];
+
+            // 	let addr_high = self.er32(RAH(i));
+            // 	if (addr_high & RAH_AV)==0{
+            // 		continue;
+            //     }
+            // 	let addr_low = self.er32(RAL(i));
+            // 	mac_addr[0] = (addr_low & 0xFF) as u8;
+            // 	mac_addr[1] = ((addr_low >> 8) & 0xFF) as u8;
+            // 	mac_addr[2] = ((addr_low >> 16) & 0xFF) as u8;
+            // 	mac_addr[3] = ((addr_low >> 24) & 0xFF) as u8;
+            // 	mac_addr[4] = (addr_high & 0xFF) as u8;
+            // 	mac_addr[5] = ((addr_high >> 8) & 0xFF) as u8;
+
+            //     self.	ew32(PCH_RAICC(i), !ether_crc_le(6, mac_addr));
+            // }
+
+            // /* Write Rx addresses to the PHY */
+            // e1000_copy_rx_addrs_to_phy_ich8lan(hw);
+
+            // /* Enable jumbo frame workaround in the MAC */
+            // mac_reg = er32(FFLT_DBG);
+            // mac_reg &= ~BIT(14);
+            // mac_reg |= (7 << 15);
+            // ew32(FFLT_DBG, mac_reg);
+
+            // mac_reg = er32(RCTL);
+            // mac_reg |= E1000_RCTL_SECRC;
+            // ew32(RCTL, mac_reg);
+
+            // ret_val = e1000e_read_kmrn_reg(hw,
+            // 			       E1000_KMRNCTRLSTA_CTRL_OFFSET,
+            // 			       &data);
+            // if (ret_val)
+            // 	return ret_val;
+            // ret_val = e1000e_write_kmrn_reg(hw,
+            // 				E1000_KMRNCTRLSTA_CTRL_OFFSET,
+            // 				data | BIT(0));
+            // if (ret_val)
+            // 	return ret_val;
+            // ret_val = e1000e_read_kmrn_reg(hw,
+            // 			       E1000_KMRNCTRLSTA_HD_CTRL,
+            // 			       &data);
+            // if (ret_val)
+            // 	return ret_val;
+            // data &= ~(0xF << 8);
+            // data |= (0xB << 8);
+            // ret_val = e1000e_write_kmrn_reg(hw,
+            // 				E1000_KMRNCTRLSTA_HD_CTRL,
+            // 				data);
+            // if (ret_val)
+            // 	return ret_val;
+
+            // /* Enable jumbo frame workaround in the PHY */
+            // e1e_rphy(hw, PHY_REG(769, 23), &data);
+            // data &= ~(0x7F << 5);
+            // data |= (0x37 << 5);
+            // ret_val = e1e_wphy(hw, PHY_REG(769, 23), data);
+            // if (ret_val)
+            // 	return ret_val;
+            // e1e_rphy(hw, PHY_REG(769, 16), &data);
+            // data &= ~BIT(13);
+            // ret_val = e1e_wphy(hw, PHY_REG(769, 16), data);
+            // if (ret_val)
+            // 	return ret_val;
+            // e1e_rphy(hw, PHY_REG(776, 20), &data);
+            // data &= ~(0x3FF << 2);
+            // data |= (E1000_TX_PTR_GAP << 2);
+            // ret_val = e1e_wphy(hw, PHY_REG(776, 20), data);
+            // if (ret_val)
+            // 	return ret_val;
+            // ret_val = e1e_wphy(hw, PHY_REG(776, 23), 0xF100);
+            // if (ret_val)
+            // 	return ret_val;
+            // e1e_rphy(hw, HV_PM_CTRL, &data);
+            // ret_val = e1e_wphy(hw, HV_PM_CTRL, data | BIT(10));
+            // if (ret_val)
+            // 	return ret_val;
+        } else {
+            /* Write MAC register values back to h/w defaults */
+            let mut mac_reg = self.er32(FFLT_DBG);
+            mac_reg &= !(0xF << 14);
+            self.ew32(FFLT_DBG, mac_reg);
+
+            mac_reg = self.er32(RCTL);
+            mac_reg &= !RCTL_SECRC;
+            self.ew32(RCTL, mac_reg);
+
+            let mut data = self.phy.read_kmrn_reg(KMRNCTRLSTA_CTRL_OFFSET);
+
+            self.phy
+                .write_kmrn_reg(KMRNCTRLSTA_CTRL_OFFSET, data & !(BIT(0) as u16));
+
+            data = self.phy.read_kmrn_reg(KMRNCTRLSTA_HD_CTRL);
+
+            data &= !(0xF << 8);
+            data |= (0xB << 8);
+
+            self.phy.write_kmrn_reg(KMRNCTRLSTA_HD_CTRL, data);
+
+            /* Write PHY register values back to h/w defaults */
+            let mut data = self.e1e_rphy(PHY_REG(769, 23))?;
+            data &= !(0x7F << 5);
+            self.e1e_wphy(PHY_REG(769, 23), data)?;
+            data = self.e1e_rphy(PHY_REG(769, 16))?;
+            data |= BIT(13) as u16;
+            self.e1e_wphy(PHY_REG(769, 16), data)?;
+            data = self.e1e_rphy(PHY_REG(776, 20))?;
+            data &= !(0x3FF << 2);
+            data |= (0x8 << 2);
+            self.e1e_wphy(PHY_REG(776, 20), data)?;
+            self.e1e_wphy(PHY_REG(776, 23), 0x7E00)?;
+            data = self.e1e_rphy(HV_PM_CTRL)?;
+            self.e1e_wphy(HV_PM_CTRL, data & !(BIT(10) as u16))?;
+        }
+
+        /* re-enable Rx path after enabling/disabling workaround */
+        return self.e1e_wphy(PHY_REG(769, 20), phy_reg & !(BIT(14) as u16));
+    }
     /**
      *  e1000e_reset_adaptive - Reset Adaptive Interframe Spacing
      *  @hw: pointer to the HW structure
@@ -1046,93 +1481,6 @@ impl E1000 {
         let mut tctl = self.er32(TCTL);
         tctl |= TCTL_EN;
         self.ew32(TCTL, tctl);
-    }
-
-    fn set_rx_mode(&mut self) {
-        /* Check for Promiscuous and All Multicast modes */
-        let mut rctl = self.er32(RCTL);
-
-        /* clear the affected bits */
-        rctl &= !(RCTL_UPE | RCTL_MPE);
-
-        rctl |= RCTL_UPE | RCTL_LPE | RCTL_BAM | RCTL_SECRC | RCTL_BSEX;
-
-        // rctl |= (
-        //     RCTL_EN // enable receiver
-        //     |  RCTL_BAM
-        //     // enable broadcast
-        //     //| RCTL_SZ_2048   // 2048-byte rx buffers
-        //     //| RCTL_SECRC  // strip CRC
-        // ) & !(0b11 << 10);
-
-        self.ew32(RCTL, rctl);
-        // TODO
-    }
-
-    fn init_manageability_pt(&mut self) {
-        if !self.params.flags.mng_pt_enabled {
-            return;
-        }
-        info!("Enabling management packets to the host");
-        let mut manc = self.er32(MANC);
-
-        /* enable receiving management packets to the host. this will probably
-         * generate destination unreachable messages from the host OS, but
-         * the packets will be handled on SMBUS
-         */
-        manc |= MANC_EN_MNG2HOST;
-        let mut manc2h = self.er32(MANC2H);
-
-        match self.mac.kind {
-            // Default case handling
-            _ => {
-                manc2h |= (MANC2H_PORT_623 | MANC2H_PORT_664);
-            }
-            MacType::e1000_82574 | MacType::e1000_82583 => {
-                let mut mdef: u32;
-                let mut j: u32 = 0;
-
-                // Check existing filters and enable if they match IPMI ports.
-                for i in 0..8 {
-                    mdef = self.er32(MDEF(i));
-                    if mdef & !(MANC2H_PORT_623 | MANC2H_PORT_664) != 0 {
-                        continue;
-                    }
-                    if mdef != 0 {
-                        manc2h |= 1 << i;
-                    }
-                    j |= mdef;
-                }
-
-                if j != (MANC2H_PORT_623 | MANC2H_PORT_664) {
-                    // Attempt to create a new filter if none matched.
-                    for i in 0..8 {
-                        if self.er32(MDEF(i)) == 0 {
-                            self.ew32(MDEF(i), MANC2H_PORT_623 | MANC2H_PORT_664);
-                            manc2h |= 1 << 1; // Enabling in MANC2H, assuming BIT(1) was a typo for enabling a different bit.
-                            j += 1;
-                            break;
-                        }
-                    }
-
-                    if j == 0 {
-                        warn!("Unable to create IPMI pass-through filter");
-                    }
-                }
-            }
-        }
-
-        // Write the updated values back to the hardware registers.
-        self.ew32(MANC2H, manc2h);
-        self.ew32(MANC, manc);
-    }
-
-    fn ctrl_slu(&mut self) {
-        info!("Setup CTRL SLU");
-        let mut ctrl = self.er32(CTRL);
-        ctrl |= CTRL_SLU;
-        self.ew32(CTRL, ctrl);
-        self.e1e_flush();
     }
 
     fn e1e_rphy(&mut self, offset: u32) -> Result<u16> {
