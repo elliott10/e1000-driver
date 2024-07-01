@@ -11,6 +11,7 @@ use core::alloc::Layout;
 use core::cmp::min;
 use core::mem::{self, align_of_val, size_of};
 use core::ptr::NonNull;
+use core::sync::atomic::{AtomicBool, Ordering};
 use e1000::variant::{self, Variant};
 use ffi::CStr;
 use params::{Flags3, InterruptMode, Params, Settings};
@@ -25,6 +26,7 @@ pub struct E1000 {
     pub(crate) params: Params,
     pub(crate) mac: MacInfo,
     pub(crate) phy: PhyInfo2,
+    phy_regs: PhyRegs,
     pub(crate) nvm: NvmInfo,
     pub(crate) bus: BusInfo,
     pub(crate) fc: FcInfo,
@@ -34,7 +36,7 @@ pub struct E1000 {
     rx_ring: Ring<RxDescExt>,
     tx_ring: Ring<TxDesc>,
     hw_stats: E1000HWStats,
-    is_link_up: bool,
+    is_link_up: AtomicBool,
     variant: Variant,
 }
 
@@ -89,11 +91,12 @@ impl E1000 {
             nvm,
             bus,
             eiac_mask: 0,
-            is_link_up: false,
+            is_link_up: Default::default(),
             rx_ring,
             tx_ring,
             variant,
             hw_contrl: None,
+            phy_regs: Default::default(),
             hw_stats: Default::default(),
             mng_cookie: Default::default(),
         };
@@ -601,8 +604,20 @@ impl E1000 {
         }
 
         if (icr & ICR_LSC) > 0 {
-            info!("interrupt: link status change");
+            let is_up = self.er32(STATUS) & STATUS_LU > 0;
+
             self.mac.get_link_status = true;
+
+            if is_up {
+                if let Ok(old_link) =
+                    self.is_link_up
+                        .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |_| Some(true))
+                {
+                    if !old_link {
+                        self.after_link_up();
+                    }
+                }
+            }
 
             if self.params.flags.rx_needs_restart {
                 info!("restart rx");
@@ -615,6 +630,142 @@ impl E1000 {
         self.ew32(IMS, IMS_OTHER | IMS_OTHER_MASK);
 
         Ok(())
+    }
+    fn after_link_up(&mut self) -> Result {
+        let mut tries = 0;
+        let dmoff_exit_timeout = 100;
+        /* Checking if MAC is in DMoff state*/
+        if (self.er32(FWSM) & ICH_FWSM_FW_VALID) > 0 {
+            let mut pcim_state = self.er32(STATUS);
+            while (pcim_state & STATUS_PCIM_STATE) > 0 {
+                tries += 1;
+                if (tries == dmoff_exit_timeout) {
+                    error!("Error in exiting dmoff");
+                    break;
+                }
+                kfn().delay(Duration::from_micros(10000));
+                pcim_state = self.er32(STATUS);
+
+                /* Checking if MAC exited DMoff state */
+                if (pcim_state & STATUS_PCIM_STATE) == 0 {
+                    // self.phy_hw_reset();
+                }
+            }
+        }
+
+        self.phy_read_status()?;
+        self.get_speed_and_duplex_copper();
+
+        self.check_downshift()?;
+
+        if (self.phy.speed_downgraded) {
+            warn!("Link Speed was downgraded by SmartSpeed");
+        }
+
+        self.phy.set_eee_pchlan()?;
+
+        let mut txb2b = true;
+
+        self.mac.config_collision_dist_generic();
+        self.config_fc_after_link_up()?;
+        /* workaround: re-program speed mode bit after
+         * link-up event
+         */
+        if (self.params.flags.tarc_speed_mode_bit && !txb2b) {
+            let mut tarc0 = self.er32(TARC(0));
+            tarc0 &= !BIT(21);
+            self.ew32(TARC(0), tarc0);
+        }
+        self.enable_receives();
+        /* enable transmits in the hardware, need to do this
+         * after setting TARC(0)
+         */
+        self.enable_transmits();
+
+        kfn().enable_net();
+
+        Ok(())
+    }
+    fn enable_receives(&mut self) {
+        let rctl = self.er32(RCTL);
+        self.ew32(RCTL, rctl | RCTL_EN);
+        self.params.flags.restart_now = false;
+    }
+    fn enable_transmits(&mut self) {
+        let mut tctl = self.er32(TCTL);
+        tctl |= TCTL_EN;
+        self.ew32(TCTL, tctl);
+    }
+    fn phy_read_status(&mut self) -> Result {
+        let mut phy = self.phy_regs.clone();
+        if self.er32(STATUS) & STATUS_LU > 0 && self.phy.media_type == MediaType::media_type_copper
+        {
+            phy.bmcr = self.e1e_rphy(MII_BMCR)?;
+            phy.bmsr = self.e1e_rphy(MII_BMSR)?;
+            phy.advertise = self.e1e_rphy(MII_ADVERTISE)?;
+            phy.lpa = self.e1e_rphy(MII_LPA)?;
+            phy.expansion = self.e1e_rphy(MII_EXPANSION)?;
+            phy.ctrl1000 = self.e1e_rphy(MII_CTRL1000)?;
+            phy.stat1000 = self.e1e_rphy(MII_STAT1000)?;
+            phy.estatus = self.e1e_rphy(MII_ESTATUS)?;
+        } else {
+            /* Do not read PHY registers if link is not up
+             * Set values to typical power-on defaults
+             */
+            phy.bmcr = (BMCR_SPEED1000 | BMCR_ANENABLE | BMCR_FULLDPLX);
+            phy.bmsr = (BMSR_100FULL
+                | BMSR_100HALF
+                | BMSR_10FULL
+                | BMSR_10HALF
+                | BMSR_ESTATEN
+                | BMSR_ANEGCAPABLE
+                | BMSR_ERCAP);
+            phy.advertise =
+                (ADVERTISE_PAUSE_ASYM | ADVERTISE_PAUSE_CAP | ADVERTISE_ALL | ADVERTISE_CSMA);
+            phy.lpa = 0;
+            phy.expansion = EXPANSION_ENABLENPAGE;
+            phy.ctrl1000 = ADVERTISE_1000FULL;
+            phy.stat1000 = 0;
+            phy.estatus = (ESTATUS_1000_TFULL | ESTATUS_1000_THALF);
+        }
+        self.phy_regs = phy;
+        Ok(())
+    }
+
+    fn print_status(&mut self) {
+        let status = self.er32(STATUS);
+        let ctrl = self.er32(CTRL);
+
+        let speed = if status & STATUS_SPEED_10 > 0 {
+            "10Mbps"
+        } else if status & STATUS_SPEED_100 > 0 {
+            "100Mbps"
+        } else {
+            "1000Mbps"
+        };
+
+        let duplex = if status & STATUS_FD > 0 {
+            "Full"
+        } else {
+            "Half"
+        };
+
+        info!(
+            "MAC Status: {:#X} Duplex {}, LU {}, Flow Control {}, Speed {}",
+            status,
+            duplex,
+            (status & STATUS_LU) != 0,
+            if ((ctrl & CTRL_TFCE) > 0) && ((ctrl & CTRL_RFCE) > 0) {
+                "Rx/Tx"
+            } else if (ctrl & CTRL_RFCE) > 0 {
+                "Rx"
+            } else if (ctrl & CTRL_TFCE) > 0 {
+                "Tx"
+            } else {
+                "None"
+            },
+            speed,
+        );
     }
 
     ///  e1000_read_mac_addr_generic - Read device MAC address
@@ -664,6 +815,15 @@ impl E1000 {
 
         self.e1e_flush();
     }
+
+    pub fn trigger_lsc(&self) {
+        if self.params.int_mode == InterruptMode::MSIX {
+            self.ew32(ICS, ICS_LSC | ICS_OTHER);
+        } else {
+            self.ew32(ICS, ICS_LSC);
+        }
+    }
+
     /**
      *  e1000e_init_rx_addrs - Initialize receive address's
      *  @hw: pointer to the HW structure
@@ -1485,28 +1645,64 @@ impl E1000 {
     }
 
     pub fn xmit(&mut self, config: E1000XmitConfig, packet: &[u8]) -> Result<u32> {
-        // let mut i = self.tx_ring.next_to_use;
+        let mut i = self.tx_ring.next_to_use;
 
-        // // info!("transmit [{}] len {}", i, packet.len());
-        // let n = {
-        //     let n = self.tx_ring.one_copy_data_from(i, packet);
+        let n = {
+            let n = self.tx_ring.elem_copy_from_slice(i, packet);
 
-        //     let mut tx_desc = &mut self.tx_ring.as_mut()[i];
-        //     tx_desc.lower = (TXD_CMD_EOP | TXD_CMD_IFCS | TXD_CMD_RS | (n as u32 & 0xffff)).to_le();
-        //     tx_desc.status = 0;
-        //     n
-        // };
-        // i += 1;
-        // if i >= self.tx_ring.size {
-        //     i = 0;
-        // }
-        // self.tx_ring.next_to_use = i;
-        // self.ew32(TDT(0), i as u32);
+            let mut tx_desc: &mut TxDesc = self.tx_ring[i].desc_mut();
+            unsafe {
+                tx_desc.lower.data =
+                    (TXD_CMD_EOP | TXD_CMD_IFCS | TXD_CMD_RS | (n as u32 & 0xffff)).to_le();
+            }
+            tx_desc.status = 0;
+            n
+        };
+        i += 1;
+        if i >= self.tx_ring.len() {
+            i = 0;
+        }
+        self.tx_ring.next_to_use = i;
+        self.ew32(TDT(0), i as u32);
 
-        // Ok(n as u32)
-        Ok(0)
+        Ok(n as u32)
     }
+    pub fn clean_tx_irq(&mut self) -> bool {
+        let mut pkts = 0;
+        let mut bytes = 0;
 
+        let mut i = self.tx_ring.next_to_clean;
+        loop {
+            let desc: &mut TxDesc = self.tx_ring[i].desc_mut();
+            if (desc.status & (TXD_STAT_DD as u8)) == 0 {
+                break;
+            }
+            let len = unsafe { desc.lower.flags.length as u32 };
+            // info!("tx [{}] ok len {}", i, len);
+            pkts += 1;
+            bytes += len;
+
+            desc.status = 0;
+
+            i += 1;
+
+            if i >= self.tx_ring.len() {
+                i = 0;
+            }
+        }
+
+        self.tx_ring.next_to_clean = i;
+        kfn().on_xmit_completed(pkts, bytes);
+        true
+    }
+    pub fn irq_handle_msix_tx(&mut self) {
+        if self.clean_tx_irq() {
+            self.ew32(IMS, self.tx_ring.ims_val);
+        } else {
+            /* Ring was not completely cleaned, so fire another interrupt */
+            self.ew32(ICS, self.tx_ring.ims_val);
+        }
+    }
     pub fn clean_rx(&mut self, max: u32) -> Vec<RcvPkt> {
         let mut out = Vec::new();
 
@@ -1561,18 +1757,6 @@ impl E1000 {
         for i in 0..self.mac.mta_reg_count as u32 {
             self.reg.write_reg_array(MTA, i, 0);
         }
-    }
-
-    fn enable_receives(&mut self) {
-        info!("enable rx");
-        let rctl = self.er32(RCTL);
-        self.ew32(RCTL, rctl | RCTL_EN);
-    }
-    fn enable_transmits(&mut self) {
-        info!("enable tx");
-        let mut tctl = self.er32(TCTL);
-        tctl |= TCTL_EN;
-        self.ew32(TCTL, tctl);
     }
 
     fn e1e_rphy(&mut self, offset: u32) -> Result<u16> {
@@ -1712,6 +1896,8 @@ impl E1000 {
     }
 
     pub fn task_watchdog(&mut self) -> Result<bool> {
+        self.print_status();
+
         Ok(false)
     }
 

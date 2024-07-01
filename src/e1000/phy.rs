@@ -413,6 +413,31 @@ impl PhyInfo2 {
         self.copper_link_setup_82577()
     }
 
+    pub(crate) fn set_eee_pchlan(&self) -> Result {
+        let mut lpa;
+        let mut pcs_status;
+        let mut adv_addr;
+
+        match self.kind {
+            PhyType::T82579 => {
+                lpa = I82579_EEE_LP_ABILITY;
+                pcs_status = I82579_EEE_PCS_STATUS;
+                adv_addr = I82579_EEE_ADVERTISEMENT;
+            }
+            PhyType::I217 => {
+                lpa = I217_EEE_LP_ABILITY;
+                pcs_status = I217_EEE_PCS_STATUS;
+                adv_addr = I217_EEE_ADVERTISEMENT;
+            }
+            _ => return Ok(()),
+        }
+
+        let mut lpi_ctrl = self.e1e_rphy(I82579_LPI_CTRL)?;
+        /* Clear bits that enable EEE in various speeds */
+        lpi_ctrl &= !I82579_LPI_CTRL_ENABLE_MASK;
+
+        self.e1e_wphy(I82579_LPI_CTRL, lpi_ctrl)
+    }
     fn copper_link_setup_82577(&mut self) -> Result {
         let mut phy_data = self.e1e_rphy(I82577_CFG_REG)?;
 

@@ -361,6 +361,9 @@ int e1000e_open(struct net_device *netdev) {
   pm_runtime_put(&pdev->dev);
 
   pr_info("e1000e open ok");
+
+  // e1000r_trigger_lsc(e1000);
+
   // mod_timer(&adapter->watchdog_timer, round_jiffies(jiffies + 1));
   return 0;
 err_req_irq:

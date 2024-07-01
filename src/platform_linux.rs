@@ -33,6 +33,7 @@ struct KFun {
     cb_pci_read_config_word: E1000CbPciReadConfigWord,
     cb_on_xmit_completed: E1000CbOnXmitCompleted,
     cb_enable_net: E1000CbEnableNet,
+    // cb_wakeup_watchdog: E1000CbWakeupWatchdog,
     cb_pcie_cap_offset: E1000CbPcieCapOffset,
     adapter: *const c_void,
 }
@@ -86,6 +87,20 @@ impl KernelFunc2 for KFun {
     fn dma_free_coherent(&self, dma: DMAInfo) {
         unsafe { (self.cb_dma_free)(self.adapter, dma.cpu_addr, dma.dma_addr, dma.size) }
     }
+
+    fn enable_net(&self) {
+        unsafe { ((self.cb_enable_net)(self.adapter)) }
+    }
+
+    fn on_xmit_completed(&self, pkts: u32, bytes: u32) {
+        unsafe { (self.cb_on_xmit_completed)(self.adapter, pkts, bytes) }
+    }
+
+    // fn wakeup_watchdog(&self) {
+
+    //     unsafe { ((self.cb_enable_net)(self.adapter)) }
+
+    // }
 }
 impl KernelFunc for KFun {
     fn dma_alloc_coherent(&self, pages: usize) -> (usize, u64) {
@@ -160,6 +175,7 @@ pub type E1000CbOnXmitCompleted = unsafe extern "C" fn(pdev: *const c_void, pkts
 pub type E1000CbOnRcv = unsafe extern "C" fn(pdev: *const c_void, pkt: E1000RcvPkt);
 
 pub type E1000CbEnableNet = unsafe extern "C" fn(pdev: *const c_void);
+pub type E1000CbWakeupWatchdog = unsafe extern "C" fn(pdev: *const c_void);
 pub type E1000CbPcieCapOffset = unsafe extern "C" fn(pdev: *const c_void) -> i32;
 #[repr(C)]
 pub struct E1000Config {
@@ -271,7 +287,7 @@ unsafe extern "C" fn e1000r_irq_handle_msix_other(ptr: usize, irq: i32) -> i32 {
 unsafe extern "C" fn e1000r_irq_handle_msix_tx(ptr: usize, irq: i32) -> i32 {
     let dev = dev_mut(ptr);
 
-    // dev.dev.irq_handle_msix_tx();
+    dev.dev.irq_handle_msix_tx();
     0
 }
 
@@ -336,7 +352,7 @@ extern "C" fn e1000_print_device_info(ptr: usize) {
 #[no_mangle]
 unsafe extern "C" fn e1000r_trigger_lsc(ptr: usize) {
     let dev = dev_mut(ptr);
-    // dev.dev.trigger_lsc()
+    dev.dev.trigger_lsc()
 }
 #[no_mangle]
 unsafe extern "C" fn e1000r_task_watchdog(ptr: usize) -> bool {

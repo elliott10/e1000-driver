@@ -63,6 +63,20 @@ where
             dma_buff,
         })
     }
+
+    pub fn elem_copy_from_slice(&mut self, index: usize, src: &[u8]) -> usize {
+        let len = src.len().min(self.buff_len);
+
+        let buf = unsafe {
+            &mut *slice_from_raw_parts_mut(
+                (self.dma_buff.cpu_addr() + index * self.buff_len) as *mut u8,
+                self.buff_len,
+            )
+        };
+
+        buf[..len].copy_from_slice(&src[..len]);
+        len
+    }
 }
 
 impl<T> Deref for Ring<T>
@@ -111,11 +125,23 @@ where
 }
 
 #[repr(C)]
-pub struct TxDesc {
-    pub addr: u64,
+pub union TxDescLower {
+    pub data: u32,
+    pub flags: TxDescLowerFlags,
+}
+
+#[derive(Clone, Copy)]
+#[repr(C)]
+pub struct TxDescLowerFlags {
     pub length: u16, /* Data buffer length */
     pub cso: u8,     /* Checksum offset */
     pub cmd: u8,     /* Descriptor control */
+}
+
+#[repr(C)]
+pub struct TxDesc {
+    pub addr: u64,
+    pub lower: TxDescLower,
     pub status: u8,
     pub css: u8,
     pub special: u16,

@@ -115,6 +115,11 @@ pub trait KernelFunc2 {
 
     /// DMA 释放
     fn dma_free_coherent(&self, dma: DMAInfo);
+
+    fn enable_net(&self);
+
+    fn on_xmit_completed(&self, pkts: u32, bytes: u32);
+    // fn wakeup_watchdog(&self);
 }
 pub trait KernelFunc: Send + Sync + Clone {
     /// Page size (usually 4K)
