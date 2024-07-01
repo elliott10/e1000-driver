@@ -262,7 +262,7 @@ impl Reg {
         let mut i = ICH_FWSM_PCIM2PCI_COUNT;
 
         while ((self.er32(FWSM) & ICH_FWSM_PCIM2PCI) != 0) && i > 0 {
-            kfn().sleep(Duration::from_micros(50));
+            kfn().delay(Duration::from_millis(50));
             i -= 1;
         }
     }
@@ -296,7 +296,7 @@ impl Reg {
                 return Ok(());
             }
 
-            kfn().sleep(Duration::from_nanos(100));
+            kfn().delay(Duration::from_micros(100));
         }
 
         return Err(Error::Unknown("Master requests are pending."));
@@ -308,12 +308,12 @@ impl Reg {
      *
      *  Check EEPROM for Auto Read done bit.
      **/
-    pub fn get_auto_rd_done(&mut self) -> Result {
+    pub fn get_auto_rd_done(&self) -> Result {
         for _ in 0..AUTO_READ_DONE_TIMEOUT {
             if (self.er32(EECD) & EECD_AUTO_RD) > 0 {
                 return Ok(());
             }
-            kfn().sleep(Duration::from_nanos(1000));
+            kfn().delay(Duration::from_nanos(1000));
         }
 
         error!("Auto read by HW from NVM has not completed.");

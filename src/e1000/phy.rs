@@ -10,7 +10,7 @@ use super::{
     reg::*,
     variant::{e82571, ich8lan, Variant},
 };
-use crate::e1000::lock::Semaphore;
+use crate::e1000::lock::SemaphoreBackend;
 use crate::{defines::*, err::*, kfn, mac::MacType};
 use crate::{hw::MsType, MediaType, PhyType};
 
@@ -272,7 +272,7 @@ impl PhyInfo2 {
         self.reg.ew32(MDIC, mdic);
 
         for _ in 0..GEN_POLL_TIMEOUT * 3 {
-            kfn().sleep(Duration::from_nanos(50));
+            kfn().delay(Duration::from_micros(50));
             mdic = self.reg.er32(MDIC);
             if (mdic & MDIC_READY) > 0 {
                 break;
@@ -301,7 +301,7 @@ impl PhyInfo2 {
          * reading duplicate data in the next MDIC transaction.
          */
         if (self.mac_kind == MacType::e1000_pch2lan) {
-            kfn().sleep(Duration::from_nanos(100));
+            kfn().delay(Duration::from_micros(100));
         }
 
         Ok(())
@@ -323,7 +323,7 @@ impl PhyInfo2 {
         reg.ew32(MDIC, mdic);
 
         for _ in 0..GEN_POLL_TIMEOUT * 3 {
-            kfn().sleep(Duration::from_nanos(50));
+            kfn().delay(Duration::from_micros(50));
             mdic = reg.er32(MDIC);
             if (mdic & MDIC_READY) > 0 {
                 break;
@@ -352,7 +352,7 @@ impl PhyInfo2 {
          * reading duplicate data in the next MDIC transaction.
          */
         if (self.mac_kind == MacType::e1000_pch2lan) {
-            kfn().sleep(Duration::from_nanos(100));
+            kfn().delay(Duration::from_micros(100));
         }
 
         Ok((mdic & 0xFFFF) as u16)

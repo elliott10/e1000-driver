@@ -56,9 +56,9 @@ impl Variant {
         }
     }
 
-    pub(crate) fn reset_hw(&self, e1000: &E1000)->Result{
-        match self.kind {
-                        VariantKind::B82571(ctx) => ctx.reset_hw(e1000),
+    pub(crate) fn reset_hw(&self, e1000: &E1000) -> Result {
+        match &self.kind {
+            VariantKind::B82571(ctx) => ctx.reset_hw(e1000),
             VariantKind::Ich8lan(ctx) => todo!(),
         }
     }

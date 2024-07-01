@@ -7,6 +7,8 @@ use crate::e1000::nvm::*;
 use crate::e1000::reg;
 use crate::e1000::reg::*;
 use crate::kfn;
+use crate::lock::Semaphore;
+use crate::lock::SemaphoreBackend;
 use crate::phy::{self, PhyInfo2};
 use crate::E1000;
 use crate::{defines::*, err::*, PhyType};
@@ -182,13 +184,8 @@ impl VariantCommon for Context {
 
         reg.e1e_flush();
 
-        kfn().sleep(Duration::from_nanos(10000));
+        kfn().delay(Duration::from_micros(10000));
 
-        res = match e1000.mac.kind {
-            MacType::e1000_82573 => self.get_hw_semaphore_82573(hw),
-            MacType::e1000_82574 | MacType::e1000_82583 => self.get_hw_semaphore_82574(hw),
-            _ => Ok(()), // Default case - no action needed or handle error
-        };
 
         let ctrl = reg.er32(CTRL);
 
@@ -197,7 +194,7 @@ impl VariantCommon for Context {
         reg.ew32(CTRL, ctrl | CTRL_RST);
 
         if e1000.nvm.kind == NvmType::FlashHw {
-            kfn().sleep(Duration::from_nanos(10));
+            kfn().delay(Duration::from_micros(10));
             let mut ctrl_ext = reg.er32(CTRL_EXT);
             ctrl_ext |= CTRL_EXT_EE_RST;
             reg.ew32(CTRL_EXT, ctrl_ext);
@@ -208,7 +205,7 @@ impl VariantCommon for Context {
 
         // Assuming ew32 andreg.er32 are functions defined elsewhere to write and read from the given register addresses respectively.
 
-        match e1000.mac.kind {
+        match &e1000.mac.kind {
             MacType::e1000_82571 | MacType::e1000_82572 => {
                 // REQ and GNT bits need to be cleared when using AUTO_RD to access the EEPROM.
                 let mut eecd = reg.er32(EECD);
@@ -217,7 +214,7 @@ impl VariantCommon for Context {
             }
             MacType::e1000_82573 | MacType::e1000_82574 | MacType::e1000_82583 => {
                 // Delay for 25 milliseconds to allow Phy configuration to complete.
-                kfn().sleep(Duration::from_millis(25));
+                kfn().delay(Duration::from_millis(25));
             }
             _ => {} // Handle other cases or do nothing
         }
@@ -225,7 +222,14 @@ impl VariantCommon for Context {
         /* Clear any pending interrupt events. */
         reg.ew32(IMC, 0xffffffff);
         reg.er32(ICR);
+
+
+        Ok(())
     }
+}
+
+impl Context {
+
 }
 
 #[derive(Debug, Clone)]
@@ -239,8 +243,8 @@ impl PhySemaphore {
     }
 }
 
-impl crate::lock::Semaphore for PhySemaphore {
-    fn acquire(&self) -> crate::err::Result {
+impl crate::lock::SemaphoreBackend for PhySemaphore {
+    fn acquire(&self) -> Result {
         Ok(())
     }
 
@@ -258,10 +262,12 @@ impl NvmSemaphore {
     }
 }
 
-impl crate::lock::Semaphore for NvmSemaphore {
-    fn acquire(&self) -> crate::err::Result {
+impl crate::lock::SemaphoreBackend for NvmSemaphore {
+    fn acquire(&self) -> Result {
         Ok(())
     }
 
     fn release(&self) {}
 }
+
+

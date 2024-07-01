@@ -21,7 +21,7 @@ const TX_RING_SIZE: usize = 256;
 const RX_RING_SIZE: usize = 256;
 
 pub struct E1000 {
-    pub(crate)reg: Reg,
+    pub(crate) reg: Reg,
     pub(crate) params: Params,
     pub(crate) mac: MacInfo,
     pub(crate) phy: PhyInfo2,
@@ -97,10 +97,10 @@ impl E1000 {
 
         unsafe { CARD_FOUND = card_found };
 
+        e1000.reset_hw()?;
+
         e1000.mac.read_mac_addr_generic(reg);
         e1000.phy.autoneg_wait_to_complete = false;
-
-        
 
         e1000.phy.copper_options();
 
@@ -114,7 +114,7 @@ impl E1000 {
 
         e1000.reset()?;
 
-        if e1000.params.flags.has_amt{
+        if e1000.params.flags.has_amt {
             e1000.get_hw_control();
         }
 
@@ -344,10 +344,8 @@ impl E1000 {
         Ok(())
     }
 
-    fn reset_hw(&self)->Result{
-        match self.variant {
-            
-        }
+    fn reset_hw(&self) -> Result {
+        self.variant.reset_hw(self)
     }
     /**
      * get_hw_control - get control of the h/w from f/w
@@ -417,7 +415,7 @@ impl E1000 {
         }
         self.ew32(TDT(0), self.tx_ring.next_to_use as u32);
 
-        kfn().sleep(Duration::from_nanos(200));
+        kfn().delay(Duration::from_micros(200));
     }
 
     /**
@@ -435,7 +433,7 @@ impl E1000 {
 
         self.e1e_flush();
 
-        kfn().sleep(Duration::from_nanos(100));
+        kfn().delay(Duration::from_micros(100));
 
         let mut rxdctl = self.er32(RXDCTL(0));
         /* zero the lower 14 bits (prefetch and host thresholds) */
@@ -452,7 +450,7 @@ impl E1000 {
         self.ew32(RCTL, rctl | RCTL_EN);
         self.e1e_flush();
 
-        kfn().sleep(Duration::from_nanos(100));
+        kfn().delay(Duration::from_micros(100));
 
         self.ew32(RCTL, rctl & (!RCTL_EN));
     }

@@ -3,7 +3,7 @@ use core::time::Duration;
 use super::reg::*;
 use super::variant::*;
 use crate::defines::*;
-use crate::e1000::lock::Semaphore;
+use crate::e1000::lock::SemaphoreBackend;
 use crate::err::{Error, Result};
 use crate::kfn;
 use alloc::vec::Vec;
@@ -121,7 +121,7 @@ impl NvmInfo {
                 return Ok(());
             }
 
-            kfn().sleep(Duration::from_nanos(5));
+            kfn().delay(Duration::from_micros(5));
         }
 
         Err(Error::Nvm("poll fail"))

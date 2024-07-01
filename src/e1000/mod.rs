@@ -101,8 +101,8 @@ pub trait KernelFunc2 {
     /// BAR remap address
     fn bar_n_remap(&self, bar: usize) -> usize;
 
-    /// sleep
-    fn sleep(&self, duration: Duration);
+    /// delay
+    fn delay(&self, duration: Duration);
 
     /// Pcie 读取
     fn pci_read_config_word(&self, where_: i32) -> u16;

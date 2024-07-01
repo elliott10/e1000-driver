@@ -44,20 +44,20 @@ impl KernelFunc2 for KFun {
         unsafe { (self.cb_bar_n_remap)(self.adapter, bar) }
     }
 
-    fn sleep(&self, duration: Duration) {
+    fn delay(&self, duration: Duration) {
         let secs = duration.as_secs();
-        let usecs = duration.subsec_nanos();
+        let micro = duration.subsec_micros();
         unsafe {
-            if usecs > 1000 {
-                let n = usecs / 1000;
+            if micro > 1000 {
+                let n = micro / 1000;
                 for _ in 0..n {
                     ((self.cb_udelay)(1000));
                 }
             } else {
-                ((self.cb_udelay)(usecs));
+                ((self.cb_udelay)(micro));
             }
 
-            let n = secs / 1_000_000;
+            let n = secs / 1_000;
 
             for _ in 0..n {
                 ((self.cb_udelay)(1000));

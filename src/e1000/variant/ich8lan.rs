@@ -31,4 +31,8 @@ impl VariantCommon for Context {
     fn init_nvm_params(&self, mac: &MacInfo, board: &BoardInfo, reg: Reg) -> Result<NvmInfo> {
         todo!()
     }
+
+    fn reset_hw(&self, e1000: &crate::E1000) -> Result {
+        todo!()
+    }
 }
