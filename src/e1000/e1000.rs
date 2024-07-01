@@ -462,6 +462,70 @@ impl E1000 {
 
         self.ew32(RCTL, rctl);
     }
+
+    pub fn configure_msix(&mut self) {
+        info!("Configuring MSI-X");
+        self.eiac_mask = 0;
+        let mut ivar = 0;
+        let mut vector = 0;
+
+        /* Workaround issue with spurious interrupts on 82574 in MSI-X mode */
+        if self.mac.kind == MacType::e1000_82574 {
+            let mut rfctl = self.er32(RFCTL);
+
+            rfctl |= RFCTL_ACK_DIS;
+            self.ew32(RFCTL, rfctl);
+        }
+        let itr_val = self.params.itr;
+
+        info!("itr val = {}", itr_val);
+
+        /* Configure Rx vector */
+        self.rx_ring.ims_val = IMS_RXQ0;
+        self.eiac_mask |= self.rx_ring.ims_val;
+
+        if itr_val > 0 {
+            let val = 1000000000 / (itr_val * 256);
+            self.write_reg(EITR_82574(vector as _), val);
+        } else {
+            self.write_reg(EITR_82574(vector as _), 1);
+        }
+        ivar = IVAR_INT_ALLOC_VALID | vector;
+
+        /* Configure Tx vector */
+        self.tx_ring.ims_val = IMS_TXQ0;
+        vector += 1;
+        self.eiac_mask |= self.tx_ring.ims_val;
+
+        if itr_val > 0 {
+            let val = 1000000000 / (itr_val * 256);
+            self.write_reg(EITR_82574(vector as _), val);
+        } else {
+            self.write_reg(EITR_82574(vector as _), 1);
+        }
+        ivar |= ((IVAR_INT_ALLOC_VALID | vector) << 8);
+
+        /* set vector for Other Causes, e.g. link changes */
+        vector += 1;
+        ivar |= ((IVAR_INT_ALLOC_VALID | vector) << 16);
+        if itr_val > 0 {
+            let val = 1000000000 / (itr_val * 256);
+            self.write_reg(EITR_82574(vector as _), val);
+        } else {
+            self.write_reg(EITR_82574(vector as _), 1);
+        }
+
+        /* Cause Tx interrupts on every write back */
+        ivar |= BIT(31);
+
+        self.ew32(IVAR, ivar);
+
+        /* enable MSI-X PBA support */
+        let mut ctrl_ext = self.er32(CTRL_EXT) & !CTRL_EXT_IAME;
+        ctrl_ext |= CTRL_EXT_PBA_CLR | CTRL_EXT_EIAME;
+        self.ew32(CTRL_EXT, ctrl_ext);
+        self.e1e_flush();
+    }
     fn setup_default_fc(&mut self) -> Result {
         if (self.fc.requested_mode == FcMode::Default) {
             match &self.variant.kind {
@@ -521,6 +585,34 @@ impl E1000 {
         } else {
             info!("Unable to establish link!!!");
         }
+
+        Ok(())
+    }
+
+    /// irq_handle
+    pub fn irq_handle_msix_other(&mut self, irq: i32) -> Result {
+        let icr = self.er32(ICR);
+        if (icr & ICR_INT_ASSERTED) == 0 {
+            return Ok(());
+        }
+
+        if (icr & self.eiac_mask) > 0 {
+            self.ew32(ICS, (icr & self.eiac_mask));
+        }
+
+        if (icr & ICR_LSC) > 0 {
+            info!("interrupt: link status change");
+            self.mac.get_link_status = true;
+
+            if self.params.flags.rx_needs_restart {
+                info!("restart rx");
+                let rctl = self.er32(RCTL);
+                self.ew32(RCTL, rctl & !RCTL_EN);
+                self.params.flags.restart_now = true;
+            }
+        }
+
+        self.ew32(IMS, IMS_OTHER | IMS_OTHER_MASK);
 
         Ok(())
     }

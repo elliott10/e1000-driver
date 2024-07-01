@@ -163,6 +163,8 @@ enum InterruptMode e1000r_irq_get_mode(size_t ptr);
 
 int32_t e1000r_irq_handle(size_t ptr, int32_t irq);
 
+int32_t e1000r_irq_handle_msix_other(size_t ptr, int32_t irq);
+
 int32_t e1000r_irq_handle_msix_tx(size_t ptr, int32_t irq);
 
 void e1000r_irq_set_mode(size_t ptr, enum InterruptMode mode);
