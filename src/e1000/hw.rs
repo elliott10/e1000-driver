@@ -1,7 +1,8 @@
 use defines::*;
+use e1000::reg::*;
+use params::Flags3;
 use phy::*;
 
-use super::regs::*;
 use crate::err::{Error, Result};
 use crate::*;
 use core::alloc::Layout;
@@ -268,5 +269,36 @@ impl BusInfo {
         };
 
         BusInfo { width, fun: 0 }
+    }
+}
+
+pub(crate) struct HwControl {
+    reg: Reg,
+    flags: Flags3,
+}
+
+impl HwControl {
+    pub(crate) fn new(reg: Reg, flags: Flags3) -> Self {
+        if flags.has_swsm_on_load {
+            let swsm = reg.er32(SWSM);
+            reg.ew32(SWSM, swsm | SWSM_DRV_LOAD);
+        } else if flags.has_ctrlext_on_load {
+            let ctrl_ext = reg.er32(CTRL_EXT);
+            reg.ew32(CTRL_EXT, ctrl_ext | CTRL_EXT_DRV_LOAD);
+        }
+
+        HwControl { reg, flags }
+    }
+}
+
+impl Drop for HwControl {
+    fn drop(&mut self) {
+        if self.flags.has_swsm_on_load {
+            let swsm = self.reg.er32(SWSM);
+            self.reg.ew32(SWSM, swsm & !SWSM_DRV_LOAD);
+        } else if self.flags.has_ctrlext_on_load {
+            let ctrl_ext = self.reg.er32(CTRL_EXT);
+            self.reg.ew32(CTRL_EXT, ctrl_ext & !CTRL_EXT_DRV_LOAD);
+        }
     }
 }

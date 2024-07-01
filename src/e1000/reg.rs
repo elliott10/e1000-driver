@@ -217,6 +217,7 @@ use core::time::Duration;
 
 use crate::kfn;
 use crate::BoardInfo;
+use crate::MacAddress;
 use crate::{defines::*, err::*, mac::MacType};
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -319,4 +320,7 @@ impl Reg {
         error!("Auto read by HW from NVM has not completed.");
         Err(Error::Nvm("Auto read by HW from NVM has not completed."))
     }
+
+
+
 }

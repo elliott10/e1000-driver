@@ -29,6 +29,8 @@ pub struct E1000 {
     pub(crate) bus: BusInfo,
     pub(crate) fc: FcInfo,
     pub(crate) eiac_mask: u32,
+    pub(crate) mng_cookie: HostMngDhcpCookie,
+    hw_contrl: Option<HwControl>,
     rx_ring: Ring<RxDescExt>,
     tx_ring: Ring<TxDesc>,
     hw_stats: E1000HWStats,
@@ -91,7 +93,9 @@ impl E1000 {
             rx_ring,
             tx_ring,
             variant,
+            hw_contrl: None,
             hw_stats: Default::default(),
+            mng_cookie: Default::default(),
         };
         e1000.irq_disable();
 
@@ -115,7 +119,7 @@ impl E1000 {
         e1000.reset()?;
 
         if e1000.params.flags.has_amt {
-            e1000.get_hw_control();
+            e1000.hw_contrl = Some(HwControl::new(reg, e1000.flags()));
         }
 
         info!(
@@ -181,7 +185,31 @@ impl E1000 {
 
         self.e1e_flush();
     }
+    /**
+     *  e1000e_init_rx_addrs - Initialize receive address's
+     *  @hw: pointer to the HW structure
+     *  @rar_count: receive address registers
+     *
+     *  Setup the receive address registers by setting the base receive address
+     *  register to the devices MAC address and clearing all the other receive
+     *  address registers to 0.
+     **/
+    pub(crate) fn init_rx_addrs(&self, rar_count: u16) {
+        let mut mac = MacAddress(self.mac.addr);
 
+        /* Setup the receive address */
+        info!("Programming MAC Address into RAR[0]: {}", mac);
+
+        self.rar_set(0, mac);
+
+        /* Zero out the other (rar_entry_count - 1) receive addresses */
+        info!("Clearing RAR[1-{}]", rar_count - 1);
+
+        mac = MacAddress([0; 6]);
+        for i in 1..rar_count {
+            self.rar_set(i as usize, mac);
+        }
+    }
     /**
      * reset - bring the hardware into a known good state
      *
@@ -339,30 +367,48 @@ impl E1000 {
             self.flush_desc_ring();
         }
 
+        self.reset_hw()?;
+
+        if self.params.flags.has_amt {
+            self.hw_contrl = Some(HwControl::new(self.reg, self.flags()));
+        }
+
         self.ew32(WUC, 0);
 
+        self.init_hw()?;
+
+        self.reset_adaptive();
+
         Ok(())
+    }
+
+    /**
+     *  e1000e_reset_adaptive - Reset Adaptive Interframe Spacing
+     *  @hw: pointer to the HW structure
+     *
+     *  Reset the Adaptive Interframe Spacing throttle to default values.
+     **/
+    fn reset_adaptive(&mut self) {
+        if !self.mac.adaptive_ifs {
+            debug!("Not in Adaptive IFS mode!\n");
+            return;
+        }
+
+        self.mac.current_ifs_val = 0;
+        self.mac.ifs_min_val = IFS_MIN;
+        self.mac.ifs_max_val = IFS_MAX;
+        self.mac.ifs_step_size = IFS_STEP;
+        self.mac.ifs_ratio = IFS_RATIO;
+
+        self.mac.in_ifs_mode = false;
+        self.ew32(AIT, 0);
     }
 
     fn reset_hw(&self) -> Result {
         self.variant.reset_hw(self)
     }
-    /**
-     * get_hw_control - get control of the h/w from f/w
-     *
-     * get_hw_control sets {CTRL_EXT|SWSM}:DRV_LOAD bit.
-     * For ASF and Pass Through versions of f/w this means that
-     * the driver is loaded. For AMT version (only with 82573)
-     * of the f/w this means that the network i/f is open.
-     **/
-    fn get_hw_control(&mut self) {
-        if self.params.flags.has_swsm_on_load {
-            let swsm = self.er32(SWSM);
-            self.ew32(SWSM, swsm | SWSM_DRV_LOAD);
-        } else if self.params.flags.has_ctrlext_on_load {
-            let ctrl_ext = self.er32(CTRL_EXT);
-            self.ew32(CTRL_EXT, ctrl_ext | CTRL_EXT_DRV_LOAD);
-        }
+    fn init_hw(&self) -> Result {
+        self.variant.init_hw(self)
     }
     /**
      * release_hw_control - release control of the h/w to f/w
@@ -515,14 +561,14 @@ impl E1000 {
         }
     }
 
-    fn ew32(&self, offset: u32, value: u32) {
+    pub(crate) fn ew32(&self, offset: u32, value: u32) {
         self.reg.ew32(offset, value);
     }
 
-    fn er32(&self, offset: u32) -> u32 {
+    pub(crate) fn er32(&self, offset: u32) -> u32 {
         self.reg.er32(offset)
     }
-    fn e1e_flush(&self) {
+    pub(crate) fn e1e_flush(&self) {
         self.reg.e1e_flush();
     }
     pub fn set_interrupt_mode(&mut self, mode: InterruptMode) {

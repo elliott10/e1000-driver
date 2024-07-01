@@ -186,7 +186,6 @@ impl VariantCommon for Context {
 
         kfn().delay(Duration::from_micros(10000));
 
-
         let ctrl = reg.er32(CTRL);
 
         debug!("Issuing a global reset to MAC");
@@ -223,13 +222,173 @@ impl VariantCommon for Context {
         reg.ew32(IMC, 0xffffffff);
         reg.er32(ICR);
 
+        Ok(())
+    }
 
+    fn init_hw(&self, e1000: &E1000) -> Result {
+        self.init_hw_bits(e1000);
+
+        //TODO init led
+
+        /* Disabling VLAN filtering */
+        debug!("Initializing the IEEE VLAN");
+        self.clear_vfta(e1000);
+        let mut rar_count = e1000.mac.rar_entry_count;
+
+        if self.get_laa_state(e1000) {
+            rar_count -= 1;
+        }
+
+        e1000.init_rx_addrs(rar_count);
+
+        /* Zero out the Multicast HASH table */
+        info!("Zeroing the MTA");
+        for i in 0..e1000.mac.mta_reg_count {
+            e1000.reg.write_reg_array(MTA, i as _, 0);
+        }
         Ok(())
     }
 }
 
 impl Context {
+    fn init_hw_bits(&self, e1000: &E1000) {
+        let mut reg = e1000.er32(TXDCTL(0));
+        reg |= (1 << 22);
 
+        e1000.ew32(TXDCTL(0), reg);
+
+        /* Transmit Descriptor Control 1 */
+        reg = e1000.er32(TXDCTL(1));
+        reg |= (1 << 22);
+        e1000.ew32(TXDCTL(1), reg);
+
+        /* Transmit Arbitration Control 0 */
+        reg = e1000.er32(TARC(0));
+        reg &= !(0xF << 27); /* 30:27 */
+
+        match e1000.mac.kind {
+            MacType::e1000_82571 | MacType::e1000_82572 => {
+                reg |= BIT(23) | BIT(24) | BIT(25) | BIT(26);
+            }
+            MacType::e1000_82574 | MacType::e1000_82583 => {
+                reg |= BIT(26);
+            }
+            _ => (),
+        }
+
+        e1000.ew32(TARC(0), reg);
+        /* Transmit Arbitration Control 1 */
+        reg = e1000.er32(TARC(1));
+        match e1000.mac.kind {
+            MacType::e1000_82571 | MacType::e1000_82572 => {
+                reg &= !(BIT(29) | BIT(30));
+                reg |= BIT(22) | BIT(24) | BIT(25) | BIT(26);
+                if (e1000.er32(TCTL) & TCTL_MULR) > 0 {
+                    reg &= !BIT(28);
+                } else {
+                    reg |= BIT(28);
+                }
+                e1000.ew32(TARC(1), reg);
+            }
+            _ => (),
+        }
+        /* Device Control */
+        match e1000.mac.kind {
+            MacType::e1000_82573 | MacType::e1000_82574 | MacType::e1000_82583 => {
+                reg = e1000.er32(CTRL);
+                reg &= !BIT(29);
+                e1000.ew32(CTRL, reg);
+            }
+            _ => (),
+        }
+
+        /* Extended Device Control */
+        match e1000.mac.kind {
+            MacType::e1000_82573 | MacType::e1000_82574 | MacType::e1000_82583 => {
+                let mut reg = e1000.er32(CTRL_EXT);
+                reg &= !BIT(23);
+                reg |= BIT(22);
+                e1000.ew32(CTRL_EXT, reg);
+            }
+            _ => {}
+        }
+
+        if e1000.mac.kind == MacType::e1000_82571 {
+            let mut reg = e1000.er32(PBA_ECC);
+            reg |= PBA_ECC_CORR_EN;
+            e1000.ew32(PBA_ECC, reg);
+        }
+
+        // Workaround for hardware errata on 82571 and 82572
+        if [MacType::e1000_82571, MacType::e1000_82572].contains(&e1000.mac.kind) {
+            let mut reg = e1000.er32(CTRL_EXT);
+            reg &= !CTRL_EXT_DMA_DYN_CLK_EN;
+            e1000.ew32(CTRL_EXT, reg);
+        }
+
+        // Disable IPv6 extension header parsing
+        if e1000.mac.kind <= MacType::e1000_82573 {
+            let mut reg = e1000.er32(RFCTL);
+            reg |= RFCTL_IPV6_EX_DIS | RFCTL_NEW_IPV6_EXT_DIS;
+            e1000.ew32(RFCTL, reg);
+        }
+
+        // PCI-Ex Control Registers for specific types
+        match e1000.mac.kind {
+            MacType::e1000_82574 | MacType::e1000_82583 => {
+                let mut reg = e1000.er32(GCR);
+                reg |= BIT(22);
+                e1000.ew32(GCR, reg);
+
+                let mut reg = e1000.er32(GCR2);
+                reg |= 1;
+                e1000.ew32(GCR2, reg);
+            }
+            _ => (),
+        }
+    }
+    /**
+     *  e1000e_get_laa_state_82571 - Get locally administered address state
+     *  @hw: pointer to the HW structure
+     *
+     *  Retrieve and return the current locally administered address state.
+     **/
+    fn get_laa_state(&self, e1000: &E1000) -> bool {
+        if e1000.mac.kind != MacType::e1000_82571 {
+            return false;
+        }
+
+        return self.laa_is_present;
+    }
+    fn clear_vfta(&self, e1000: &E1000) {
+        let mut vfta_value = 0;
+        let mut vfta_offset = 0;
+        let mut vfta_bit_in_reg = 0;
+        match e1000.mac.kind {
+            MacType::e1000_82573 | MacType::e1000_82574 | MacType::e1000_82583 => {
+                if e1000.mng_cookie.vlan_id != 0 {
+                    // The VFTA is a 4096b bit-field, each identifying a single VLAN ID.
+                    // Determine which 32b entry (offset) into the array to set the VLAN ID (bit) of the manageability unit.
+                    vfta_offset = (e1000.mng_cookie.vlan_id >> VFTA_ENTRY_SHIFT) & VFTA_ENTRY_MASK;
+                    vfta_bit_in_reg =
+                        BIT((e1000.mng_cookie.vlan_id & VFTA_ENTRY_BIT_SHIFT_MASK) as usize);
+                }
+            }
+            _ => {}
+        }
+
+        for offset in 0..VLAN_FILTER_TBL_SIZE {
+            // If the offset we want to clear is the same offset of the manageability VLAN ID,
+            // then clear all bits except that of the manageability unit.
+            let vfta_value = if offset as u16 == vfta_offset {
+                vfta_bit_in_reg
+            } else {
+                0
+            };
+            e1000.reg.write_reg_array(VFTA, offset as _, vfta_value);
+            e1000.e1e_flush();
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -269,5 +428,3 @@ impl crate::lock::SemaphoreBackend for NvmSemaphore {
 
     fn release(&self) {}
 }
-
-

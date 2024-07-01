@@ -59,7 +59,13 @@ impl Variant {
     pub(crate) fn reset_hw(&self, e1000: &E1000) -> Result {
         match &self.kind {
             VariantKind::B82571(ctx) => ctx.reset_hw(e1000),
-            VariantKind::Ich8lan(ctx) => todo!(),
+            VariantKind::Ich8lan(ctx) => ctx.reset_hw(e1000),
+        }
+    }
+    pub(crate) fn init_hw(&self, e1000: &E1000) -> Result {
+        match &self.kind {
+            VariantKind::B82571(ctx) => ctx.init_hw(e1000),
+            VariantKind::Ich8lan(ctx) => ctx.init_hw(e1000),
         }
     }
 }
@@ -69,6 +75,7 @@ pub(crate) trait VariantCommon {
     fn init_nvm_params(&self, mac: &MacInfo, board: &BoardInfo, reg: Reg) -> Result<NvmInfo>;
     fn init_phy_params(&mut self, mac: &MacInfo, board: &BoardInfo, reg: Reg) -> Result<PhyInfo2>;
     fn reset_hw(&self, e1000: &E1000) -> Result;
+    fn init_hw(&self, e1000: &E1000) -> Result;
 
     fn get_variants(
         &mut self,

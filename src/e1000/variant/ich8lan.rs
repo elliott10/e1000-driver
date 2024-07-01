@@ -35,4 +35,8 @@ impl VariantCommon for Context {
     fn reset_hw(&self, e1000: &crate::E1000) -> Result {
         todo!()
     }
+    
+    fn init_hw(&self, e1000: &crate::E1000) -> Result {
+        todo!()
+    }
 }

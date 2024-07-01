@@ -136,7 +136,7 @@ pub(crate) const FWSM_MODE_MASK: u32 = 0xE;
 pub(crate) const FWSM_MODE_SHIFT: u8 = 1;
 
 pub(crate) const VLAN_ETH_DATA_LEN: usize = 1500; /* Max. octets in payload */
-pub(crate) const VLAN_ETH_HLEN: usize = 18; 
+pub(crate) const VLAN_ETH_HLEN: usize = 18;
 pub(crate) const VLAN_ETH_FRAME_LEN: usize = 1518; /* Max. octets in frame sans FCS */
 pub(crate) const VLAN_MAX_DEPTH: usize = 8; /* Max. number of nested VLAN tags parsed */
 pub(crate) const ETH_FCS_LEN: usize = 4; /* Octets in the FCS */
@@ -336,8 +336,6 @@ pub(crate) const TCTL_COLD_SHIFT: u32 = 12; // Collision distance shift
 pub(crate) const TCTL_SWXOFF: u32 = 0x00400000; // SW Xoff transmission
 pub(crate) const TCTL_PBE: u32 = 0x00800000; // Packet Burst Enable
 pub(crate) const TCTL_NRTU: u32 = 0x02000000; // No re-transmit on underrun
-
-
 
 /* Receive Control Flags */
 pub(crate) const RCTL_EN: u32 = 0x00000002; // enable
@@ -772,3 +770,7 @@ pub(crate) const ICH_MNG_IAMT_MODE: u32 = 0x2;
 
 pub(crate) const RAL_MAC_ADDR_LEN: usize = 4;
 pub(crate) const RAH_MAC_ADDR_LEN: usize = 2;
+pub(crate) const IFS_MAX: u16 = 80;
+pub(crate) const IFS_MIN: u16 = 40;
+pub(crate) const IFS_RATIO: u16 = 4;
+pub(crate) const IFS_STEP: u16 = 10;
