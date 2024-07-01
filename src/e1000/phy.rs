@@ -10,8 +10,14 @@ use super::{
     reg::*,
     variant::{e82571, ich8lan, Variant},
 };
-use crate::e1000::lock::SemaphoreBackend;
-use crate::{defines::*, err::*, kfn, mac::MacType};
+use crate::{
+    defines::*,
+    err::*,
+    kfn,
+    mac::{MacInfo, MacType},
+    E1000,
+};
+use crate::{e1000::lock::SemaphoreBackend, hw::FcMode};
 use crate::{hw::MsType, MediaType, PhyType};
 
 // IGP01E1000 Specific Registers
@@ -364,6 +370,315 @@ impl PhyInfo2 {
             self.disable_polarity_correction = false;
             self.ms_type = MsType::HwDefault;
         }
+    }
+
+    pub(crate) fn phy_has_link_generic(
+        &mut self,
+        iterations: u32,
+        usec_interval: u32,
+    ) -> Result<bool> {
+        let mut success = false;
+
+        for i in 0..iterations {
+            if self.e1e_rphy(MII_BMSR).is_err() {
+                kfn().delay(Duration::from_micros(usec_interval as u64));
+            }
+
+            let phy_status = self.e1e_rphy(MII_BMSR)?;
+            if phy_status & BMSR_LSTATUS != 0 {
+                success = true;
+                break;
+            }
+
+            kfn().delay(Duration::from_micros(usec_interval as u64));
+        }
+        Ok(success)
+    }
+    pub(crate) fn setup_copper_link_82571(&mut self) -> Result {
+        let mut ctrl = self.reg.er32(CTRL);
+        ctrl |= CTRL_SLU;
+        ctrl &= !(CTRL_FRCSPD | CTRL_FRCDPX);
+        self.reg.ew32(CTRL, ctrl);
+        self.reg.e1e_flush();
+
+        Ok(())
+    }
+    pub(crate) fn setup_copper_link_pch_lpt(&mut self) -> Result {
+        let mut ctrl = self.reg.er32(CTRL);
+        ctrl |= CTRL_SLU;
+        ctrl &= !(CTRL_FRCSPD | CTRL_FRCDPX);
+        self.reg.ew32(CTRL, ctrl);
+        self.reg.e1e_flush();
+
+        self.copper_link_setup_82577()
+    }
+
+    fn copper_link_setup_82577(&mut self) -> Result {
+        let mut phy_data = self.e1e_rphy(I82577_CFG_REG)?;
+
+        /* Enable CRS on Tx. This must be set for half-duplex operation. */
+        phy_data |= I82577_CFG_ASSERT_CRS_ON_TX;
+
+        /* Enable downshift */
+        phy_data |= I82577_CFG_ENABLE_DOWNSHIFT;
+
+        self.e1e_wphy(I82577_CFG_REG, phy_data)?;
+
+        /* Set MDI/MDIX mode */
+        phy_data = self.e1e_rphy(I82577_PHY_CTRL_2)?;
+        phy_data &= !I82577_PHY_CTRL2_MDIX_CFG_MASK;
+        /* Options:
+         *   0 - Auto (default)
+         *   1 - MDI mode
+         *   2 - MDI-X mode
+         */
+        match self.mdix {
+            1 => {}
+            2 => {
+                phy_data |= I82577_PHY_CTRL2_MANUAL_MDIX;
+            }
+            _ => {
+                phy_data |= I82577_PHY_CTRL2_AUTO_MDI_MDIX;
+            }
+        }
+        self.e1e_wphy(I82577_PHY_CTRL_2, phy_data)?;
+
+        self.set_master_slave_mode()
+    }
+    /**
+     *  e1000_set_master_slave_mode - Setup PHY for Master/slave mode
+     *  @hw: pointer to the HW structure
+     *
+     *  Sets up Master/slave mode
+     **/
+    pub(crate) fn set_master_slave_mode(&mut self) -> Result {
+        /* Resolve Master/Slave mode */
+        let mut phy_data = self.e1e_rphy(MII_CTRL1000)?;
+
+        /* load defaults for future use */
+        self.original_ms_type = if (phy_data & CTL1000_ENABLE_MASTER) > 0 {
+            if (phy_data & CTL1000_AS_MASTER) > 0 {
+                MsType::ForceMaster
+            } else {
+                MsType::ForceSlave
+            }
+        } else {
+            MsType::Auto
+        };
+
+        match self.ms_type {
+            MsType::HwDefault => {}
+            MsType::ForceMaster => phy_data |= (CTL1000_ENABLE_MASTER | CTL1000_AS_MASTER),
+            MsType::ForceSlave => {
+                phy_data |= CTL1000_ENABLE_MASTER;
+                phy_data &= !(CTL1000_AS_MASTER);
+            }
+            MsType::Auto => phy_data &= !CTL1000_ENABLE_MASTER,
+        }
+
+        return self.e1e_wphy(MII_CTRL1000, phy_data);
+    }
+
+    pub(crate) fn copper_link_autoneg(&mut self, current_mode: FcMode) -> Result {
+        /* Perform some bounds checking on the autoneg advertisement
+         * parameter.
+         */
+        self.autoneg_advertised &= self.autoneg_mask;
+
+        /* If autoneg_advertised is zero, we assume it was not defaulted
+         * by the calling code so we set to advertise full capability.
+         */
+        if self.autoneg_advertised == 0 {
+            self.autoneg_advertised = self.autoneg_mask;
+        }
+
+        info!("Reconfiguring auto-neg advertisement params");
+        self.phy_setup_autoneg(current_mode)?;
+
+        info!("Restarting Auto-Neg");
+
+        /* Restart auto-negotiation by setting the Auto Neg Enable bit and
+         * the Auto Neg Restart bit in the PHY control register.
+         */
+        let mut phy_ctrl = self.e1e_rphy(MII_BMCR)?;
+
+        phy_ctrl |= (BMCR_ANENABLE | BMCR_ANRESTART);
+        self.e1e_wphy(MII_BMCR, phy_ctrl)?;
+
+        /* Does the user want to wait for Auto-Neg to complete here, or
+         * check at a later time (for example, callback routine).
+         */
+        if (self.autoneg_wait_to_complete) {
+            let r = self.wait_autoneg();
+            if r.is_err() {
+                info!("Error while waiting for autoneg to complete");
+                r?;
+            }
+        }
+
+        info!("Auto-Neg Complete");
+        // self.mac.get_link_status = true;
+
+        Ok(())
+    }
+    fn phy_setup_autoneg(&mut self, current_mode: FcMode) -> Result {
+        let mut mii_1000t_ctrl_reg = 0;
+        let mut mii_autoneg_adv_reg = 0;
+
+        self.autoneg_advertised &= self.autoneg_mask;
+
+        /* Read the MII Auto-Neg Advertisement Register (Address 4). */
+        mii_autoneg_adv_reg = self.e1e_rphy(MII_ADVERTISE)?;
+
+        if (self.autoneg_mask & ADVERTISE_1000_FULL) > 0 {
+            /* Read the MII 1000Base-T Control Register (Address 9). */
+            mii_1000t_ctrl_reg = self.e1e_rphy(MII_CTRL1000)?;
+        }
+
+        /* Need to parse both autoneg_advertised and fc and set up
+         * the appropriate PHY registers.  First we will parse for
+         * autoneg_advertised software override.  Since we can advertise
+         * a plethora of combinations, we need to check each bit
+         * individually.
+         */
+
+        /* First we clear all the 10/100 mb speed bits in the Auto-Neg
+         * Advertisement Register (Address 4) and the 1000 mb speed bits in
+         * the  1000Base-T Control Register (Address 9).
+         */
+        mii_autoneg_adv_reg &=
+            !(ADVERTISE_100FULL | ADVERTISE_100HALF | ADVERTISE_10FULL | ADVERTISE_10HALF);
+        mii_1000t_ctrl_reg &= !(ADVERTISE_1000HALF | ADVERTISE_1000FULL);
+
+        info!("autoneg_advertised {:#X}", self.autoneg_advertised);
+
+        /* Do we want to advertise 10 Mb Half Duplex? */
+        if (self.autoneg_advertised & ADVERTISE_10_HALF) > 0 {
+            info!("Advertise 10mb Half duplex\n");
+            mii_autoneg_adv_reg |= ADVERTISE_10HALF;
+        }
+
+        /* Do we want to advertise 10 Mb Full Duplex? */
+        if (self.autoneg_advertised & ADVERTISE_10_FULL) > 0 {
+            info!("Advertise 10mb Full duplex\n");
+            mii_autoneg_adv_reg |= ADVERTISE_10FULL;
+        }
+
+        /* Do we want to advertise 100 Mb Half Duplex? */
+        if (self.autoneg_advertised & ADVERTISE_100_HALF) > 0 {
+            info!("Advertise 100mb Half duplex\n");
+            mii_autoneg_adv_reg |= ADVERTISE_100HALF;
+        }
+
+        /* Do we want to advertise 100 Mb Full Duplex? */
+        if (self.autoneg_advertised & ADVERTISE_100_FULL) > 0 {
+            info!("Advertise 100mb Full duplex\n");
+            mii_autoneg_adv_reg |= ADVERTISE_100FULL;
+        }
+
+        /* We do not allow the Phy to advertise 1000 Mb Half Duplex */
+        if (self.autoneg_advertised & ADVERTISE_1000_HALF) > 0 {
+            info!("Advertise 1000mb Half duplex request denied!\n");
+        }
+        /* Do we want to advertise 1000 Mb Full Duplex? */
+        if (self.autoneg_advertised & ADVERTISE_1000_FULL) > 0 {
+            info!("Advertise 1000mb Full duplex\n");
+            mii_1000t_ctrl_reg |= ADVERTISE_1000FULL;
+        }
+
+        /* Check for a software override of the flow control settings, and
+         * setup the PHY advertisement registers accordingly.  If
+         * auto-negotiation is enabled, then software will have to set the
+         * "PAUSE" bits to the correct value in the Auto-Negotiation
+         * Advertisement Register (MII_ADVERTISE) and re-start auto-
+         * negotiation.
+         *
+         * The possible values of the "fc" parameter are:
+         *      0:  Flow control is completely disabled
+         *      1:  Rx flow control is enabled (we can receive pause frames
+         *          but not send pause frames).
+         *      2:  Tx flow control is enabled (we can send pause frames
+         *          but we do not support receiving pause frames).
+         *      3:  Both Rx and Tx flow control (symmetric) are enabled.
+         *  other:  No software override.  The flow control configuration
+         *          in the EEPROM is used.
+         */
+        match current_mode {
+            FcMode::None => {
+                /* Flow control (Rx & Tx) is completely disabled by a
+                 * software over-ride.
+                 */
+                mii_autoneg_adv_reg &= !(ADVERTISE_PAUSE_ASYM | ADVERTISE_PAUSE_CAP);
+                self.autoneg_advertised &= !(ADVERTISED_Pause | ADVERTISED_Asym_Pause);
+            }
+            FcMode::RxPause => {
+                /* Rx Flow control is enabled, and Tx Flow control is
+                 * disabled, by a software over-ride.
+                 *
+                 * Since there really isn't a way to advertise that we are
+                 * capable of Rx Pause ONLY, we will advertise that we
+                 * support both symmetric and asymmetric Rx PAUSE.  Later
+                 * (in e1000e_config_fc_after_link_up) we will disable the
+                 * hw's ability to send PAUSE frames.
+                 */
+                mii_autoneg_adv_reg |= (ADVERTISE_PAUSE_ASYM | ADVERTISE_PAUSE_CAP);
+                self.autoneg_advertised |= (ADVERTISED_Pause | ADVERTISED_Asym_Pause);
+            }
+            FcMode::TxPause => {
+                /* Tx Flow control is enabled, and Rx Flow control is
+                 * disabled, by a software over-ride.
+                 */
+                mii_autoneg_adv_reg |= ADVERTISE_PAUSE_ASYM;
+                mii_autoneg_adv_reg &= !ADVERTISE_PAUSE_CAP;
+                self.autoneg_advertised |= ADVERTISED_Asym_Pause;
+                self.autoneg_advertised &= !ADVERTISED_Pause;
+            }
+            FcMode::Full => {
+                /* Flow control (both Rx and Tx) is enabled by a software
+                 * over-ride.
+                 */
+                mii_autoneg_adv_reg |= (ADVERTISE_PAUSE_ASYM | ADVERTISE_PAUSE_CAP);
+                self.autoneg_advertised |= (ADVERTISED_Pause | ADVERTISED_Asym_Pause);
+            }
+            _ => {
+                error!("Flow control param set incorrectly\n");
+                return Err(Error::Config("Flow control param set incorrectly"));
+            }
+        }
+        self.e1e_wphy(MII_ADVERTISE, mii_autoneg_adv_reg)?;
+
+        info!("Auto-Neg Advertising {:#X}", mii_autoneg_adv_reg);
+
+        if (self.autoneg_mask & ADVERTISE_1000_FULL) > 0 {
+            self.e1e_wphy(MII_CTRL1000, mii_1000t_ctrl_reg);
+        }
+
+        Ok(())
+    }
+
+    /**
+     *  e1000_wait_autoneg - Wait for auto-neg completion
+     *  @hw: pointer to the HW structure
+     *
+     *  Waits for auto-negotiation to complete or for the auto-negotiation time
+     *  limit to expire, which ever happens first.
+     **/
+    fn wait_autoneg(&mut self) -> Result {
+        /* Break after autoneg completes or PHY_AUTO_NEG_LIMIT expires. */
+        for _ in 0..45 {
+            let mut phy_status = self.e1e_rphy(MII_BMSR)?;
+            phy_status = self.e1e_rphy(MII_BMSR)?;
+
+            if (phy_status & BMSR_ANEGCOMPLETE) > 0 {
+                break;
+            }
+            kfn().delay(Duration::from_millis(100));
+        }
+
+        /* PHY_AUTO_NEG_TIME expiration doesn't guarantee auto-negotiation
+         * has completed.
+         */
+        Ok(())
     }
 }
 

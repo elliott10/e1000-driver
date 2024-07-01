@@ -1,6 +1,6 @@
-use alloc::vec::Vec;
 use super::reg::*;
-use crate::{defines::*, err::*, phy::PhyInfo2, MacAddress};
+use crate::{defines::*, err::*, hw::FcMode, phy::PhyInfo2, MacAddress};
+use alloc::vec::Vec;
 
 #[allow(non_camel_case_types)]
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
@@ -37,6 +37,8 @@ impl Default for MacType {
 #[derive(Default)]
 pub(crate) struct MacInfo {
     pub(crate) kind: MacType,
+    pub(crate) ops: MacOps,
+    pub reg: Reg,
     pub(crate) addr: [u8; 6],
     pub(crate) perm_addr: [u8; 6],
 
@@ -191,5 +193,110 @@ impl MacInfo {
         reg.e1e_flush();
 
         Ok(())
+    }
+    fn setup_physical_interface(&mut self) -> Result {
+        match self.ops.setup_physical_interface {
+            SetupPhysicalInterface::CopperLink82571 => todo!(),
+            SetupPhysicalInterface::CopperLinkPchLpt => todo!(),
+        }
+
+        Ok(())
+    }
+    // fn setup_copper_link_82571(&mut self) -> Result {
+    //     let mut ctrl = self.er32(CTRL);
+    //     ctrl |= CTRL_SLU;
+    //     ctrl &= !(CTRL_FRCSPD | CTRL_FRCDPX);
+    //     self.ew32(CTRL, ctrl);
+
+    //     // self.copper_link_setup_m88()?;
+
+    //     // self.hw.as_mut().setup_copper_link()
+    // }
+
+    /**
+     *  e1000e_config_collision_dist_generic - Configure collision distance
+     *  @hw: pointer to the HW structure
+     *
+     *  Configures the collision distance to the default value and is used
+     *  during link setup.
+     **/
+    pub fn config_collision_dist_generic(&mut self) {
+        let mut tctl = self.er32(TCTL);
+
+        tctl &= !TCTL_COLD;
+        tctl |= COLLISION_DISTANCE << COLD_SHIFT;
+
+        self.ew32(TCTL, tctl);
+        self.e1e_flush();
+    }
+
+    pub fn er32(&self, offset: u32) -> u32 {
+        self.reg.er32(offset)
+    }
+
+    pub fn ew32(&self, offset: u32, value: u32) {
+        self.reg.ew32(offset, value)
+    }
+
+    pub fn e1e_flush(&self) {
+        self.reg.e1e_flush()
+    }
+    pub fn force_mac_fc(&self, fc_mode: FcMode) -> Result {
+        let mut ctrl = self.er32(CTRL);
+
+        /* Because we didn't get link via the internal auto-negotiation
+         * mechanism (we either forced link or we got link via PHY
+         * auto-neg), we have to manually enable/disable transmit an
+         * receive flow control.
+         *
+         * The "Case" statement below enables/disable flow control
+         * according to the "hw->fc.current_mode" parameter.
+         *
+         * The possible values of the "fc" parameter are:
+         *      0:  Flow control is completely disabled
+         *      1:  Rx flow control is enabled (we can receive pause
+         *          frames but not send pause frames).
+         *      2:  Tx flow control is enabled (we can send pause frames
+         *          but we do not receive pause frames).
+         *      3:  Both Rx and Tx flow control (symmetric) is enabled.
+         *  other:  No other values should be possible at this point.
+         */
+        info!("hw->fc.current_mode = {:?}", fc_mode);
+
+        match fc_mode {
+            FcMode::None => ctrl &= (!(CTRL_TFCE | CTRL_RFCE)),
+            FcMode::RxPause => {
+                ctrl &= !CTRL_TFCE;
+                ctrl |= CTRL_RFCE;
+            }
+            FcMode::TxPause => {
+                ctrl &= !CTRL_RFCE;
+                ctrl |= CTRL_TFCE;
+            }
+            FcMode::Full => ctrl |= (CTRL_TFCE | CTRL_RFCE),
+            FcMode::Default => {
+                error!("Flow control param set incorrectly");
+                return Err(Error::Config("Flow control param set incorrectly"));
+            }
+        }
+
+        self.ew32(CTRL, ctrl);
+
+        return Ok(());
+    }
+}
+#[derive(Debug, Default, Clone)]
+pub(crate) struct MacOps {
+    pub setup_physical_interface: SetupPhysicalInterface,
+}
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum SetupPhysicalInterface {
+    CopperLink82571,
+    CopperLinkPchLpt,
+}
+
+impl Default for SetupPhysicalInterface {
+    fn default() -> Self {
+        Self::CopperLink82571
     }
 }

@@ -6,6 +6,7 @@ use crate::e1000::mac::*;
 use crate::e1000::nvm::*;
 use crate::e1000::reg;
 use crate::e1000::reg::*;
+use crate::hw::FcMode;
 use crate::kfn;
 use crate::lock::Semaphore;
 use crate::lock::SemaphoreBackend;
@@ -248,6 +249,8 @@ impl VariantCommon for Context {
         }
         Ok(())
     }
+    
+ 
 }
 
 impl Context {

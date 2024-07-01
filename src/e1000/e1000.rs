@@ -137,6 +137,92 @@ impl E1000 {
         );
         Ok(e1000)
     }
+    /// open
+    pub fn open(&mut self) -> Result {
+        if self.params.flags.has_amt {
+            self.hw_contrl = Some(HwControl::new(self.reg, self.flags()));
+            self.reset()?;
+        }
+
+        self.power_up_phy()?;
+
+        Ok(())
+    }
+
+    fn power_up_phy(&mut self) -> Result {
+        info!("Power up phy");
+        let mut mii = self.e1e_rphy(MII_BMCR)?;
+
+        mii &= !BMCR_PDOWN;
+
+        self.e1e_wphy(MII_BMCR, mii)?;
+
+        self.setup_link();
+        Ok(())
+    }
+
+    fn setup_default_fc(&mut self) -> Result {
+        if (self.fc.requested_mode == FcMode::Default) {
+            match &self.variant.kind {
+                variant::VariantKind::B82571(_) => match self.mac.kind {
+                    MacType::e1000_82573 | MacType::e1000_82574 | MacType::e1000_82583 => {
+                        self.fc.requested_mode = FcMode::Full;
+                    }
+                    _ => {}
+                },
+                variant::VariantKind::Ich8lan(_) => match self.mac.kind {
+                    MacType::e1000_pchlan => {
+                        self.fc.requested_mode = FcMode::RxPause;
+                    }
+                    _ => {
+                        self.fc.requested_mode = FcMode::Full;
+                    }
+                },
+            }
+        }
+        if self.fc.requested_mode == FcMode::Default {
+            return self.set_default_fc_generic();
+        }
+
+        Ok(())
+    }
+
+    fn setup_link(&mut self) -> Result {
+        self.setup_default_fc()?;
+
+        /* Save off the requested flow control mode for use later.  Depending
+         * on the link partner's capabilities, we may or may not use this mode.
+         */
+        self.fc.current_mode = self.fc.requested_mode;
+
+        info!(
+            "After fix-ups FlowControl is now = {:?}",
+            self.fc.current_mode
+        );
+
+        if self.mac.autoneg {
+            self.phy.copper_link_autoneg(self.fc.current_mode)?;
+        } else {
+            info!("Forcing Speed and Duplex");
+        }
+
+        match self.mac.ops.setup_physical_interface {
+            SetupPhysicalInterface::CopperLink82571 => self.phy.setup_copper_link_82571(),
+            SetupPhysicalInterface::CopperLinkPchLpt => self.phy.setup_copper_link_pch_lpt(),
+        }?;
+
+        let link = self.phy.phy_has_link_generic(10, 10)?;
+
+        if link {
+            info!("Valid link established!!!");
+            self.mac.config_collision_dist_generic();
+            self.config_fc_after_link_up();
+        } else {
+            info!("Unable to establish link!!!");
+        }
+
+        Ok(())
+    }
 
     ///  e1000_read_mac_addr_generic - Read device MAC address
     ///
@@ -598,7 +684,189 @@ impl E1000 {
         }
         res
     }
+    /**
+     * e1000_get_speed_and_duplex
+     * @hw: Struct containing variables accessed by shared code
+     * @speed: Speed of the connection
+     * @duplex: Duplex setting of the connection
+     *
+     * Detects the current speed and duplex settings of the hardware.
+     */
+    pub(crate) fn get_speed_and_duplex_copper(&mut self) {
+        let mut speed = 0;
+        let mut duplex = 0;
+        let status = self.er32(STATUS);
+        if (status & STATUS_SPEED_1000) > 0 {
+            speed = 1000;
+        } else if (status & STATUS_SPEED_100) > 0 {
+            speed = 100;
+        } else {
+            speed = 10;
+        }
+        let link = status & STATUS_LU != 0;
+        if (status & STATUS_FD) > 0 {
+            duplex = FULL_DUPLEX;
+        } else {
+            duplex = HALF_DUPLEX;
+        }
 
+        self.params.link_speed = speed;
+        self.params.link_duplex = duplex;
+
+        info!(
+            "{} Mbps, {} Duplex Link {}",
+            speed,
+            if duplex == FULL_DUPLEX {
+                "Full"
+            } else {
+                "Half"
+            },
+            link
+        );
+    }
+
+    fn config_fc_after_link_up(&mut self) -> Result {
+        self.get_speed_and_duplex_copper();
+
+        if self.mac.autoneg_failed {
+        } else {
+            self.mac.force_mac_fc(self.fc.current_mode)?;
+        }
+
+        /* Check for the case where we have copper media and auto-neg is
+         * enabled.  In this case, we need to check and see if Auto-Neg
+         * has completed, and if so, how the PHY and link partner has
+         * flow control configured.
+         */
+        if ((self.phy.media_type == MediaType::media_type_copper) && self.mac.autoneg) {
+            /* Read the MII Status Register and check to see if AutoNeg
+             * has completed.  We read this twice because this reg has
+             * some "sticky" (latched) bits.
+             */
+            let mut mii_status_reg = self.e1e_rphy(MII_BMSR)?;
+
+            mii_status_reg = self.e1e_rphy(MII_BMSR)?;
+
+            if (mii_status_reg & BMSR_ANEGCOMPLETE) == 0 {
+                error!("Copper PHY and Auto Neg has not completed.");
+                return Err(Error::Unknown("Copper PHY and Auto Neg has not completed."));
+            }
+
+            /* The AutoNeg process has completed, so we now need to
+             * read both the Auto Negotiation Advertisement
+             * Register (Address 4) and the Auto_Negotiation Base
+             * Page Ability Register (Address 5) to determine how
+             * flow control was negotiated.
+             */
+            let mut mii_nway_adv_reg = self.e1e_rphy(MII_ADVERTISE)?;
+
+            let mut mii_nway_lp_ability_reg = self.e1e_rphy(MII_LPA)?;
+
+            /* Two bits in the Auto Negotiation Advertisement Register
+             * (Address 4) and two bits in the Auto Negotiation Base
+             * Page Ability Register (Address 5) determine flow control
+             * for both the PHY and the link partner.  The following
+             * table, taken out of the IEEE 802.3ab/D6.0 dated March 25,
+             * 1999, describes these PAUSE resolution bits and how flow
+             * control is determined based upon these settings.
+             * NOTE:  DC = Don't Care
+             *
+             *   LOCAL DEVICE  |   LINK PARTNER
+             * PAUSE | ASM_DIR | PAUSE | ASM_DIR | NIC Resolution
+             *-------|---------|-------|---------|--------------------
+             *   0   |    0    |  DC   |   DC    | e1000_fc_none
+             *   0   |    1    |   0   |   DC    | e1000_fc_none
+             *   0   |    1    |   1   |    0    | e1000_fc_none
+             *   0   |    1    |   1   |    1    | e1000_fc_tx_pause
+             *   1   |    0    |   0   |   DC    | e1000_fc_none
+             *   1   |   DC    |   1   |   DC    | e1000_fc_full
+             *   1   |    1    |   0   |    0    | e1000_fc_none
+             *   1   |    1    |   0   |    1    | e1000_fc_rx_pause
+             *
+             * Are both PAUSE bits set to 1?  If so, this implies
+             * Symmetric Flow Control is enabled at both ends.  The
+             * ASM_DIR bits are irrelevant per the spec.
+             *
+             * For Symmetric Flow Control:
+             *
+             *   LOCAL DEVICE  |   LINK PARTNER
+             * PAUSE | ASM_DIR | PAUSE | ASM_DIR | Result
+             *-------|---------|-------|---------|--------------------
+             *   1   |   DC    |   1   |   DC    | E1000_fc_full
+             *
+             */
+            if (mii_nway_adv_reg & ADVERTISE_PAUSE_CAP) > 0
+                && (mii_nway_lp_ability_reg & LPA_PAUSE_CAP) > 0
+            {
+                /* Now we need to check if the user selected Rx ONLY
+                 * of pause frames.  In this case, we had to advertise
+                 * FULL flow control because we could not advertise Rx
+                 * ONLY. Hence, we must now check to see if we need to
+                 * turn OFF the TRANSMISSION of PAUSE frames.
+                 */
+                if (self.fc.requested_mode == FcMode::Full) {
+                    self.fc.current_mode = FcMode::Full;
+                    info!("Flow Control = FULL.");
+                } else {
+                    self.fc.current_mode = FcMode::RxPause;
+                    info!("Flow Control = Rx PAUSE frames only.");
+                }
+            }
+            /* For receiving PAUSE frames ONLY.
+             *
+             *   LOCAL DEVICE  |   LINK PARTNER
+             * PAUSE | ASM_DIR | PAUSE | ASM_DIR | Result
+             *-------|---------|-------|---------|--------------------
+             *   0   |    1    |   1   |    1    | e1000_fc_tx_pause
+             */
+            else if ((mii_nway_adv_reg & ADVERTISE_PAUSE_CAP) == 0
+                && (mii_nway_adv_reg & ADVERTISE_PAUSE_ASYM) > 0
+                && (mii_nway_lp_ability_reg & LPA_PAUSE_CAP) > 0
+                && (mii_nway_lp_ability_reg & LPA_PAUSE_ASYM) > 0)
+            {
+                self.fc.current_mode = FcMode::TxPause;
+                info!("Flow Control = Tx PAUSE frames only.");
+            }
+            /* For transmitting PAUSE frames ONLY.
+             *
+             *   LOCAL DEVICE  |   LINK PARTNER
+             * PAUSE | ASM_DIR | PAUSE | ASM_DIR | Result
+             *-------|---------|-------|---------|--------------------
+             *   1   |    1    |   0   |    1    | e1000_fc_rx_pause
+             */
+            else if ((mii_nway_adv_reg & ADVERTISE_PAUSE_CAP) > 0
+                && (mii_nway_adv_reg & ADVERTISE_PAUSE_ASYM) > 0
+                && (mii_nway_lp_ability_reg & LPA_PAUSE_CAP) == 0
+                && (mii_nway_lp_ability_reg & LPA_PAUSE_ASYM) > 0)
+            {
+                self.fc.current_mode = FcMode::RxPause;
+                info!("Flow Control = Rx PAUSE frames only.\n");
+            } else {
+                /* Per the IEEE spec, at this point flow control
+                 * should be disabled.
+                 */
+                self.fc.current_mode = FcMode::None;
+                info!("Flow Control = NONE.");
+            }
+
+            /* Now we need to do one last check...  If we auto-
+             * negotiated to HALF DUPLEX, flow control should not be
+             * enabled per IEEE 802.3 spec.
+             */
+            self.get_speed_and_duplex_copper();
+
+            if (self.params.link_duplex == HALF_DUPLEX) {
+                self.fc.current_mode = FcMode::None;
+            }
+
+            /* Now we call a subroutine to actually force the MAC
+             * controller to use the correct flow control settings.
+             */
+            self.mac.force_mac_fc(self.fc.current_mode)?;
+        }
+
+        Ok(())
+    }
     pub fn print_info(&mut self) {
         let pba_str = [0; PBANUM_LENGTH];
         let mac_kind = self.mac.kind;
@@ -753,11 +1021,6 @@ impl E1000 {
         // }
 
         out
-    }
-
-    /// open
-    pub fn open(&mut self) -> Result {
-        Ok(())
     }
 
     fn clean_uc_addr(&mut self) {
@@ -1010,6 +1273,81 @@ impl E1000 {
 
     pub fn task_watchdog(&mut self) -> Result<bool> {
         Ok(false)
+    }
+
+    pub(crate) fn set_fc_watermarks(&mut self) -> Result {
+        let mut fcrtl = 0;
+        let mut fcrth = 0;
+        if self.fc.current_mode == FcMode::TxPause {
+            /* We need to set up the Receive Threshold high and low water
+             * marks as well as (optionally) enabling the transmission of
+             * XON frames.
+             */
+            fcrtl = self.fc.low_water;
+            if self.fc.send_xon {
+                fcrtl |= FCRTL_XONE;
+            }
+
+            fcrth = self.fc.high_water;
+        }
+        self.ew32(FCRTL, fcrtl);
+        self.ew32(FCRTH, fcrth);
+
+        Ok(())
+    }
+
+    pub(crate) fn setup_link_generic(&mut self) -> Result {
+        if self.fc.requested_mode == FcMode::Default {
+            return self.set_default_fc_generic();
+        }
+        /* Save off the requested flow control mode for use later.  Depending
+         * on the link partner's capabilities, we may or may not use this mode.
+         */
+        self.fc.current_mode = self.fc.requested_mode;
+
+        info!(
+            "After fix-ups FlowControl is now = {:?}",
+            self.fc.current_mode
+        );
+
+        // self.setup_physical_interface()?;
+
+        /* Initialize the flow control address, type, and PAUSE timer
+         * registers to their default values.  This is done even if flow
+         * control is disabled, because it does not hurt anything to
+         * initialize these registers.
+         */
+        info!("Initializing the Flow Control address, type and timer regs");
+        self.ew32(FCT, FLOW_CONTROL_TYPE);
+        self.ew32(FCAH, FLOW_CONTROL_ADDRESS_HIGH);
+        self.ew32(FCAL, FLOW_CONTROL_ADDRESS_LOW);
+
+        self.ew32(FCTTV, self.fc.pause_time as u32);
+
+        self.set_fc_watermarks()?;
+
+        Ok(())
+    }
+
+    fn set_default_fc_generic(&mut self) -> Result {
+        /* Read and store word 0x0F of the EEPROM. This word contains bits
+         * that determine the hardware's default PAUSE (flow control) mode,
+         * a bit that determines whether the HW defaults to enabling or
+         * disabling auto-negotiation, and the direction of the
+         * SW defined pins. If there is no SW over-ride of the flow
+         * control setting, then the variable hw->fc will
+         * be initialized based on a value in the EEPROM.
+         */
+        let nvm_data = self.nvm.read_nvm(NVM_INIT_CONTROL2_REG, 1)?[0];
+
+        if (nvm_data & NVM_WORD0F_PAUSE_MASK) == 0 {
+            self.fc.requested_mode = FcMode::None;
+        } else if (nvm_data & NVM_WORD0F_PAUSE_MASK) == NVM_WORD0F_ASM_DIR {
+            self.fc.requested_mode = FcMode::TxPause;
+        } else {
+            self.fc.requested_mode = FcMode::Full;
+        }
+        Ok(())
     }
 }
 

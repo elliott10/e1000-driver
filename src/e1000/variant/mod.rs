@@ -68,6 +68,7 @@ impl Variant {
             VariantKind::Ich8lan(ctx) => ctx.init_hw(e1000),
         }
     }
+
 }
 
 pub(crate) trait VariantCommon {
@@ -84,8 +85,9 @@ pub(crate) trait VariantCommon {
         boad: &BoardInfo,
     ) -> Result<VariantResult> {
         let mut flags = boad.flags.clone();
-        let mac = self.init_mac_params(param.board_info.mac, reg)?;
+        let mut mac = self.init_mac_params(param.board_info.mac, reg)?;
         self.set_reg(mac.kind, &mut reg);
+        mac.reg = reg;
         let nvm = self.init_nvm_params(&mac, boad, reg)?;
         let phy = self.init_phy_params(&mac, boad, reg)?;
 
