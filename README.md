@@ -5,7 +5,7 @@ E1000 driver in Rust for the Intel PCIE Gigabit Ethernet.
 * `e1000` and `e1000e` driver on Qemu and [a Physical Industrial Computer](doc/E1000E驱动移植于工控机的技术总结及网卡性能测试.pdf) are supported
 * Initialize simple PCI-Express for e1000 device
 * Implement the e1000 driver as a linux driver module
-
+* MSIX、MSI supported
 
 
 ## Quick start on bare metal OS

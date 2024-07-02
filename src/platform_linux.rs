@@ -4,6 +4,7 @@
 #[macro_use]
 mod linux;
 use core::{
+    alloc::Layout,
     ffi::{self, c_void},
     ptr::slice_from_raw_parts,
     time::Duration,
@@ -16,10 +17,6 @@ pub(crate) use linux::print::*;
 pub mod e1000;
 use e1000::*;
 use params::{InterruptMode, Settings};
-
-pub struct Device {
-    dev: E1000,
-}
 
 #[derive(Clone)]
 struct KFun {
@@ -105,9 +102,8 @@ impl KernelFunc for KFun {
     // }
 }
 
-type DevicePtr = *mut Device;
-fn dev_mut<'a>(ptr: usize) -> &'a mut Device {
-    unsafe { &mut *(ptr as DevicePtr) }
+fn e1000_mut<'a>(ptr: usize) -> &'a mut E1000 {
+    unsafe { &mut *(ptr as *mut E1000) }
 }
 
 /// 通过bar获取到映射地址
@@ -179,15 +175,24 @@ extern "C" fn e1000r_new(config: E1000Config) -> usize {
         Err(_) => return 0,
     };
 
-    let dev = Box::init(kernel::init!(Device { dev: e1000 })).unwrap();
-    let ptr = unsafe { Box::into_raw(dev) as usize };
-    ptr
+    unsafe {
+        let layout = Layout::for_value(&e1000);
+        let ptr = alloc::alloc(layout) as *mut E1000;
+        ptr.write(e1000);
+        ptr as usize
+    }
+
+    // let dev = Box::init(kernel::init!(Device { dev: e1000 })).unwrap();
+    // let ptr = unsafe { Box::into_raw(dev) as usize };
+    // ptr
 }
 
 #[no_mangle]
 extern "C" fn e1000r_drop(ptr: usize) {
     unsafe {
-        let _ = Box::from_raw(ptr as DevicePtr);
+        let dev = e1000_mut(ptr);
+        dev.release();
+        alloc::dealloc(ptr as _, Layout::for_value(dev));
     }
 }
 
@@ -195,15 +200,15 @@ const __LOG_PREFIX: &[u8] = b"E1000 Rust\0";
 
 #[no_mangle]
 extern "C" fn e1000r_read_mac_addr(ptr: usize, mac: &mut [u8; 6]) {
-    let dev = dev_mut(ptr);
-    let mac_new = dev.dev.read_mac_addr_generic();
+    let dev = e1000_mut(ptr);
+    let mac_new = dev.read_mac_addr_generic();
     mac.copy_from_slice(&mac_new.0);
 }
 
 #[no_mangle]
 unsafe extern "C" fn e1000r_stats64<'a>(ptr: usize) -> E1000HWStats {
-    let dev = dev_mut(ptr);
-    dev.dev.get_stats64()
+    let dev = e1000_mut(ptr);
+    dev.get_stats64()
 }
 
 #[no_mangle]
@@ -213,10 +218,10 @@ unsafe extern "C" fn e1000r_transmit(
     pkt: *const u8,
     len: u32,
 ) -> i32 {
-    let dev = dev_mut(ptr);
+    let dev = e1000_mut(ptr);
     let pkt = unsafe { &*slice_from_raw_parts(pkt, len as usize) };
 
-    match dev.dev.xmit(cfg, pkt) {
+    match dev.xmit(cfg, pkt) {
         Ok(n) => n as i32,
         Err(_) => -1,
     }
@@ -224,86 +229,86 @@ unsafe extern "C" fn e1000r_transmit(
 
 #[no_mangle]
 unsafe extern "C" fn e1000r_irq_handle(ptr: usize, irq: i32) -> i32 {
-    let dev = dev_mut(ptr);
-    rfn(|| dev.dev.irq_handle(irq))
+    let dev = e1000_mut(ptr);
+    rfn(|| dev.irq_handle(irq))
 }
 #[no_mangle]
 unsafe extern "C" fn e1000r_irq_handle_msix_other(ptr: usize, irq: i32) -> i32 {
-    let dev = dev_mut(ptr);
-    rfn(|| dev.dev.irq_handle_msix_other(irq))
+    let dev = e1000_mut(ptr);
+    rfn(|| dev.irq_handle_msix_other(irq))
 }
 #[no_mangle]
 unsafe extern "C" fn e1000r_irq_handle_msix_tx(ptr: usize, irq: i32) -> i32 {
-    let dev = dev_mut(ptr);
+    let dev = e1000_mut(ptr);
 
-    dev.dev.irq_handle_msix_tx();
+    dev.irq_handle_msix_tx();
     0
 }
 
 #[no_mangle]
 unsafe extern "C" fn e1000r_irq_clean_tx(ptr: usize) -> bool {
-    let dev = dev_mut(ptr);
-    dev.dev.clean_tx_irq()
+    let dev = e1000_mut(ptr);
+    dev.clean_tx_irq()
 }
 #[no_mangle]
 extern "C" fn e1000r_irq_set_mode(ptr: usize, mode: InterruptMode) {
-    let dev = dev_mut(ptr);
-    dev.dev.set_interrupt_mode(mode)
+    let dev = e1000_mut(ptr);
+    dev.set_interrupt_mode(mode)
 }
 
 #[no_mangle]
 extern "C" fn e1000r_irq_get_mode(ptr: usize) -> InterruptMode {
-    let dev = dev_mut(ptr);
-    dev.dev.get_interrupt_mode()
+    let dev = e1000_mut(ptr);
+    dev.get_interrupt_mode()
 }
 
 #[no_mangle]
 extern "C" fn e1000r_irq_disable(ptr: usize) {
-    let dev = dev_mut(ptr);
-    dev.dev.irq_disable();
+    let dev = e1000_mut(ptr);
+    dev.irq_disable();
 }
 #[no_mangle]
 extern "C" fn e1000r_irq_enable(ptr: usize) {
-    let dev = dev_mut(ptr);
-    dev.dev.irq_enable();
+    let dev = e1000_mut(ptr);
+    dev.irq_enable();
 }
 #[no_mangle]
 extern "C" fn e1000r_configure_msix(ptr: usize) {
-    let dev = dev_mut(ptr);
-    dev.dev.configure_msix();
+    let dev = e1000_mut(ptr);
+    dev.configure_msix();
 }
 
 #[no_mangle]
 extern "C" fn e1000r_open(ptr: usize) -> i32 {
-    let dev = dev_mut(ptr);
-    match dev.dev.open() {
+    let dev = e1000_mut(ptr);
+    match dev.open() {
         Ok(_) => 0,
         Err(_) => -1,
     }
 }
 #[no_mangle]
 extern "C" fn e1000r_down(ptr: usize) -> i32 {
-    let dev = dev_mut(ptr);
-    dev.dev.down();
+    let dev = e1000_mut(ptr);
+    dev.down();
 
     return 0;
 }
 #[no_mangle]
 extern "C" fn e1000_print_device_info(ptr: usize) {
-    let dev = dev_mut(ptr);
-    let e1000 = &mut dev.dev;
-    e1000.print_info();
+    let dev = e1000_mut(ptr);
+
+    dev.print_info();
 }
 
 #[no_mangle]
 unsafe extern "C" fn e1000r_trigger_lsc(ptr: usize) {
-    let dev = dev_mut(ptr);
-    dev.dev.trigger_lsc()
+    let dev = e1000_mut(ptr);
+    dev.trigger_lsc()
 }
 #[no_mangle]
 unsafe extern "C" fn e1000r_task_watchdog(ptr: usize) -> bool {
-    let dev = dev_mut(ptr);
-    let link = dev.dev.task_watchdog().unwrap_or(false);
+    let dev = e1000_mut(ptr);
+    let link = dev.task_watchdog().unwrap_or(false);
     link
 }
 
@@ -320,8 +325,8 @@ unsafe extern "C" fn e1000r_clear_rx(
     on_rcv: E1000CbOnRcv,
     meta: *const c_void,
 ) -> usize {
-    let dev = dev_mut(ptr);
-    let pkts = dev.dev.clean_rx_irq(max);
+    let dev = e1000_mut(ptr);
+    let pkts = dev.clean_rx_irq(max);
 
     unsafe {
         for i in 0..pkts.len() {

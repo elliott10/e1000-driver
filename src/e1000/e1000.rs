@@ -626,7 +626,6 @@ impl E1000 {
         Ok(())
     }
 
-
     /// irq_handle
     pub fn irq_handle_msix_other(&mut self, irq: i32) -> Result {
         let icr = self.er32(ICR);
@@ -2022,15 +2021,22 @@ impl E1000 {
         }
         Ok(())
     }
-}
 
-impl Drop for E1000 {
-    fn drop(&mut self) {
+    pub unsafe fn release(&mut self) {
+        info!("release e1000");
         debug!("unmap mmio {:#X}", self.reg.mmio);
         kfn().iounmap(self.reg.mmio);
         if let Some(flash) = self.reg.flash {
             debug!("unmap flash {:#X}", flash);
             kfn().iounmap(flash);
+        }
+    }
+}
+
+impl Drop for E1000 {
+    fn drop(&mut self) {
+        unsafe {
+            self.release();
         }
     }
 }

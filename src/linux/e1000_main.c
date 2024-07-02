@@ -267,6 +267,8 @@ static void e1000_remove(struct pci_dev *pdev) {
   free_netdev(netdev);
 
   pci_disable_device(pdev);
+
+  e1000r_drop(adapter->ptr);
 }
 static int __maybe_unused e1000_suspend(struct device *dev) { return 0; }
 
@@ -852,10 +854,7 @@ size_t cb_bar_n_remap(const void *data, size_t bar) {
   return (size_t)ioremap(mmio_start, mmio_len);
 }
 
-
-
 void cb_io_unmap(size_t addr) { iounmap((void *)addr); }
-
 
 int cb_pcie_cap_offset(const void *data) {
 
