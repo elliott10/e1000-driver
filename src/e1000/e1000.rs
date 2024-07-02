@@ -607,6 +607,26 @@ impl E1000 {
         Ok(())
     }
 
+    pub fn irq_handle(&mut self, irq: i32) -> Result {
+        let icr = self.er32(ICR);
+
+        if (icr & ICR_LSC) > 0 {
+            self.mac.get_link_status = true;
+
+            self.on_lsc_changed();
+
+            if self.params.flags.rx_needs_restart {
+                info!("restart rx");
+                let rctl = self.er32(RCTL);
+                self.ew32(RCTL, rctl & !RCTL_EN);
+                self.params.flags.restart_now = true;
+            }
+        }
+
+        Ok(())
+    }
+
+
     /// irq_handle
     pub fn irq_handle_msix_other(&mut self, irq: i32) -> Result {
         let icr = self.er32(ICR);
