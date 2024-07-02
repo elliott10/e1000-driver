@@ -1,6 +1,6 @@
 use core::time::Duration;
 
-use super::{VariantCommon, VariantParam, VariantResult};
+use super::{VariantCommon, VariantResult};
 
 use crate::e1000::mac::*;
 use crate::e1000::nvm::*;
@@ -24,8 +24,10 @@ pub(crate) struct Context {
 impl VariantCommon for Context {
     fn set_reg(&self, _mac_kind: MacType, _reg: &mut Reg) {}
 
-    fn init_mac_params(&mut self, mac_kind: MacType, reg: Reg) -> Result<MacInfo> {
+    fn init_mac_params(&mut self, board: &BoardInfo, reg: Reg) -> Result<MacInfo> {
         let mut mac = MacInfo::default();
+        mac.ops = board.mac_ops.clone();
+        mac.kind = board.mac;
         /* Set mta register count */
         mac.mta_reg_count = 128;
         // /* Set rar entry count */
@@ -112,7 +114,7 @@ impl VariantCommon for Context {
         })
     }
 
-    fn init_nvm_params(&self, mac: &MacInfo, board: &BoardInfo, reg: Reg) -> Result<NvmInfo> {
+    fn init_nvm_params(&mut self, mac: &MacInfo, board: &BoardInfo, reg: Reg) -> Result<NvmInfo> {
         let mut nvm = NvmInfo::default();
         nvm.ops = board.nvm_ops.clone();
         nvm.reg = reg;

@@ -591,6 +591,7 @@ impl E1000 {
 
         match self.mac.ops.setup_physical_interface {
             SetupPhysicalInterface::CopperLink82571 => self.phy.setup_copper_link_82571(),
+            SetupPhysicalInterface::CopperLinkIch8lan => todo!(),
             SetupPhysicalInterface::CopperLinkPchLpt => self.phy.setup_copper_link_pch_lpt(),
         }?;
 

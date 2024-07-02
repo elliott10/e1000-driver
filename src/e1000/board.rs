@@ -38,7 +38,6 @@ impl From<usize> for BoardType {
     }
 }
 
-
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub enum E1000GetVariants {
@@ -53,6 +52,7 @@ pub(crate) struct BoardInfo {
     pub pba: u32,
     pub max_hw_frame_size: u32,
     pub variant: BoardVariant,
+    pub mac_ops: MacOps,
     pub phy_ops: PhyOps,
     pub nvm_ops: NvmOps,
 }
@@ -61,12 +61,14 @@ const fn e82_phy_ops_bm() -> PhyOps {
     PhyOps {
         semaphore: PhySemaphore::B82571,
         read_write: PhyReadWrite::Bm2,
+        get_cfg_done: PhyGetCfgDone::Generic,
     }
 }
 const fn ich8_phy_ops() -> PhyOps {
     PhyOps {
         semaphore: PhySemaphore::Ich8lan,
         read_write: PhyReadWrite::Hv,
+        get_cfg_done: PhyGetCfgDone::Ich8lan,
     }
 }
 
@@ -81,6 +83,18 @@ const fn e82571_nvm_ops() -> NvmOps {
     NvmOps {
         semaphore: NvmSemaphore::E82571,
         read_write: NvmReadWrite::E82571,
+    }
+}
+
+const fn e82571_mac_ops() -> MacOps {
+    MacOps {
+        setup_physical_interface: SetupPhysicalInterface::CopperLink82571,
+    }
+}
+
+const fn ich8_mac_ops() -> MacOps {
+    MacOps {
+        setup_physical_interface: SetupPhysicalInterface::CopperLinkIch8lan,
     }
 }
 
@@ -113,6 +127,7 @@ impl BoardType {
                 pba: 32,
                 max_hw_frame_size: DEFAULT_JUMBO,
                 variant: BoardVariant::B82571,
+                mac_ops: e82571_mac_ops(),
                 phy_ops: e82_phy_ops_bm(),
                 nvm_ops: e82571_nvm_ops(),
             },
@@ -144,6 +159,7 @@ impl BoardType {
                 pba: 26,
                 max_hw_frame_size: 9022,
                 variant: BoardVariant::Ich8lan,
+                mac_ops: ich8_mac_ops(),
                 phy_ops: ich8_phy_ops(),
                 nvm_ops: spt_nvm_ops(),
             },
@@ -165,6 +181,7 @@ impl BoardType {
                 pba: 26,
                 max_hw_frame_size: 9022,
                 variant: BoardVariant::Ich8lan,
+                mac_ops: ich8_mac_ops(),
                 phy_ops: ich8_phy_ops(),
                 nvm_ops: spt_nvm_ops(),
             },
@@ -186,6 +203,7 @@ impl BoardType {
                 pba: 26,
                 max_hw_frame_size: 9022,
                 variant: BoardVariant::Ich8lan,
+                mac_ops: ich8_mac_ops(),
                 phy_ops: ich8_phy_ops(),
                 nvm_ops: spt_nvm_ops(),
             },

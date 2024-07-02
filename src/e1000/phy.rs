@@ -242,7 +242,7 @@ pub(crate) struct PhyInfo {
 impl PhyInfo {
     pub fn acquire(&self) -> Result<PhyGuard<'_>> {
         match &self.ops.semaphore {
-            PhySemaphore::Ich8lan => todo!(),
+            PhySemaphore::Ich8lan => ich8lan::PhySemaphore::new(self.reg).acquire(),
             PhySemaphore::B82571 => e82571::PhySemaphore::new(self.reg).acquire(),
         }?;
         unsafe { Ok(PhyGuard { phy: self }) }
@@ -251,13 +251,13 @@ impl PhyInfo {
     pub fn e1e_rphy_locked(&mut self, offset: u32) -> Result<u16> {
         match &self.ops.read_write {
             PhyReadWrite::Bm2 => self.read_phy_reg_bm2(offset),
-            PhyReadWrite::Hv => todo!(),
+            PhyReadWrite::Hv => self.read_phy_reg_hv(offset),
         }
     }
     pub fn e1e_wphy_locked(&mut self, offset: u32, value: u16) -> Result {
         match &self.ops.read_write {
             PhyReadWrite::Bm2 => self.write_phy_reg_bm2(offset, value),
-            PhyReadWrite::Hv => todo!(),
+            PhyReadWrite::Hv => self.write_phy_reg_hv(offset, value),
         }
     }
     pub fn e1e_rphy(&self, offset: u32) -> Result<u16> {
@@ -428,6 +428,78 @@ impl PhyInfo {
         Ok((mdic & 0xFFFF) as u16)
     }
 
+    fn read_phy_reg_hv(&mut self, offset: u32) -> Result<u16> {
+        let mut page = BM_PHY_REG_PAGE(offset);
+        let reg = BM_PHY_REG_NUM(offset);
+        // let _g = self.get_phy_lock_ich8lan()?;
+        let phy_addr = self.get_phy_addr_for_hv_page(page);
+        self.addr = phy_addr;
+
+        if page == BM_WUC_PAGE {
+            error!("read_phy_reg_hv: BM_WUC_PAGE");
+            return Err(Error::Phy("read_phy_reg_hv: BM_WUC_PAGE"));
+        }
+        if page > 0 && page < HV_INTC_FC_PAGE_START {
+            error!("read_phy_reg_hv: HV_INTC_FC_PAGE_START");
+
+            return Err(Error::Phy("read_phy_reg_hv: HV_INTC_FC_PAGE_START"));
+        }
+
+        if (page == HV_INTC_FC_PAGE_START) {
+            page = 0;
+        }
+
+        if reg > MAX_PHY_MULTI_PAGE_REG {
+            /* Page is shifted left, PHY expects (page x 32) */
+            self.set_page_igp((page << IGP_PAGE_SHIFT))?;
+        }
+
+        debug!(
+            "reading PHY addr {} page {} (or {:#X} shifted) reg {:#X}",
+            self.addr,
+            page,
+            page << IGP_PAGE_SHIFT,
+            reg
+        );
+
+        self.read_phy_reg_mdic(MAX_PHY_REG_ADDRESS & reg as u32)
+    }
+    fn write_phy_reg_hv(&mut self, offset: u32, value: u16) -> Result {
+        let mut page = BM_PHY_REG_PAGE(offset);
+        let reg = BM_PHY_REG_NUM(offset);
+        let mut phy_addr = self.get_phy_addr_for_hv_page(page);
+        self.addr = phy_addr;
+        if page == BM_WUC_PAGE {
+            error!("read_phy_reg_hv: BM_WUC_PAGE");
+
+            return Err(Error::Phy("read_phy_reg_hv: BM_WUC_PAGE"));
+        }
+        if page > 0 && page < HV_INTC_FC_PAGE_START {
+            error!("read_phy_reg_hv: HV_INTC_FC_PAGE_START");
+
+            return Err(Error::Phy("read_phy_reg_hv: HV_INTC_FC_PAGE_START"));
+        }
+
+        if (page == HV_INTC_FC_PAGE_START) {
+            page = 0;
+        }
+
+        if reg > MAX_PHY_MULTI_PAGE_REG {
+            /* Page is shifted left, PHY expects (page x 32) */
+            self.set_page_igp((page << IGP_PAGE_SHIFT))?;
+        }
+
+        debug!(
+            "writing PHY addr {} page {} (or {:#X} shifted) reg {:#X} data {:#X}",
+            self.addr,
+            page,
+            page << IGP_PAGE_SHIFT,
+            reg,
+            value
+        );
+
+        self.write_phy_reg_mdic(MAX_PHY_REG_ADDRESS & reg as u32, value)
+    }
     pub(crate) fn copper_options(&mut self) {
         if self.media_type == MediaType::media_type_copper {
             self.mdix = AUTO_ALL_MODES;
@@ -785,12 +857,268 @@ impl PhyInfo {
         self.reg.e1e_flush();
         kfn().delay(Duration::from_micros(2));
     }
+
+    /**
+     *  get_phy_addr_for_hv_page - Get PHY address based on page
+     *  @page: page to be accessed
+     **/
+    fn get_phy_addr_for_hv_page(&mut self, page: u16) -> u32 {
+        let mut phy_addr = 2;
+
+        if (page >= HV_INTC_FC_PAGE_START) {
+            phy_addr = 1;
+        }
+
+        return phy_addr;
+    }
+
+    /**
+     *  e1000_phy_is_accessible_pchlan - Check if able to access PHY registers
+     *  @hw: pointer to the HW structure
+     *
+     *  Test access to the PHY registers by reading the PHY ID registers.  If
+     *  the PHY ID is already known (e.g. resume path) compare it with known ID,
+     *  otherwise assume the read PHY ID is correct if it is valid.
+     *
+     *  Assumes the sw/fw/hw semaphore is already acquired.
+     **/
+    pub fn is_accessible(&mut self) -> bool {
+        let mut phy_id = 0;
+        let mut phy_reg = 0;
+        for _ in 0..2 {
+            if let Ok(data) = self.e1e_rphy_locked(MII_PHYSID1) {
+                phy_reg = data;
+                if phy_reg == 0xFFFF {
+                    continue;
+                }
+            } else {
+                continue;
+            }
+
+            phy_id = (phy_reg as u32) << 16;
+
+            if let Ok(data) = self.e1e_rphy_locked(MII_PHYSID2) {
+                phy_reg = data;
+                if phy_reg == 0xFFFF {
+                    continue;
+                }
+            } else {
+                continue;
+            };
+            phy_id |= (phy_reg as u32 & PHY_REVISION_MASK);
+            break;
+        }
+
+        let mut skip = false;
+
+        if self.id > 0 {
+            if (self.id == phy_id) {
+                skip = true;
+            }
+        } else if phy_id > 0 {
+            self.id = phy_id;
+            self.revision = (phy_reg as u32 & !PHY_REVISION_MASK);
+            skip = true;
+        }
+
+        if !skip {
+            /* In case the PHY needs to be in mdio slow mode,
+             * set slow mode and try to get the PHY id again.
+             */
+            // if (hw.mac.kind < MacType::e1000_pch_lpt) {
+            // 	ret_val = e1000_set_mdio_slow_mode_hv(hw);
+            // 	if (!ret_val)
+            // 		ret_val = e1000e_get_phy_id(hw);
+            // }
+            return false;
+        }
+
+        if (self.mac_kind >= MacType::e1000_pch_lpt) {
+            /* Only unforce SMBus if ME is not active */
+            if self.reg.er32(FWSM) & ICH_FWSM_FW_VALID == 0 {
+                /* Unforce SMBus mode in PHY */
+                phy_reg = match self.e1e_rphy_locked(CV_SMB_CTRL) {
+                    Ok(d) => d,
+                    Err(_) => return false,
+                };
+                phy_reg &= !CV_SMB_CTRL_FORCE_SMBUS;
+                if self.e1e_wphy_locked(CV_SMB_CTRL, phy_reg).is_err() {
+                    return false;
+                };
+
+                /* Unforce SMBus mode in MAC */
+                let mut mac_reg = self.reg.er32(CTRL_EXT);
+                mac_reg &= !CTRL_EXT_FORCE_SMBUS;
+                self.reg.ew32(CTRL_EXT, mac_reg);
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     *  set_mdio_slow_mode_hv - Set slow MDIO access mode
+     *  @hw:   pointer to the HW structure
+     **/
+    pub fn set_mdio_slow_mode_hv(&self) -> Result {
+        let mut data = self.e1e_rphy(HV_KMRN_MODE_CTRL)?;
+
+        data |= HV_KMRN_MDIO_SLOW;
+
+        self.e1e_wphy(HV_KMRN_MODE_CTRL, data)
+    }
+
+    /**
+     *  get_phy_id - Retrieve the PHY ID and revision
+     *
+     *  Reads the PHY registers and stores the PHY ID and possibly the PHY
+     *  revision in the hardware structure.
+     **/
+    pub fn get_phy_id(&mut self) -> Result {
+        for _ in 0..2 {
+            let mut phy_id: u16 = self.e1e_rphy(MII_PHYSID1)?;
+            self.id = (phy_id as u32) << 16;
+
+            kfn().delay(Duration::from_micros(20));
+
+            phy_id = self.e1e_rphy(MII_PHYSID2)?;
+
+            self.id |= (phy_id as u32 & PHY_REVISION_MASK);
+            self.revision = (phy_id as u32 & !PHY_REVISION_MASK);
+
+            if (self.id != 0 && self.id != PHY_REVISION_MASK) {
+                return Ok(());
+            }
+        }
+
+        return Ok(());
+    }
+
+    /**
+     *  get_phy_type_from_id - Get PHY type from id
+     *  @phy_id: phy_id read from the phy
+     *
+     *  Returns the phy type from the id.
+     **/
+    pub fn get_phy_type_from_id(&self, phy_id: u32) -> PhyType {
+        let mut phy_type = PhyType::Unknown;
+
+        match phy_id {
+            M88E1000_I_PHY_ID | M88E1000_E_PHY_ID | M88E1111_I_PHY_ID | M88E1011_I_PHY_ID => {
+                phy_type = PhyType::M88;
+            }
+            IGP01E1000_I_PHY_ID => {
+                /* IGP 1 & 2 share this */
+                phy_type = PhyType::Igp2;
+            }
+            GG82563_E_PHY_ID => {
+                phy_type = PhyType::Gg82563;
+            }
+            IGP03E1000_E_PHY_ID => {
+                phy_type = PhyType::Igp3;
+            }
+            IFE_E_PHY_ID | IFE_PLUS_E_PHY_ID | IFE_C_E_PHY_ID => {
+                phy_type = PhyType::Ife;
+            }
+            BME1000_E_PHY_ID | BME1000_E_PHY_ID_R2 => {
+                phy_type = PhyType::Bm;
+            }
+            I82578_E_PHY_ID => {
+                phy_type = PhyType::T82578;
+            }
+            I82577_E_PHY_ID => {
+                phy_type = PhyType::T82577;
+            }
+            I82579_E_PHY_ID => {
+                phy_type = PhyType::T82579;
+            }
+            I217_E_PHY_ID => {
+                phy_type = PhyType::I217;
+            }
+            _ => {
+                phy_type = PhyType::Unknown;
+            }
+        }
+        return phy_type;
+    }
+
+    /**
+     *  get_cfg_done_generic - Generic configuration done
+     *
+     *  Generic function to wait 10 milli-seconds for configuration to complete
+     *  and return success.
+     **/
+    fn get_cfg_done_generic(&self) -> Result {
+        kfn().delay(Duration::from_millis(10));
+        Ok(())
+    }
+
+    fn get_cfg_done_ich8lan(&self) -> Result {
+        self.get_cfg_done_generic()?;
+
+        /* Wait for indication from h/w that it has completed basic config */
+        if (self.mac_kind >= MacType::e1000_ich10lan) {
+            ich8lan::lan_init_done(self.reg);
+        }
+
+        info!("Clear PHY Reset Asserted bit");
+        /* Clear PHY Reset Asserted bit */
+        let mut status = self.reg.er32(STATUS);
+        if (status & STATUS_PHYRA) > 0 {
+            self.reg.ew32(STATUS, status & !STATUS_PHYRA);
+        } else {
+            warn!("PHY Reset Asserted not set - needs delay");
+        }
+
+        /* If EEPROM is not marked present, init the IGP 3 PHY manually */
+        if (self.mac_kind <= MacType::e1000_ich9lan) {
+            // if (!(er32(EECD) & EECD_PRES) &&
+            // (hw->phy.type == e1000_phy_igp_3)) {
+            // e1000e_phy_init_script_igp3(hw);
+            // }
+            error!("hw.mac.kind <= MacType:: e1000_ich9lan");
+        } else {
+            // self.valid_nvm_bank_detect(hw)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn hw_reset_generic(&self) -> Result {
+        info!("PHY reset");
+        let reg = self.reg;
+        {
+            let lock = self.acquire()?;
+            let mut ctrl = reg.er32(CTRL);
+            reg.ew32(CTRL, ctrl | CTRL_PHY_RST);
+            reg.e1e_flush();
+
+            kfn().delay(Duration::from_micros(self.reset_delay_us as _));
+
+            reg.ew32(CTRL, ctrl);
+            reg.e1e_flush();
+
+            kfn().delay(Duration::from_micros(300));
+
+            drop(lock);
+        }
+        return self.get_cfg_done();
+    }
+
+    pub fn get_cfg_done(&self) -> Result {
+        match self.ops.get_cfg_done {
+            PhyGetCfgDone::Generic => self.get_cfg_done_generic(),
+            PhyGetCfgDone::E82751 => todo!(),
+            PhyGetCfgDone::Ich8lan => self.get_cfg_done_ich8lan(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct PhyOps {
     pub semaphore: PhySemaphore,
     pub read_write: PhyReadWrite,
+    pub get_cfg_done: PhyGetCfgDone,
 }
 
 #[derive(Debug, Clone)]
@@ -803,6 +1131,13 @@ pub(crate) enum PhySemaphore {
 pub(crate) enum PhyReadWrite {
     Bm2,
     Hv,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum PhyGetCfgDone {
+    Generic,
+    E82751,
+    Ich8lan,
 }
 
 pub(crate) struct PhyGuard<'a> {

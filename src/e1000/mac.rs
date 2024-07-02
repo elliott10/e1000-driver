@@ -194,14 +194,7 @@ impl MacInfo {
 
         Ok(())
     }
-    fn setup_physical_interface(&mut self) -> Result {
-        match self.ops.setup_physical_interface {
-            SetupPhysicalInterface::CopperLink82571 => todo!(),
-            SetupPhysicalInterface::CopperLinkPchLpt => todo!(),
-        }
 
-        Ok(())
-    }
 
     /**
      *  e1000e_config_collision_dist_generic - Configure collision distance
@@ -282,6 +275,7 @@ pub(crate) struct MacOps {
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum SetupPhysicalInterface {
     CopperLink82571,
+    CopperLinkIch8lan,
     CopperLinkPchLpt,
 }
 

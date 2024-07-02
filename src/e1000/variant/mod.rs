@@ -18,11 +18,6 @@ pub(crate) struct Variant {
     pub kind: VariantKind,
 }
 
-pub(crate) struct VariantParam {
-    pub reg: Reg,
-    pub board_info: BoardInfo,
-}
-
 pub(crate) struct VariantResult {
     pub mac: MacInfo,
     pub phy: PhyInfo,
@@ -45,14 +40,9 @@ impl Variant {
         mut reg: Reg,
         board_info: &BoardInfo,
     ) -> Result<VariantResult> {
-        let param = VariantParam {
-            reg,
-            board_info: board_info.clone(),
-        };
-
         match &mut self.kind {
-            VariantKind::B82571(ctx) => ctx.get_variants(param, reg, board_info),
-            VariantKind::Ich8lan(ctx) => ctx.get_variants(param, reg, board_info),
+            VariantKind::B82571(ctx) => ctx.get_variants(reg, board_info),
+            VariantKind::Ich8lan(ctx) => ctx.get_variants(reg, board_info),
         }
     }
 
@@ -68,27 +58,23 @@ impl Variant {
             VariantKind::Ich8lan(ctx) => ctx.init_hw(e1000),
         }
     }
-
 }
 
 pub(crate) trait VariantCommon {
-    fn init_mac_params(&mut self, mac_kind: MacType, reg: Reg) -> Result<MacInfo>;
-    fn init_nvm_params(&self, mac: &MacInfo, board: &BoardInfo, reg: Reg) -> Result<NvmInfo>;
+    fn init_mac_params(&mut self, board: &BoardInfo, reg: Reg) -> Result<MacInfo>;
+    fn init_nvm_params(&mut self, mac: &MacInfo, board: &BoardInfo, reg: Reg) -> Result<NvmInfo>;
     fn init_phy_params(&mut self, mac: &MacInfo, board: &BoardInfo, reg: Reg) -> Result<PhyInfo>;
     fn reset_hw(&self, e1000: &E1000) -> Result;
     fn init_hw(&self, e1000: &E1000) -> Result;
 
-    fn get_variants(
-        &mut self,
-        param: VariantParam,
-        mut reg: Reg,
-        boad: &BoardInfo,
-    ) -> Result<VariantResult> {
+    fn get_variants(&mut self, mut reg: Reg, boad: &BoardInfo) -> Result<VariantResult> {
         let mut flags = boad.flags.clone();
-        let mut mac = self.init_mac_params(param.board_info.mac, reg)?;
+        let mut mac = self.init_mac_params(boad, reg)?;
         self.set_reg(mac.kind, &mut reg);
         mac.reg = reg;
         let nvm = self.init_nvm_params(&mac, boad, reg)?;
+        reg = nvm.reg;
+        mac.reg = reg;
         let phy = self.init_phy_params(&mac, boad, reg)?;
 
         Ok(VariantResult {
