@@ -375,7 +375,7 @@ unsafe extern "C" fn e1000r_clear_rx(
     meta: *const c_void,
 ) -> usize {
     let dev = dev_mut(ptr);
-    let pkts = dev.dev.clean_rx(max);
+    let pkts = dev.dev.clean_rx_irq(max);
 
     unsafe {
         for i in 0..pkts.len() {

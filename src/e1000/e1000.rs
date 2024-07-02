@@ -241,7 +241,7 @@ impl E1000 {
 
     fn configure_tx(&mut self) {
         let mut tdba = self.tx_ring.dma_desc.dma_addr();
-        let tdlen = self.tx_ring.len() as u32;
+        let tdlen = self.tx_ring.dma_desc.size() as u32;
         self.ew32(TDBAL(0), (tdba & DMA_BIT_MASK(32)) as u32);
         self.ew32(TDBAH(0), (tdba >> 32) as u32);
         self.ew32(TDLEN(0), tdlen);
@@ -339,7 +339,7 @@ impl E1000 {
         rctl =
             RCTL_BAM | RCTL_LBM_NO | RCTL_RDMTS_HALF | (self.mac.mc_filter_type << RCTL_MO_SHIFT);
 
-        rctl &= !(0b11 << 10); // Legacy description type
+        // rctl &= !(0b11 << 10); // Legacy description type
 
         /* Do not Store bad packets */
         rctl &= !RCTL_SBP;
@@ -394,7 +394,8 @@ impl E1000 {
     fn configure_rx(&mut self) {
         //TODO
 
-        let rdlen = self.rx_ring.len() as u32;
+        let rdlen = self.rx_ring.dma_desc.size() as u32;
+        let rlen = self.rx_ring.len() as u32;
         /* disable receives while setting up the descriptors */
         let mut rctl = self.er32(RCTL);
         if !self.params.flags.no_disable_rx {
@@ -419,11 +420,9 @@ impl E1000 {
 
         /* set the Receive Delay Timer Register */
         self.ew32(RDTR, self.params.rx_int_delay);
-        // self.ew32(RDTR, 0);
 
         /* irq moderation */
         self.ew32(RADV, self.params.rx_abs_int_delay);
-        // self.ew32(RADV, 0);
 
         if (self.params.itr_settings != 0) && (self.params.itr != 0) {
             self.write_itr(self.params.itr);
@@ -445,10 +444,7 @@ impl E1000 {
         self.ew32(RDLEN(0), rdlen);
         self.ew32(RDH(0), 0);
 
-        // self.rx_ring.next_to_clean = 0;
-        // self.ew32(RDT(0), 0);
-
-        self.ew32(RDT(0), rdlen - 1);
+        self.ew32(RDT(0), rlen - 1);
         self.rx_ring.next_to_clean = 0;
 
         // writel(0, rx_ring->head);
@@ -604,20 +600,9 @@ impl E1000 {
         }
 
         if (icr & ICR_LSC) > 0 {
-            let is_up = self.er32(STATUS) & STATUS_LU > 0;
-
             self.mac.get_link_status = true;
 
-            if is_up {
-                if let Ok(old_link) =
-                    self.is_link_up
-                        .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |_| Some(true))
-                {
-                    if !old_link {
-                        self.after_link_up();
-                    }
-                }
-            }
+            self.on_lsc_changed();
 
             if self.params.flags.rx_needs_restart {
                 info!("restart rx");
@@ -631,6 +616,21 @@ impl E1000 {
 
         Ok(())
     }
+
+    fn on_lsc_changed(&mut self) {
+        let is_up = self.er32(STATUS) & STATUS_LU > 0;
+        if is_up {
+            if let Ok(old_link) =
+                self.is_link_up
+                    .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |_| Some(true))
+            {
+                if !old_link {
+                    self.after_link_up();
+                }
+            }
+        }
+    }
+
     fn after_link_up(&mut self) -> Result {
         let mut tries = 0;
         let dmoff_exit_timeout = 100;
@@ -1703,45 +1703,53 @@ impl E1000 {
             self.ew32(ICS, self.tx_ring.ims_val);
         }
     }
-    pub fn clean_rx(&mut self, max: u32) -> Vec<RcvPkt> {
+    pub fn clean_rx_irq(&mut self, max: u32) -> Vec<RcvPkt> {
         let mut out = Vec::new();
 
-        // let mut i = self.rx_ring.next_to_clean;
-        // let mut pkts_compl = 0;
-        // let mut bytes_compl = 0;
-        // let mut tail = i;
+        let mut i = self.rx_ring.next_to_clean;
+        let mut pkts_compl = 0;
+        let mut bytes_compl = 0;
+        let mut tail = i;
 
-        // for _ in 0..max {
-        //     // info!(
-        //     //     "clean_rx: max {}, index: {}, head {}",
-        //     //     max,
-        //     //     i,
-        //     //     self.er32(RDH(0))
-        //     // );
+        for _ in 0..max {
+            // info!(
+            //     "clean_rx: max {}, index: {}, head {}",
+            //     max,
+            //     i,
+            //     self.er32(RDH(0))
+            // );
+            unsafe {
+                let elem = &mut self.rx_ring[i];
+                let cpu_addr = elem.cpu_addr as *mut u8;
+                let dma_addr = elem.dma_addr;
+                let desc: &mut RxDescExt = elem.desc_mut();
 
-        //     let desc = self.rx_ring.mut_volatile(i);
-        //     if (desc.status & RXD_STAT_DD as u8) == 0 {
-        //         break;
-        //     }
-        //     self.rx_ring.as_mut()[i].status = 0;
-        //     let len = desc.length as usize;
-        //     let mbuf = unsafe { &*slice_from_raw_parts(self.rx_ring.mbufs[i] as *mut u8, len) };
-        //     let mut data = Vec::try_with_capacity(len).unwrap();
-        //     data.try_extend_from_slice(mbuf);
-        //     out.try_push(RcvPkt { data }).unwrap();
+                if (desc.wb.status_error & RXD_STAT_DD) == 0 {
+                    break;
+                }
 
-        //     tail = i;
-        //     // self.ew32(RDT(0), i as u32);
-        //     i += 1;
-        //     if i >= self.rx_ring.size {
-        //         i = 0;
-        //     }
-        // }
+                let len = desc.wb.length as usize;
+                let mbuf = &*slice_from_raw_parts(cpu_addr, len);
+                let mut data = Vec::try_with_capacity(len).unwrap();
+                data.try_extend_from_slice(mbuf);
+                out.try_push(RcvPkt { data }).unwrap();
 
-        // if self.rx_ring.next_to_clean != i {
-        //     self.rx_ring.next_to_clean = i;
-        //     self.ew32(RDT(0), tail as u32);
-        // }
+                fence_w();
+
+                desc.set_dma_addr(dma_addr);
+                desc.wb.status_error = 0;
+            }
+            tail = i;
+            i += 1;
+            if i >= self.rx_ring.len() {
+                i = 0;
+            }
+        }
+
+        if self.rx_ring.next_to_clean != i {
+            self.rx_ring.next_to_clean = i;
+            self.ew32(RDT(0), tail as u32);
+        }
 
         out
     }

@@ -692,9 +692,9 @@ static int e1000e_poll(struct napi_struct *napi, int budget) {
 
   bool tx_cleand = false;
 
-  // if (!adapter->msix_entries) {
-  tx_cleand = e1000r_irq_clean_tx(adapter->ptr);
-  // }
+  if (!adapter->msix_entries) {
+    tx_cleand = e1000r_irq_clean_tx(adapter->ptr);
+  }
 
   int work_done = e1000r_clear_rx(adapter->ptr, budget, cb_on_rcv_pkt, adapter);
 

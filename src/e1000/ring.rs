@@ -36,21 +36,25 @@ where
         layout = layout.align_to(4096).unwrap();
         let dma_desc: DMA = DMA::try_new(layout.size())?;
         let dma_buff: DMA = DMA::try_new(buff_len * size)?;
-        let mut buff_addr: u64 = dma_buff.dma_addr();
+        let mut buff_dma_addr: u64 = dma_buff.dma_addr();
+        let mut buff_cpu_addr = dma_buff.cpu_addr();
 
         unsafe {
             let desc_ptr = dma_desc.cpu_addr() as *mut T;
 
             for i in 0..size {
                 let desc = &mut *desc_ptr.offset(i as _);
-                desc.set_dma_addr(buff_addr);
+                desc.set_dma_addr(buff_dma_addr);
                 let mut elem = RingElem {
                     desc_ptr: desc,
                     length: buff_len,
+                    dma_addr: buff_dma_addr,
+                    cpu_addr: buff_cpu_addr,
                 };
 
                 elems.try_push(elem)?;
-                buff_addr += buff_len as u64;
+                buff_dma_addr += buff_len as u64;
+                buff_cpu_addr += buff_len;
             }
         }
         Ok(Self {
@@ -77,6 +81,7 @@ where
         buf[..len].copy_from_slice(&src[..len]);
         len
     }
+    
 }
 
 impl<T> Deref for Ring<T>
@@ -109,6 +114,8 @@ where
 {
     desc_ptr: *mut T,
     pub length: usize,
+    pub dma_addr: u64,
+    pub cpu_addr: usize,
 }
 
 impl<T> RingElem<T>
@@ -182,4 +189,47 @@ impl Descriptor for RxDescExt {
     fn set_dma_addr(&mut self, dma_addr: u64) {
         self.read.addr = dma_addr;
     }
+}
+
+const MAX_PS_BUFFERS: usize = 4;
+const PS_PAGE_BUFFERS: usize = MAX_PS_BUFFERS - 1;
+
+/* Receive Descriptor - Packet Split */
+#[repr(C)]
+pub union RxDescPacketSplit {
+    pub buffer_addr: [u64; MAX_PS_BUFFERS],
+    pub wb: RxDescPacketSplitWB,
+}
+
+impl Descriptor for RxDescPacketSplit {
+    fn set_dma_addr(&mut self, dma_addr: u64) {
+        todo!()
+    }
+}
+
+#[derive(Clone, Copy)]
+#[repr(C)]
+pub struct RxDescPacketSplitWB {
+    pub mrq: u32,
+    pub hi_dword: RxDescPacketSplitHiDword,
+    pub status_error: u32,
+    pub length0: u16,
+    pub vlan: u16,
+    pub header_status: u16,
+    pub length: [u16; PS_PAGE_BUFFERS],
+    pub reserved: u64,
+}
+
+#[derive(Clone, Copy)]
+#[repr(C)]
+pub union RxDescPacketSplitHiDword {
+    pub rss: u32,
+    pub csum_ip: RxDescPacketSplitCsumIp,
+}
+
+#[derive(Clone, Copy)]
+#[repr(C)]
+pub struct RxDescPacketSplitCsumIp {
+    pub ip_id: u16,
+    pub csum: u16,
 }
