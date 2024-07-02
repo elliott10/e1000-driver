@@ -25,10 +25,10 @@ pub(crate) struct VariantParam {
 
 pub(crate) struct VariantResult {
     pub mac: MacInfo,
-    pub phy: PhyInfo2,
+    pub phy: PhyInfo,
     pub nvm: NvmInfo,
     pub reg: Reg,
-    pub flags: Flags3,
+    pub flags: Flags,
 }
 
 impl Variant {
@@ -74,7 +74,7 @@ impl Variant {
 pub(crate) trait VariantCommon {
     fn init_mac_params(&mut self, mac_kind: MacType, reg: Reg) -> Result<MacInfo>;
     fn init_nvm_params(&self, mac: &MacInfo, board: &BoardInfo, reg: Reg) -> Result<NvmInfo>;
-    fn init_phy_params(&mut self, mac: &MacInfo, board: &BoardInfo, reg: Reg) -> Result<PhyInfo2>;
+    fn init_phy_params(&mut self, mac: &MacInfo, board: &BoardInfo, reg: Reg) -> Result<PhyInfo>;
     fn reset_hw(&self, e1000: &E1000) -> Result;
     fn init_hw(&self, e1000: &E1000) -> Result;
 

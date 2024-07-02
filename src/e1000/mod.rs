@@ -12,7 +12,6 @@ pub(crate) mod nvm;
 pub(crate) mod params;
 pub(crate) mod phy;
 mod reg;
-mod regs;
 pub(crate) mod ring;
 mod variant;
 pub use self::e1000::*;
@@ -25,7 +24,10 @@ use core::{
 };
 use err::{Error, Result};
 
-pub use hw::{E1000HWStats, MediaType, PhyInfo, PhyType};
+pub use hw::E1000HWStats;
+pub use params::Flags;
+pub use phy::MediaType;
+
 const PAGE_SIZE: usize = 4096;
 
 static mut KERNEL: *mut Box<dyn KernelFunc> = null_mut();
@@ -124,7 +126,6 @@ pub trait KernelFunc {
     /// iounmap address
     fn iounmap(&self, addr: usize);
 }
-
 
 #[repr(C)]
 pub struct E1000XmitConfig {

@@ -10,10 +10,10 @@ use crate::hw::FcMode;
 use crate::kfn;
 use crate::lock::Semaphore;
 use crate::lock::SemaphoreBackend;
-use crate::phy::{self, PhyInfo2};
+use crate::phy::{self, PhyInfo};
 use crate::E1000;
-use crate::{defines::*, err::*, PhyType};
-use crate::{BoardInfo, Flags, Flags2, MediaType};
+use crate::{defines::*, err::*, phy::*};
+use crate::{BoardInfo, Flags};
 
 #[derive(Default, Debug, Clone)]
 pub(crate) struct Context {
@@ -71,7 +71,7 @@ impl VariantCommon for Context {
         Ok(mac)
     }
 
-    fn init_phy_params(&mut self, mac: &MacInfo, board: &BoardInfo, reg: Reg) -> Result<PhyInfo2> {
+    fn init_phy_params(&mut self, mac: &MacInfo, board: &BoardInfo, reg: Reg) -> Result<PhyInfo> {
         let media_type = MediaType::media_type_copper;
         let mac_kind = mac.kind;
         let mut id = 0;
@@ -85,7 +85,7 @@ impl VariantCommon for Context {
             _ => return Err(Error::Phy("Error getting PHY")),
         };
 
-        Ok(PhyInfo2 {
+        Ok(PhyInfo {
             mac_kind,
             reg,
             ops: board.phy_ops.clone(),
@@ -249,8 +249,6 @@ impl VariantCommon for Context {
         }
         Ok(())
     }
-    
- 
 }
 
 impl Context {

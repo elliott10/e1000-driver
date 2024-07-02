@@ -1,6 +1,6 @@
 use defines::*;
 use e1000::reg::*;
-use params::Flags3;
+use params::Flags;
 use phy::*;
 
 use crate::err::{Error, Result};
@@ -29,17 +29,6 @@ pub(crate) struct HostMngDhcpCookie {
     pub(crate) reserved3: u8,
     pub(crate) checksum: u8,
 }
-#[allow(non_camel_case_types)]
-#[repr(C)]
-#[derive(Debug, Clone, PartialOrd, PartialEq)]
-pub enum MediaType {
-    media_type_unknown = 0,
-    media_type_copper = 1,
-    media_type_fiber = 2,
-    media_type_internal_serdes = 3,
-    num_media_types,
-}
-
 const MAX_MTA_REG: usize = 128;
 
 #[repr(C)]
@@ -108,97 +97,6 @@ pub struct E1000HWStats {
     pub ictxqmtc: u64,
     pub icrxdmtc: u64,
     pub icrxoc: u64,
-}
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) enum MsType {
-    HwDefault = 0,
-    ForceMaster,
-    ForceSlave,
-    Auto,
-}
-impl Default for MsType {
-    fn default() -> Self {
-        Self::Auto
-    }
-}
-
-#[derive(Debug, PartialEq, Clone, Copy, PartialOrd)]
-pub enum PhyType {
-    Unknown,
-    None,
-    M88,
-    Igp,
-    Igp2,
-    Gg82563,
-    Igp3,
-    Ife,
-    Bm,
-    T82578,
-    T82577,
-    T82579,
-    I217,
-}
-impl Default for PhyType {
-    fn default() -> Self {
-        Self::Unknown
-    }
-}
-
-impl Default for MediaType {
-    fn default() -> Self {
-        Self::media_type_unknown
-    }
-}
-
-#[derive(Debug, Default)]
-pub struct PhyInfo {
-    pub kind: PhyType,
-
-    pub addr: u32,
-    pub id: u32,
-    pub reset_delay_us: u32, // in microseconds
-    pub revision: u32,
-
-    pub media_type: MediaType,
-
-    pub autoneg_advertised: u16,
-    pub autoneg_mask: u16,
-    pub cable_length: u16,
-    pub max_cable_length: u16,
-    pub min_cable_length: u16,
-
-    pub mdix: u8,
-
-    pub disable_polarity_correction: bool,
-    pub is_mdix: bool,
-    pub polarity_correction: bool,
-    pub speed_downgraded: bool,
-    pub autoneg_wait_to_complete: bool,
-
-    pub(crate) ms_type: MsType,
-    pub(crate) original_ms_type: MsType,
-}
-
-impl PhyInfo {
-    pub(crate) fn copper_options(&mut self) {
-        if self.media_type == MediaType::media_type_copper {
-            self.mdix = AUTO_ALL_MODES;
-            self.disable_polarity_correction = false;
-            self.ms_type = MsType::HwDefault;
-        }
-    }
-}
-#[derive(Default, Debug, Clone)]
-#[repr(C)]
-pub(crate) struct PhyRegs {
-    pub(crate) bmcr: u16,      // Basic Mode Control Register
-    pub(crate) bmsr: u16,      // Basic Mode Status Register
-    pub(crate) advertise: u16, // Auto-Negotiation Advertisement
-    pub(crate) lpa: u16,       // Link Partner Ability Register
-    pub(crate) expansion: u16, // Auto-Negotiation Expansion Register
-    pub(crate) ctrl1000: u16,  // 1000BASE-T Control Register
-    pub(crate) stat1000: u16,  // 1000BASE-T Status Register
-    pub(crate) estatus: u16,   // Extended Status Register
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -274,11 +172,11 @@ impl BusInfo {
 
 pub(crate) struct HwControl {
     reg: Reg,
-    flags: Flags3,
+    flags: Flags,
 }
 
 impl HwControl {
-    pub(crate) fn new(reg: Reg, flags: Flags3) -> Self {
+    pub(crate) fn new(reg: Reg, flags: Flags) -> Self {
         if flags.has_swsm_on_load {
             let swsm = reg.er32(SWSM);
             reg.ew32(SWSM, swsm | SWSM_DRV_LOAD);

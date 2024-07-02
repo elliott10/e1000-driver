@@ -1,5 +1,5 @@
 use super::reg::*;
-use crate::{defines::*, err::*, hw::FcMode, phy::PhyInfo2, MacAddress};
+use crate::{defines::*, err::*, hw::FcMode, phy::PhyInfo, MacAddress};
 use alloc::vec::Vec;
 
 #[allow(non_camel_case_types)]
@@ -107,7 +107,7 @@ impl MacInfo {
         addr: MacAddress,
         index: usize,
         reg: Reg,
-        phy: &PhyInfo2,
+        phy: &PhyInfo,
     ) -> Result {
         let index = index as u32;
         let rar_low = u32::from_le_bytes([addr.0[0], addr.0[1], addr.0[2], addr.0[3]]);

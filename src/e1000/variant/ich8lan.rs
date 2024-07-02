@@ -3,9 +3,9 @@ use super::{VariantCommon, VariantParam, VariantResult};
 use crate::defines::*;
 use crate::e1000::mac::*;
 use crate::e1000::nvm::*;
-use crate::e1000::reg::{Reg, FWSM};
-use crate::phy::PhyInfo2;
-use crate::{err::*, BoardInfo, Flags, Flags2, MediaType};
+use crate::e1000::reg::{self, *};
+use crate::{defines::*, err::*, phy::*};
+use crate::{err::*, BoardInfo, Flags};
 
 #[derive(Debug, Default, Clone)]
 pub(crate) struct Context {}
@@ -23,7 +23,7 @@ impl VariantCommon for Context {
         todo!()
     }
 
-    fn init_phy_params(&mut self, mac: &MacInfo, board: &BoardInfo, reg: Reg) -> Result<PhyInfo2> {
+    fn init_phy_params(&mut self, mac: &MacInfo, board: &BoardInfo, reg: Reg) -> Result<PhyInfo> {
         let media_type = MediaType::media_type_copper;
         todo!()
     }
@@ -35,9 +35,8 @@ impl VariantCommon for Context {
     fn reset_hw(&self, e1000: &crate::E1000) -> Result {
         todo!()
     }
-    
+
     fn init_hw(&self, e1000: &crate::E1000) -> Result {
         todo!()
     }
-    
 }

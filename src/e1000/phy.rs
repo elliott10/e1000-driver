@@ -18,7 +18,6 @@ use crate::{
     E1000,
 };
 use crate::{e1000::lock::SemaphoreBackend, hw::FcMode};
-use crate::{hw::MsType, MediaType, PhyType};
 
 // IGP01E1000 Specific Registers
 pub(crate) const PHY_PORT_CONFIG: u16 = 0x10; // Port Config
@@ -142,8 +141,73 @@ pub(crate) const I82579_LPI_CTRL: u32 = PHY_REG(772, 20);
 
 pub(crate) const I82579_LPI_CTRL_ENABLE_MASK: u16 = 0x6000;
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum MsType {
+    HwDefault = 0,
+    ForceMaster,
+    ForceSlave,
+    Auto,
+}
+impl Default for MsType {
+    fn default() -> Self {
+        Self::Auto
+    }
+}
+
+#[allow(non_camel_case_types)]
+#[repr(C)]
+#[derive(Debug, Clone, PartialOrd, PartialEq)]
+pub enum MediaType {
+    media_type_unknown = 0,
+    media_type_copper = 1,
+    media_type_fiber = 2,
+    media_type_internal_serdes = 3,
+    num_media_types,
+}
+
+#[derive(Debug, PartialEq, Clone, Copy, PartialOrd)]
+pub enum PhyType {
+    Unknown,
+    None,
+    M88,
+    Igp,
+    Igp2,
+    Gg82563,
+    Igp3,
+    Ife,
+    Bm,
+    T82578,
+    T82577,
+    T82579,
+    I217,
+}
+impl Default for PhyType {
+    fn default() -> Self {
+        Self::Unknown
+    }
+}
+
+impl Default for MediaType {
+    fn default() -> Self {
+        Self::media_type_unknown
+    }
+}
+
+#[derive(Default, Debug, Clone)]
+#[repr(C)]
+pub(crate) struct PhyRegs {
+    pub(crate) bmcr: u16,      // Basic Mode Control Register
+    pub(crate) bmsr: u16,      // Basic Mode Status Register
+    pub(crate) advertise: u16, // Auto-Negotiation Advertisement
+    pub(crate) lpa: u16,       // Link Partner Ability Register
+    pub(crate) expansion: u16, // Auto-Negotiation Expansion Register
+    pub(crate) ctrl1000: u16,  // 1000BASE-T Control Register
+    pub(crate) stat1000: u16,  // 1000BASE-T Status Register
+    pub(crate) estatus: u16,   // Extended Status Register
+}
+
 #[derive(Debug)]
-pub(crate) struct PhyInfo2 {
+pub(crate) struct PhyInfo {
     pub mac_kind: MacType,
     pub kind: PhyType,
     pub reg: Reg,
@@ -175,7 +239,7 @@ pub(crate) struct PhyInfo2 {
     pub access_shared_resource: AtomicBool,
 }
 
-impl PhyInfo2 {
+impl PhyInfo {
     pub fn acquire(&self) -> Result<PhyGuard<'_>> {
         match &self.ops.semaphore {
             PhySemaphore::Ich8lan => todo!(),
@@ -742,11 +806,11 @@ pub(crate) enum PhyReadWrite {
 }
 
 pub(crate) struct PhyGuard<'a> {
-    phy: &'a PhyInfo2,
+    phy: &'a PhyInfo,
 }
 
 impl core::ops::Deref for PhyGuard<'_> {
-    type Target = PhyInfo2;
+    type Target = PhyInfo;
 
     fn deref(&self) -> &Self::Target {
         self.phy
@@ -756,8 +820,8 @@ impl core::ops::Deref for PhyGuard<'_> {
 impl core::ops::DerefMut for PhyGuard<'_> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe {
-            let ptr = self.phy as *const PhyInfo2;
-            let ptr = ptr as *mut PhyInfo2;
+            let ptr = self.phy as *const PhyInfo;
+            let ptr = ptr as *mut PhyInfo;
             &mut *ptr
         }
     }

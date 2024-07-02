@@ -14,7 +14,7 @@ use core::ptr::NonNull;
 use core::sync::atomic::{AtomicBool, Ordering};
 use e1000::variant::{self, Variant};
 use ffi::CStr;
-use params::{Flags3, InterruptMode, Params, Settings};
+use params::{Flags, InterruptMode, Params, Settings};
 
 static mut CARD_FOUND: usize = 0;
 
@@ -25,7 +25,7 @@ pub struct E1000 {
     pub(crate) reg: Reg,
     pub(crate) params: Params,
     pub(crate) mac: MacInfo,
-    pub(crate) phy: PhyInfo2,
+    pub(crate) phy: PhyInfo,
     phy_regs: PhyRegs,
     pub(crate) nvm: NvmInfo,
     pub(crate) bus: BusInfo,
@@ -833,7 +833,7 @@ impl E1000 {
         Ok(())
     }
 
-    pub fn flags(&self) -> Flags3 {
+    pub fn flags(&self) -> Flags {
         self.params.flags.clone()
     }
 

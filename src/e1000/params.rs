@@ -15,7 +15,7 @@ const MAX_NIC: usize = 32;
 
 #[repr(C)]
 #[derive(Debug, Clone, Default)]
-pub struct Flags3 {
+pub struct Flags {
     // ---- flags ----
     pub has_amt: bool,
     pub has_flash: bool,
@@ -79,7 +79,7 @@ pub struct Settings {
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Params {
     pub settings: Settings,
-    pub flags: Flags3,
+    pub flags: Flags,
     pub int_mode: InterruptMode,
 
     /* Interrupt Throttle Rate (interrupts/sec)
