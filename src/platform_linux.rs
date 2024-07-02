@@ -26,8 +26,6 @@ struct KFun {
     cb_bar_n_remap: E1000CbBarNremap,
     cb_iounmap: E1000CbIounmap,
     cb_udelay: E1000CbUdelay,
-    cb_pcie_info: E1000CbPcieInfo,
-    cb_mtu_bg_eth: E1000CbMtuBgEth,
     cb_dma_alloc: E1000CbDmaAllocCoherent,
     cb_dma_free: E1000CbDmaFreeCoherent,
     cb_pci_read_config_word: E1000CbPciReadConfigWord,
@@ -40,7 +38,7 @@ struct KFun {
 
 unsafe impl Sync for KFun {}
 unsafe impl Send for KFun {}
-impl KernelFunc2 for KFun {
+impl KernelFunc for KFun {
     fn bar_n_remap(&self, bar: usize) -> usize {
         unsafe { (self.cb_bar_n_remap)(self.adapter, bar) }
     }
@@ -106,50 +104,6 @@ impl KernelFunc2 for KFun {
 
     // }
 }
-impl KernelFunc for KFun {
-    fn dma_alloc_coherent(&self, pages: usize) -> (usize, u64) {
-        let mut dma = 0;
-        let addr = unsafe { (self.cb_dma_alloc)(self.adapter, pages, &mut dma) };
-        (addr, dma)
-    }
-
-    fn dma_free_coherent(&self, vaddr: usize, dma: u64, pages: usize) {
-        unsafe { (self.cb_dma_free)(self.adapter, vaddr, dma, pages) }
-    }
-
-    fn bar_n_remap(&self, bar: usize) -> usize {
-        unsafe { (self.cb_bar_n_remap)(self.adapter, bar) }
-    }
-    fn iounmap(&self, addr: usize) {
-        unsafe { (self.cb_iounmap)(addr) }
-    }
-
-    fn delay(&self, nanos: u64) {
-        unsafe {
-            ((self.cb_udelay)((nanos / 1000) as u32));
-        }
-    }
-
-    fn pcie_info(&self) -> E1000rPcieInfo {
-        unsafe { (self.cb_pcie_info)(self.adapter) }
-    }
-
-    fn is_mtu_bg_eth(&self) -> bool {
-        unsafe { ((self.cb_mtu_bg_eth)(self.adapter)) }
-    }
-
-    fn pci_read_config_word(&self, where_: i32) -> u16 {
-        unsafe { (self.cb_pci_read_config_word)(self.adapter, where_) }
-    }
-
-    fn on_xmit_completed(&self, pkts: u32, bytes: u32) {
-        unsafe { (self.cb_on_xmit_completed)(self.adapter, pkts, bytes) }
-    }
-
-    fn enable_net(&self) {
-        unsafe { ((self.cb_enable_net)(self.adapter)) }
-    }
-}
 
 type DevicePtr = *mut Device;
 fn dev_mut<'a>(ptr: usize) -> &'a mut Device {
@@ -163,10 +117,6 @@ pub type E1000CbBarNremap = unsafe extern "C" fn(pdev: *const c_void, bar: usize
 pub type E1000CbIounmap = unsafe extern "C" fn(addr: usize);
 
 pub type E1000CbUdelay = unsafe extern "C" fn(usecs: u32);
-
-pub type E1000CbPcieInfo = unsafe extern "C" fn(pdev: *const c_void) -> E1000rPcieInfo;
-
-pub type E1000CbMtuBgEth = unsafe extern "C" fn(pdev: *const c_void) -> bool;
 
 pub type E1000CbDmaAllocCoherent =
     unsafe extern "C" fn(pdev: *const c_void, size: usize, dma: &mut u64) -> usize;
@@ -188,8 +138,6 @@ pub struct E1000Config {
     cb_bar_n_remap: E1000CbBarNremap,
     cb_iounmap: E1000CbIounmap,
     cb_udelay: E1000CbUdelay,
-    cb_pcie_info: E1000CbPcieInfo,
-    cb_mtu_bg_eth: E1000CbMtuBgEth,
     cb_dma_alloc_coherent: E1000CbDmaAllocCoherent,
     cb_dma_free_coherent: E1000CbDmaFreeCoherent,
     cb_pci_read_config_word: E1000CbPciReadConfigWord,
@@ -215,9 +163,7 @@ extern "C" fn e1000r_new(config: E1000Config) -> usize {
         cb_bar_n_remap: config.cb_bar_n_remap,
         cb_iounmap: config.cb_iounmap,
         cb_udelay: config.cb_udelay,
-        cb_pcie_info: config.cb_pcie_info,
         adapter: config.adapter,
-        cb_mtu_bg_eth: config.cb_mtu_bg_eth,
         cb_dma_alloc: config.cb_dma_alloc_coherent,
         cb_dma_free: config.cb_dma_free_coherent,
         cb_pci_read_config_word: config.cb_pci_read_config_word,

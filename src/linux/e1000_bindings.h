@@ -32,14 +32,6 @@ typedef void (*E1000CbIounmap)(size_t addr);
 
 typedef void (*E1000CbUdelay)(uint32_t usecs);
 
-typedef struct E1000rPcieInfo {
-  uint16_t bus_link_width;
-} E1000rPcieInfo;
-
-typedef struct E1000rPcieInfo (*E1000CbPcieInfo)(const void *pdev);
-
-typedef bool (*E1000CbMtuBgEth)(const void *pdev);
-
 typedef size_t (*E1000CbDmaAllocCoherent)(const void *pdev, size_t size, uint64_t *dma);
 
 typedef void (*E1000CbDmaFreeCoherent)(const void *pdev, size_t vaddr, uint64_t dma, size_t size);
@@ -58,8 +50,6 @@ typedef struct E1000Config {
   E1000CbBarNremap cb_bar_n_remap;
   E1000CbIounmap cb_iounmap;
   E1000CbUdelay cb_udelay;
-  E1000CbPcieInfo cb_pcie_info;
-  E1000CbMtuBgEth cb_mtu_bg_eth;
   E1000CbDmaAllocCoherent cb_dma_alloc_coherent;
   E1000CbDmaFreeCoherent cb_dma_free_coherent;
   E1000CbPciReadConfigWord cb_pci_read_config_word;

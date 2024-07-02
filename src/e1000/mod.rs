@@ -28,9 +28,9 @@ use err::{Error, Result};
 pub use hw::{E1000HWStats, MediaType, PhyInfo, PhyType};
 const PAGE_SIZE: usize = 4096;
 
-static mut KERNEL: *mut Box<dyn KernelFunc2> = null_mut();
+static mut KERNEL: *mut Box<dyn KernelFunc> = null_mut();
 
-pub fn register_kernel<K: KernelFunc2 + 'static>(k: K) {
+pub fn register_kernel<K: KernelFunc + 'static>(k: K) {
     unsafe {
         if !KERNEL.is_null() {
             return;
@@ -38,16 +38,16 @@ pub fn register_kernel<K: KernelFunc2 + 'static>(k: K) {
         let layout = Layout::for_value(&k);
         let ptr = alloc::alloc(layout) as *mut K;
         ptr.write(k);
-        let boxed: Box<dyn KernelFunc2> = Box::from_raw(ptr);
+        let boxed: Box<dyn KernelFunc> = Box::from_raw(ptr);
 
         let layout = Layout::for_value(&boxed);
-        let wrap = alloc::alloc(layout) as *mut Box<dyn KernelFunc2>;
+        let wrap = alloc::alloc(layout) as *mut Box<dyn KernelFunc>;
         wrap.write(boxed);
 
         KERNEL = wrap;
     }
 }
-pub(crate) fn kfn() -> &'static Box<dyn KernelFunc2> {
+pub(crate) fn kfn() -> &'static Box<dyn KernelFunc> {
     unsafe {
         if KERNEL.is_null() {
             panic!("register_kernel not called");
@@ -97,7 +97,7 @@ impl Drop for DMA {
     }
 }
 
-pub trait KernelFunc2 {
+pub trait KernelFunc {
     /// BAR remap address
     fn bar_n_remap(&self, bar: usize) -> usize;
 
@@ -124,43 +124,7 @@ pub trait KernelFunc2 {
     /// iounmap address
     fn iounmap(&self, addr: usize);
 }
-pub trait KernelFunc: Send + Sync + Clone {
-    /// Page size (usually 4K)
-    const PAGE_SIZE: usize = PAGE_SIZE;
 
-    // 或请求分配irq
-
-    /// Allocate 'contiguous physical memory' for DMA;
-    /// Return (cpu virtual address, dma physical address) which is page aligned.
-    //fn dma_alloc_coherent(pages: usize) -> usize;
-    fn dma_alloc_coherent(&self, pages: usize) -> (usize, u64);
-
-    /// Deallocate DMA memory by virtual address
-    fn dma_free_coherent(&self, vaddr: usize, dma: u64, pages: usize);
-
-    /// BAR remap address
-    fn bar_n_remap(&self, bar: usize) -> usize;
-
-    /// iounmap address
-    fn iounmap(&self, addr: usize);
-
-    /// TODO linux Duration 无法编译通过
-    fn delay(&self, nanos: u64);
-
-    /// PCIe 相关信息
-    fn pcie_info(&self) -> E1000rPcieInfo;
-
-    /// Pcie 读取
-    fn pci_read_config_word(&self, where_: i32) -> u16;
-
-    /// mtu 大于 ETH_DATA_LEN
-    fn is_mtu_bg_eth(&self) -> bool;
-
-    fn on_xmit_completed(&self, pkts: u32, bytes: u32);
-
-    fn enable_net(&self);
-    // fn num_msix_vectors(&self)->usize;
-}
 
 #[repr(C)]
 pub struct E1000XmitConfig {

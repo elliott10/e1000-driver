@@ -852,38 +852,11 @@ size_t cb_bar_n_remap(const void *data, size_t bar) {
   return (size_t)ioremap(mmio_start, mmio_len);
 }
 
-struct E1000rPcieInfo cb_pcie_info(const void *data) {
-  struct e1000_adapter *adapter = (struct e1000_adapter *)data;
 
-  u16 bus_width = 0;
-
-  u16 pcie_link_status, cap_offset;
-  cap_offset = adapter->pdev->pcie_cap;
-
-  if (!cap_offset) {
-    bus_width = 0;
-  } else {
-    pci_read_config_word(adapter->pdev, cap_offset + PCIE_LINK_STATUS,
-                         &pcie_link_status);
-    bus_width =
-        ((pcie_link_status & PCIE_LINK_WIDTH_MASK) >> PCIE_LINK_WIDTH_SHIFT);
-  }
-
-  struct E1000rPcieInfo info = {
-      .bus_link_width = bus_width,
-  };
-
-  return info;
-}
 
 void cb_io_unmap(size_t addr) { iounmap((void *)addr); }
 
-bool cb_mtu_bg_eth(const void *data) {
 
-  struct e1000_adapter *adapter = (struct e1000_adapter *)data;
-
-  return adapter->netdev->mtu > ETH_DATA_LEN;
-}
 int cb_pcie_cap_offset(const void *data) {
 
   struct e1000_adapter *adapter = (struct e1000_adapter *)data;
@@ -1005,8 +978,6 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent) {
   config.device_id = ent->device;
   config.cb_iounmap = cb_io_unmap;
   config.cb_bar_n_remap = cb_bar_n_remap;
-  config.cb_pcie_info = cb_pcie_info;
-  config.cb_mtu_bg_eth = cb_mtu_bg_eth;
   config.cb_dma_alloc_coherent = cb_dma_alloc;
   config.cb_dma_free_coherent = cb_dma_free;
   config.cb_pci_read_config_word = cb_pci_read_config_word;
