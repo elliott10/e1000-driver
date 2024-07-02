@@ -320,6 +320,4 @@ impl Reg {
         error!("Auto read by HW from NVM has not completed.");
         Err(Error::Nvm("Auto read by HW from NVM has not completed."))
     }
-
-
 }

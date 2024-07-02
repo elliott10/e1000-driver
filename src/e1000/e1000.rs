@@ -158,6 +158,25 @@ impl E1000 {
         Ok(())
     }
 
+    pub fn down(&mut self) {
+        /* disable transmits in the hardware */
+        let mut tctl = self.er32(TCTL);
+        tctl &= !TCTL_EN;
+        self.ew32(TCTL, tctl);
+
+        /* disable receives in the hardware */
+        let rctl = self.er32(RCTL);
+        self.ew32(RCTL, rctl & !RCTL_EN);
+
+        self.e1e_flush();
+
+        kfn().delay(Duration::from_micros(10000));
+
+        self.irq_disable();
+
+        self.reg.disable_pcie_master();
+    }
+
     fn power_up_phy(&mut self) -> Result {
         info!("Power up phy");
         let mut mii = self.e1e_rphy(MII_BMCR)?;
@@ -1987,12 +2006,12 @@ impl E1000 {
 
 impl Drop for E1000 {
     fn drop(&mut self) {
-        // debug!("unmap mmio {:#X}", self.hw.mmio);
-        // self.kernel().iounmap(self.hw.mmio);
-        // if let Some(flash) = self.flash {
-        //     debug!("unmap flash {:#X}", flash);
-        //     self.kernel().iounmap(flash);
-        // }
+        debug!("unmap mmio {:#X}", self.reg.mmio);
+        kfn().iounmap(self.reg.mmio);
+        if let Some(flash) = self.reg.flash {
+            debug!("unmap flash {:#X}", flash);
+            kfn().iounmap(flash);
+        }
     }
 }
 

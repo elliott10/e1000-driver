@@ -96,6 +96,10 @@ impl KernelFunc2 for KFun {
         unsafe { (self.cb_on_xmit_completed)(self.adapter, pkts, bytes) }
     }
 
+    fn iounmap(&self, addr: usize) {
+        unsafe { (self.cb_iounmap)(addr) }
+    }
+
     // fn wakeup_watchdog(&self) {
 
     //     unsafe { ((self.cb_enable_net)(self.adapter)) }
@@ -338,7 +342,7 @@ extern "C" fn e1000r_open(ptr: usize) -> i32 {
 #[no_mangle]
 extern "C" fn e1000r_down(ptr: usize) -> i32 {
     let dev = dev_mut(ptr);
-    // dev.dev.down();
+    dev.dev.down();
 
     return 0;
 }

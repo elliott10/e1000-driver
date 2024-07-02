@@ -120,6 +120,9 @@ pub trait KernelFunc2 {
 
     fn on_xmit_completed(&self, pkts: u32, bytes: u32);
     // fn wakeup_watchdog(&self);
+
+    /// iounmap address
+    fn iounmap(&self, addr: usize);
 }
 pub trait KernelFunc: Send + Sync + Clone {
     /// Page size (usually 4K)
