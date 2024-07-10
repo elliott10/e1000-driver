@@ -212,6 +212,15 @@ impl E1000 {
             }
 
             self.vlan_filter_enable();
+
+            /* Write addresses to available RAR registers, if there is not
+             * sufficient space to store all the addresses then enable
+             * unicast promiscuous mode
+             */
+            let uc_list = flags.uc_list();
+            if self.update_uc_addr_list(uc_list.as_slice()).is_err() {
+                rctl |= RCTL_UPE;
+            }
         }
 
         rctl |= RCTL_LPE | RCTL_BAM | RCTL_SECRC | RCTL_BSEX;
@@ -1854,6 +1863,41 @@ impl E1000 {
         }
 
         self.e1e_flush();
+    }
+    fn update_uc_addr_list(&mut self, uc_list: &[[u8; 6]]) -> Result {
+        info!("update_uc_addr_list:");
+        let mut rar_entries = self.rar_get_count();
+
+        /* save a rar entry for our hardware address */
+        rar_entries -= 1;
+
+        /* save a rar entry for the LAA workaround */
+        if self.params.flags.reset_overwrites_laa {
+            rar_entries -= 1;
+        }
+
+        if uc_list.len() > rar_entries {
+            return Err(Error::Unknown("rar entries overflow"));
+        }
+
+        for uc in uc_list {
+            let mac = MacAddress(*uc);
+            info!("  {:?}", mac);
+            self.rar_set(rar_entries, mac)?;
+
+            rar_entries -= 1;
+        }
+
+        while rar_entries > 0 {
+            rar_entries -= 1;
+
+            self.ew32(RAH(rar_entries as _), 0);
+            self.ew32(RAL(rar_entries as _), 0);
+        }
+
+        self.e1e_flush();
+
+        Ok(())
     }
 
     fn e1e_rphy(&mut self, offset: u32) -> Result<u16> {
