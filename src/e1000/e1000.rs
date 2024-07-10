@@ -141,7 +141,7 @@ impl E1000 {
         Ok(e1000)
     }
     /// open
-    pub fn open(&mut self) -> Result {
+    pub fn open(&mut self, flags: NetDevSettings) -> Result {
         if self.params.flags.has_amt {
             self.hw_contrl = Some(HwControl::new(self.reg, self.flags()));
             self.reset()?;
@@ -149,7 +149,7 @@ impl E1000 {
 
         self.power_up_phy()?;
 
-        self.set_rx_mode();
+        self.set_rx_mode(flags);
         self.init_manageability_pt();
         self.configure_tx();
         self.setup_rctl();
@@ -189,17 +189,50 @@ impl E1000 {
         Ok(())
     }
 
-    fn set_rx_mode(&mut self) {
+    fn set_rx_mode(&mut self, flags: NetDevSettings) {
         /* Check for Promiscuous and All Multicast modes */
         let mut rctl = self.er32(RCTL);
 
         /* clear the affected bits */
         rctl &= !(RCTL_UPE | RCTL_MPE);
 
-        rctl |= RCTL_UPE | RCTL_LPE | RCTL_BAM | RCTL_SECRC | RCTL_BSEX;
+        if flags.iff_promisc {
+            rctl |= (RCTL_UPE | RCTL_MPE);
+            /* Do not hardware filter VLANs in promisc mode */
+        } else {
+            if flags.iff_allmulti {
+                rctl |= RCTL_MPE;
+            } else {
+                /* Write addresses to the MTA, if the attempt fails
+                 * then we should just turn on promiscuous mode so
+                 * that we can at least receive multicast traffic
+                 */
+                let mc_list = flags.mc_list();
+                self.update_mc_addr_list_generic(mc_list.as_slice());
+            }
+
+            self.vlan_filter_enable();
+        }
+
+        rctl |= RCTL_LPE | RCTL_BAM | RCTL_SECRC | RCTL_BSEX;
+        // rctl |= RCTL_UPE | RCTL_LPE | RCTL_BAM | RCTL_SECRC | RCTL_BSEX;
 
         self.ew32(RCTL, rctl);
     }
+
+    /**
+     * vlan_filter_enable - helper to enable HW VLAN filtering
+     **/
+    fn vlan_filter_enable(&mut self) {
+        if self.params.flags.has_hw_vlan_filter {
+            /* enable VLAN receive filtering */
+            let mut rctl = self.er32(RCTL);
+            rctl |= RCTL_VFE;
+            rctl &= !RCTL_CFIEN;
+            self.ew32(RCTL, rctl);
+        }
+    }
+
     fn init_manageability_pt(&mut self) {
         if !self.params.flags.mng_pt_enabled {
             return;
@@ -1800,10 +1833,27 @@ impl E1000 {
         }
     }
 
-    fn update_mc_addr_list_generic(&mut self) {
-        for i in 0..self.mac.mta_reg_count as u32 {
-            self.reg.write_reg_array(MTA, i, 0);
+    fn update_mc_addr_list_generic(&mut self, mc_list: &[[u8; 6]]) {
+        info!("update_mc_addr_list:");
+
+        self.mac.mta_shadow.as_mut_slice().fill(0);
+        for mc in mc_list {
+            info!("  {:?}", mc);
+
+            let hash_value = self.mac.hash_mc_addr(mc);
+            let mut hash_reg = (hash_value >> 5) & (self.mac.mta_reg_count - 1) as u32;
+            let hash_bit = hash_value & 0x1F;
+
+            self.mac.mta_shadow[hash_reg as usize] |= BIT(hash_bit as usize);
         }
+        let mut i = (self.mac.mta_reg_count - 1) as i32;
+        while i >= 0 {
+            i -= 1;
+            self.reg
+                .write_reg_array(MTA, i as _, self.mac.mta_shadow[i as usize]);
+        }
+
+        self.e1e_flush();
     }
 
     fn e1e_rphy(&mut self, offset: u32) -> Result<u16> {
@@ -2021,6 +2071,21 @@ impl E1000 {
             self.fc.requested_mode = FcMode::Full;
         }
         Ok(())
+    }
+
+    fn rar_get_count(&self) -> usize {
+        if self.mac.kind < MacType::e1000_pch_lpt {
+            return self.mac.rar_entry_count as usize;
+        }
+
+        let mut wlock_mac = self.er32(FWSM) & FWSM_WLOCK_MAC_MASK;
+        wlock_mac >>= FWSM_WLOCK_MAC_SHIFT;
+
+        match wlock_mac {
+            0 => self.mac.rar_entry_count as usize,
+            1 => 1,
+            _ => wlock_mac as usize + 1,
+        }
     }
 
     pub unsafe fn release(&mut self) {

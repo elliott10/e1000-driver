@@ -81,6 +81,47 @@ static void e1000_watchdog(struct timer_list *t) {
 
   /* TODO: make this use queue_delayed_work() */
 }
+
+static struct NetDevSettings e1000_netdev_flags(struct net_device *netdev) {
+  NetDevSettings flags;
+  if (netdev->flags & IFF_PROMISC) {
+    flags.iff_promisc = true;
+  }
+  if (netdev->flags & IFF_ALLMULTI) {
+    flags.iff_allmulti = true;
+  }
+
+  int i = 0;
+  if (netdev_mc_empty(netdev)) {
+    flags.mc_list_len = 0;
+  } else {
+    struct netdev_hw_addr *ha;
+    flags.mc_list_len = netdev_mc_count(netdev);
+    flags.mc_list = kcalloc(netdev_mc_count(netdev), ETH_ALEN, GFP_ATOMIC);
+    netdev_for_each_mc_addr(ha, netdev)
+        memcpy(flags.mc_list + (i++ * ETH_ALEN), ha->addr, ETH_ALEN);
+  }
+
+  i = 0;
+  if (netdev_uc_empty(netdev)) {
+    flags.uc_list_len = 0;
+  } else {
+    struct netdev_hw_addr *ha;
+    flags.uc_list_len = netdev_uc_count(netdev);
+    flags.uc_list = kcalloc(netdev_uc_count(netdev), ETH_ALEN, GFP_ATOMIC);
+    netdev_for_each_uc_addr(ha, netdev)
+        memcpy(flags.uc_list + (i++ * ETH_ALEN), ha->addr, ETH_ALEN);
+  }
+  return flags;
+}
+
+static void e1000_netdev_flags_release(struct NetDevSettings flags) {
+  if (flags.mc_list_len > 0)
+    kfree(flags.mc_list);
+  if (flags.uc_list_len > 0)
+    kfree(flags.uc_list);
+}
+
 static irqreturn_t e1000_intr_msix_rx(int __always_unused irq, void *data) {
   struct net_device *netdev = data;
   // size_t e1000 = e1000e_get_e1000(netdev);
@@ -346,7 +387,12 @@ int e1000e_open(struct net_device *netdev) {
   netif_stop_queue(netdev);
 
   pr_info("e1000e open");
-  size_t err = e1000r_open(e1000);
+  struct NetDevSettings flags = e1000_netdev_flags(netdev);
+
+  size_t err = e1000r_open(e1000, flags);
+
+  e1000_netdev_flags_release(flags);
+
   if (err != 0) {
     pr_err("e1000e open fail: %d", err);
     goto err_req_irq;

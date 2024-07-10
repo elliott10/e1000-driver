@@ -279,9 +279,9 @@ extern "C" fn e1000r_configure_msix(ptr: usize) {
 }
 
 #[no_mangle]
-extern "C" fn e1000r_open(ptr: usize) -> i32 {
+extern "C" fn e1000r_open(ptr: usize, flags: NetDevSettings) -> i32 {
     let dev = e1000_mut(ptr);
-    match dev.open() {
+    match dev.open(flags) {
         Ok(_) => 0,
         Err(_) => -1,
     }

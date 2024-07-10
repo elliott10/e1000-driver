@@ -59,6 +59,15 @@ typedef struct E1000Config {
   const void *adapter;
 } E1000Config;
 
+typedef struct NetDevSettings {
+  bool iff_promisc;
+  bool iff_allmulti;
+  uint8_t *mc_list;
+  size_t mc_list_len;
+  uint8_t *uc_list;
+  size_t uc_list_len;
+} NetDevSettings;
+
 typedef struct E1000HWStats {
   uint64_t crcerrs;
   uint64_t algnerrc;
@@ -161,7 +170,7 @@ void e1000r_irq_set_mode(size_t ptr, enum InterruptMode mode);
 
 size_t e1000r_new(struct E1000Config config);
 
-int32_t e1000r_open(size_t ptr);
+int32_t e1000r_open(size_t ptr, struct NetDevSettings flags);
 
 void e1000r_read_mac_addr(size_t ptr, uint8_t (*mac)[6]);
 

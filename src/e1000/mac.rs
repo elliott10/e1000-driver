@@ -195,7 +195,6 @@ impl MacInfo {
         Ok(())
     }
 
-
     /**
      *  e1000e_config_collision_dist_generic - Configure collision distance
      *  @hw: pointer to the HW structure
@@ -267,6 +266,67 @@ impl MacInfo {
 
         return Ok(());
     }
+
+    /**
+     *  e1000_hash_mc_addr - Generate a multicast hash value
+     *  @hw: pointer to the HW structure
+     *  @mc_addr: pointer to a multicast address
+     *
+     *  Generates a multicast address hash value which is used to determine
+     *  the multicast filter table array address and new table value.
+     **/
+    pub fn hash_mc_addr(&self, mc_addr: &[u8; 6]) -> u32 {
+        let mut bit_shift = 0u8;
+
+        /* Register count multiplied by bits per register */
+        let hash_mask = (self.mta_reg_count * 32) - 1;
+
+        /* For a mc_filter_type of 0, bit_shift is the number of left-shifts
+         * where 0xFF would still fall within the hash mask.
+         */
+        while (hash_mask >> bit_shift != 0xFF) {
+            bit_shift += 1;
+        }
+
+        /* The portion of the address that is used for the hash table
+         * is determined by the mc_filter_type setting.
+         * The algorithm is such that there is a total of 8 bits of shifting.
+         * The bit_shift for a mc_filter_type of 0 represents the number of
+         * left-shifts where the MSB of mc_addr[5] would still fall within
+         * the hash_mask.  Case 0 does this exactly.  Since there are a total
+         * of 8 bits of shifting, then mc_addr[4] will shift right the
+         * remaining number of bits. Thus 8 - bit_shift.  The rest of the
+         * cases are a variation of this algorithm...essentially raising the
+         * number of bits to shift mc_addr[5] left, while still keeping the
+         * 8-bit shifting total.
+         *
+         * For example, given the following Destination MAC Address and an
+         * mta register count of 128 (thus a 4096-bit vector and 0xFFF mask),
+         * we can see that the bit_shift for case 0 is 4.  These are the hash
+         * values resulting from each mc_filter_type...
+         * [0] [1] [2] [3] [4] [5]
+         * 01  AA  00  12  34  56
+         * LSB           MSB
+         *
+         * case 0: hash_value = ((0x34 >> 4) | (0x56 << 4)) & 0xFFF = 0x563
+         * case 1: hash_value = ((0x34 >> 3) | (0x56 << 5)) & 0xFFF = 0xAC6
+         * case 2: hash_value = ((0x34 >> 2) | (0x56 << 6)) & 0xFFF = 0x163
+         * case 3: hash_value = ((0x34 >> 0) | (0x56 << 8)) & 0xFFF = 0x634
+         */
+        match self.mc_filter_type {
+            1 => bit_shift += 1,
+            2 => bit_shift += 2,
+            3 => bit_shift += 4,
+            _ => {}
+        }
+
+        let hash_value = hash_mask
+            & ((mc_addr[4] >> (8 - bit_shift)) as u16 | ((mc_addr[5] as u16) << bit_shift));
+
+        return hash_value as _;
+    }
+
+
 }
 #[derive(Debug, Default, Clone)]
 pub(crate) struct MacOps {

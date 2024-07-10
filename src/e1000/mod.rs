@@ -1,4 +1,4 @@
-use ::alloc::boxed::Box;
+use ::alloc::{boxed::Box, vec::Vec};
 use alloc::{alloc, Layout};
 mod board;
 pub(crate) mod defines;
@@ -31,6 +31,30 @@ pub use phy::MediaType;
 const PAGE_SIZE: usize = 4096;
 
 static mut KERNEL: *mut Box<dyn KernelFunc> = null_mut();
+#[repr(C)]
+#[derive(Debug, Clone)]
+pub struct NetDevSettings {
+    pub iff_promisc: bool,
+    pub iff_allmulti: bool,
+    pub mc_list: *mut u8,
+    pub mc_list_len: usize,
+    pub uc_list: *mut u8,
+    pub uc_list_len: usize,
+}
+
+impl NetDevSettings {
+    pub(crate) fn mc_list(&self) -> Vec<[u8; 6]> {
+        let mut list = Vec::new();
+        for i in 0..self.mc_list_len {
+            let mut addr = [0u8; 6];
+            addr.copy_from_slice(unsafe {
+                &*slice_from_raw_parts_mut(self.mc_list.offset((i * 6) as _), 6)
+            });
+            list.try_push(addr).unwrap();
+        }
+        list
+    }
+}
 
 pub fn register_kernel<K: KernelFunc + 'static>(k: K) {
     unsafe {
