@@ -54,6 +54,18 @@ impl NetDevSettings {
         }
         list
     }
+
+    pub(crate) fn uc_list(&self) -> Vec<[u8; 6]> {
+        let mut list = Vec::new();
+        for i in 0..self.uc_list_len {
+            let mut addr = [0u8; 6];
+            addr.copy_from_slice(unsafe {
+                &*slice_from_raw_parts_mut(self.uc_list.offset((i * 6) as _), 6)
+            });
+            list.try_push(addr).unwrap();
+        }
+        list
+    }
 }
 
 pub fn register_kernel<K: KernelFunc + 'static>(k: K) {
