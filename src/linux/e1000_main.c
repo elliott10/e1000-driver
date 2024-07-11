@@ -606,7 +606,16 @@ void e1000e_get_stats64(struct net_device *netdev,
  * promiscuous mode, and all-multi behavior.
  **/
 static void e1000e_set_rx_mode(struct net_device *netdev) {
-  // pr_info("e1000e_set_rx_mode");
+  struct e1000_adapter *adapter = netdev_priv(netdev);
+
+  if (pm_runtime_suspended(netdev->dev.parent))
+    return;
+
+  struct NetDevSettings flags = e1000_netdev_flags(netdev);
+
+  e1000r_set_rx_mode(adapter->ptr, flags);
+
+  e1000_netdev_flags_release(flags);
 }
 /**
  * e1000_set_mac - Change the Ethernet Address of the NIC

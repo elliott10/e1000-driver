@@ -301,6 +301,13 @@ extern "C" fn e1000_print_device_info(ptr: usize) {
 }
 
 #[no_mangle]
+extern "C" fn e1000r_set_rx_mode(ptr: usize, flags: NetDevSettings) {
+    let dev = e1000_mut(ptr);
+
+    dev.set_rx_mode(flags)
+}
+
+#[no_mangle]
 unsafe extern "C" fn e1000r_trigger_lsc(ptr: usize) {
     let dev = e1000_mut(ptr);
     dev.trigger_lsc()

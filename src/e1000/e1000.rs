@@ -189,7 +189,7 @@ impl E1000 {
         Ok(())
     }
 
-    fn set_rx_mode(&mut self, flags: NetDevSettings) {
+    pub fn set_rx_mode(&mut self, flags: NetDevSettings) {
         /* Check for Promiscuous and All Multicast modes */
         let mut rctl = self.er32(RCTL);
 

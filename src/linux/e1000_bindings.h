@@ -174,6 +174,8 @@ int32_t e1000r_open(size_t ptr, struct NetDevSettings flags);
 
 void e1000r_read_mac_addr(size_t ptr, uint8_t (*mac)[6]);
 
+void e1000r_set_rx_mode(size_t ptr, struct NetDevSettings flags);
+
 struct E1000HWStats e1000r_stats64(size_t ptr);
 
 bool e1000r_task_watchdog(size_t ptr);
