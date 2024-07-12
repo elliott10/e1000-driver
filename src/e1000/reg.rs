@@ -343,7 +343,50 @@ impl Reg {
 
         return Err(Error::Unknown("Master requests are pending."));
     }
-
+    /**
+     *  clear_hw_cntrs_base - Clear base hardware counters
+     *
+     *  Clears the base hardware counters by reading the counter registers.
+     **/
+    pub fn clear_hw_cntrs_base(&self) {
+        self.er32(CRCERRS);
+        self.er32(SYMERRS);
+        self.er32(MPC);
+        self.er32(SCC);
+        self.er32(ECOL);
+        self.er32(MCC);
+        self.er32(LATECOL);
+        self.er32(COLC);
+        self.er32(DC);
+        self.er32(SEC);
+        self.er32(RLEC);
+        self.er32(XONRXC);
+        self.er32(XONTXC);
+        self.er32(XOFFRXC);
+        self.er32(XOFFTXC);
+        self.er32(FCRUC);
+        self.er32(GPRC);
+        self.er32(BPRC);
+        self.er32(MPRC);
+        self.er32(GPTC);
+        self.er32(GORCL);
+        self.er32(GORCH);
+        self.er32(GOTCL);
+        self.er32(GOTCH);
+        self.er32(RNBC);
+        self.er32(RUC);
+        self.er32(RFC);
+        self.er32(ROC);
+        self.er32(RJC);
+        self.er32(TORL);
+        self.er32(TORH);
+        self.er32(TOTL);
+        self.er32(TOTH);
+        self.er32(TPR);
+        self.er32(TPT);
+        self.er32(MPTC);
+        self.er32(BPTC);
+    }
     /**
      *  get_auto_rd_done - Check for auto read completion
      *  @hw: pointer to the HW structure

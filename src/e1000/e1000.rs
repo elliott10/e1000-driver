@@ -612,7 +612,7 @@ impl E1000 {
         Ok(())
     }
 
-    fn setup_link(&mut self) -> Result {
+    pub(crate) fn setup_link(&mut self) -> Result {
         self.setup_default_fc()?;
 
         /* Save off the requested flow control mode for use later.  Depending
@@ -1261,7 +1261,7 @@ impl E1000 {
     fn reset_hw(&self) -> Result {
         self.variant.reset_hw(self)
     }
-    fn init_hw(&self) -> Result {
+    fn init_hw(&mut self) -> Result {
         self.variant.init_hw(self)
     }
     /**
