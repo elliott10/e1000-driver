@@ -1850,20 +1850,25 @@ impl E1000 {
         info!("update_mc_addr_list:");
 
         self.mac.mta_shadow.as_mut_slice().fill(0);
+        let len_mask = (self.mac.mta_reg_count - 1) as u32;
+
         for mc in mc_list {
-            info!("  {:?}", mc);
+            info!("  {}", MacAddress(*mc));
 
             let hash_value = self.mac.hash_mc_addr(mc);
-            let mut hash_reg = (hash_value >> 5) & (self.mac.mta_reg_count - 1) as u32;
+
+            info!("  hash_value: {}, len_mask {len_mask:#X}", hash_value);
+            let mut hash_reg = (hash_value >> 5) & len_mask;
             let hash_bit = hash_value & 0x1F;
 
+            info!("  hash_reg: {hash_reg}, hash_bit {hash_bit}");
             self.mac.mta_shadow[hash_reg as usize] |= BIT(hash_bit as usize);
         }
         let mut i = (self.mac.mta_reg_count - 1) as i32;
         while i >= 0 {
-            i -= 1;
             self.reg
                 .write_reg_array(MTA, i as _, self.mac.mta_shadow[i as usize]);
+            i -= 1;
         }
 
         self.e1e_flush();
@@ -1886,7 +1891,7 @@ impl E1000 {
 
         for uc in uc_list {
             let mac = MacAddress(*uc);
-            info!("  {:?}", mac);
+            info!("  {}", mac);
             self.rar_set(rar_entries, mac)?;
 
             rar_entries -= 1;

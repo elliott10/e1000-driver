@@ -69,12 +69,13 @@ pub(crate) trait VariantCommon {
 
     fn get_variants(&mut self, mut reg: Reg, boad: &BoardInfo) -> Result<VariantResult> {
         let mut flags = boad.flags.clone();
-        let mut mac = self.init_mac_params(boad, reg)?;
+        let mut mac: MacInfo = self.init_mac_params(boad, reg)?;
+        mac.mta_shadow.try_resize(128, 0)?;
         self.set_reg(mac.kind, &mut reg);
         mac.reg = reg;
         let mut nvm = self.init_nvm_params(&mac, boad, reg)?;
         reg = nvm.reg;
-        nvm.mac_kind= mac.kind;
+        nvm.mac_kind = mac.kind;
         mac.reg = reg;
         let phy = self.init_phy_params(&mac, boad, reg)?;
 
