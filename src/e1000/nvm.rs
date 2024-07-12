@@ -468,7 +468,7 @@ impl core::ops::DerefMut for NvmGuard<'_> {
 impl Drop for NvmGuard<'_> {
     fn drop(&mut self) {
         match &self.data.ops.semaphore {
-            NvmSemaphore::Spt => todo!(),
+            NvmSemaphore::Spt => ich8lan::NvmSemaphore::new(self.data.reg).release(),
             NvmSemaphore::E82571 => e82571::NvmSemaphore::new(self.data.reg).release(),
         }
     }

@@ -9,6 +9,7 @@ use crate::e1000::mac::*;
 use crate::e1000::nvm::*;
 use crate::e1000::reg::{self, *};
 use crate::kfn;
+use crate::E1000;
 use crate::{defines::*, err::*, phy::*};
 use crate::{err::*, BoardInfo, Flags};
 
@@ -280,8 +281,68 @@ impl VariantCommon for Context {
         Ok(nvm)
     }
 
-    fn reset_hw(&self, e1000: &crate::E1000) -> Result {
-        todo!()
+    fn reset_hw(&self, e1000: &E1000) -> Result {
+        let mut res = e1000.reg.disable_pcie_master();
+        if res.is_err() {
+            error!("PCI-E Master disable polling has failed.");
+        }
+        info!("Masking off all interrupts");
+
+        e1000.ew32(IMC, 0xffffffff);
+
+        e1000.ew32(RCTL, 0);
+
+        e1000.ew32(TCTL, TCTL_PSP);
+        e1000.e1e_flush();
+
+        kfn().delay(Duration::from_micros(10000));
+
+        let mut ctrl = e1000.er32(CTRL);
+
+        // if (!hw->phy.ops.check_reset_block(hw)) {
+        // 	/* Full-chip reset requires MAC and PHY reset at the same
+        // 	 * time to make sure the interface between MAC and the
+        // 	 * external PHY is reset.
+        // 	 */
+        if self.check_reset_block(e1000.reg.clone()).is_ok() {
+            ctrl |= CTRL_PHY_RST;
+        }
+
+        // 	/* Gate automatic PHY configuration by hardware on
+        // 	 * non-managed 82579
+        // 	 */
+        // 	if ((hw->mac.type == e1000_pch2lan) &&
+        // 	    !(er32(FWSM) & E1000_ICH_FWSM_FW_VALID))
+        // 		e1000_gate_hw_phy_config_ich8lan(hw, true);
+        // }
+        // ret_val = e1000_acquire_swflag_ich8lan(hw);
+        info!("Issuing a global reset to ich8lan");
+        e1000.ew32(CTRL, (ctrl | CTRL_RST));
+        /* cannot issue a flush here because it hangs the hardware */
+
+        kfn().delay(Duration::from_micros(20_000));
+
+        if (ctrl & CTRL_PHY_RST) > 0 {
+            info!("Phy reset");
+            e1000.phy.get_cfg_done()?;
+            self.post_phy_reset(e1000)?;
+            info!("Phy reset ok");
+        }
+        // /* For PCH, this write will make sure that any noise
+        //  * will be detected as a CRC error and be dropped rather than show up
+        //  * as a bad packet to the DMA engine.
+        //  */
+        // if (hw->mac.type == e1000_pchlan)
+        // 	ew32(CRC_OFFSET, 0x65656565);
+
+        e1000.ew32(IMC, 0xffffffff);
+        e1000.er32(ICR);
+
+        let mut reg = e1000.er32(KABGTXD);
+        reg |= KABGTXD_BGSQLBIAS;
+        e1000.ew32(KABGTXD, reg);
+
+        Ok(())
     }
 
     fn init_hw(&self, e1000: &crate::E1000) -> Result {
@@ -332,7 +393,129 @@ impl Context {
 
         return Err(Error::Unknown("LANPHYPC toggle failed"));
     }
+    /**
+     *  post_phy_reset_ich8lan - Perform steps required after a PHY reset
+     *  @hw: pointer to the HW structure
+     **/
+    fn post_phy_reset(&self, e1000: &E1000) -> Result {
+        info!("post phy reset");
 
+        if self.check_reset_block(e1000.reg.clone()).is_err() {
+            info!("reset block");
+            return Ok(());
+        }
+
+        /* Allow time for h/w to get to quiescent state after reset */
+        kfn().delay(Duration::from_micros(10000));
+
+        /* Perform any necessary post-reset workarounds */
+
+        /* Clear the host wakeup bit after lcd reset */
+        if (e1000.mac.kind >= MacType::e1000_pchlan) {
+            let mut reg = e1000.e1e_rphy(BM_PORT_GEN_CFG)?;
+            reg &= !BM_WUC_HOST_WU_BIT;
+            e1000.e1e_wphy(BM_PORT_GEN_CFG, reg)?;
+        }
+
+        /* Configure the LCD with the extended configuration region in NVM */
+        self.sw_lcd_config(e1000)?;
+
+        /* Configure the LCD with the OEM bits in NVM */
+        self.oem_bits_config(e1000, true)?;
+
+        Ok(())
+    }
+    fn sw_lcd_config(&self, e1000: &E1000) -> Result {
+        let mut phy_page = 0;
+        let mut sw_cfg_mask = FEXTNVM_SW_CONFIG_ICH8M;
+
+        let mut data = e1000.er32(FEXTNVM);
+        if data & sw_cfg_mask == 0 {
+            return Ok(());
+        }
+
+        /* Make sure HW does not configure LCD from PHY
+         * extended configuration before SW configuration
+         */
+        data = e1000.er32(EXTCNF_CTRL);
+
+        let mut cnf_size = e1000.er32(EXTCNF_SIZE);
+        cnf_size &= EXTCNF_SIZE_EXT_PCIE_LENGTH_MASK;
+        cnf_size >>= EXTCNF_SIZE_EXT_PCIE_LENGTH_SHIFT;
+        if cnf_size == 0 {
+            return Ok(());
+        }
+
+        let mut cnf_base_addr = data & EXTCNF_CTRL_EXT_CNF_POINTER_MASK;
+        cnf_base_addr >>= EXTCNF_CTRL_EXT_CNF_POINTER_SHIFT;
+
+        /* Configure LCD from extended configuration region. */
+
+        /* cnf_base_addr is in DWORD */
+        let mut word_addr = (cnf_base_addr << 1) as u16;
+
+        for i in 0..cnf_size as u16 {
+            let mut reg_data = e1000.read_nvm((word_addr + i * 2), 1)?[0];
+
+            let mut reg_addr = e1000.read_nvm((word_addr + i * 2 + 1), 1)?[0];
+
+            /* Save off the PHY page for future writes. */
+            if (reg_addr as u32 == IGP01E1000_PHY_PAGE_SELECT) {
+                phy_page = reg_data;
+                continue;
+            }
+
+            reg_addr &= PHY_REG_MASK;
+            reg_addr |= phy_page;
+
+            e1000.e1e_wphy(reg_addr as u32, reg_data);
+        }
+        Ok(())
+    }
+    fn oem_bits_config(&self, e1000: &E1000, d0_state: bool) -> Result {
+        if (e1000.mac.kind < MacType::e1000_pchlan) {
+            return Ok(());
+        }
+        let mut mac_reg = e1000.er32(FEXTNVM);
+        if (mac_reg & FEXTNVM_SW_CONFIG_ICH8M) == 0 {
+            return Ok(());
+        }
+
+        mac_reg = e1000.er32(PHY_CTRL);
+
+        let mut oem_reg = e1000.e1e_rphy(HV_OEM_BITS)?;
+
+        oem_reg &= !(HV_OEM_BITS_GBE_DIS | HV_OEM_BITS_LPLU);
+
+        if d0_state {
+            if (mac_reg & PHY_CTRL_GBE_DISABLE) > 0 {
+                oem_reg |= HV_OEM_BITS_GBE_DIS;
+            }
+
+            if (mac_reg & PHY_CTRL_D0A_LPLU) > 0 {
+                oem_reg |= HV_OEM_BITS_LPLU;
+            }
+        } else {
+            if (mac_reg & (PHY_CTRL_GBE_DISABLE | PHY_CTRL_NOND0A_GBE_DISABLE)) > 0 {
+                oem_reg |= HV_OEM_BITS_GBE_DIS;
+            }
+
+            if (mac_reg & (PHY_CTRL_D0A_LPLU | PHY_CTRL_NOND0A_LPLU)) > 0 {
+                oem_reg |= HV_OEM_BITS_LPLU;
+            }
+        }
+
+        /* Set Restart auto-neg to activate the bits */
+        if ((d0_state || (e1000.mac.kind != MacType::e1000_pchlan))
+            && self.check_reset_block(e1000.reg.clone()).is_ok())
+        {
+            oem_reg |= HV_OEM_BITS_RESTART_AN;
+        }
+
+        e1000.e1e_wphy(HV_OEM_BITS, oem_reg)?;
+
+        Ok(())
+    }
     fn init_phy_workarounds(&mut self, phy: &PhyInfo) -> Result {
         let reg = phy.reg;
         let fwsm = reg.er32(FWSM);
@@ -494,7 +677,6 @@ pub(crate) struct NvmSemaphore {
 
 impl NvmSemaphore {
     pub(crate) fn new(reg: Reg) -> Self {
-        
         Self { reg }
     }
 }

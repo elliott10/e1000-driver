@@ -37,7 +37,7 @@ pub struct E1000 {
     tx_ring: Ring<TxDesc>,
     hw_stats: E1000HWStats,
     is_link_up: AtomicBool,
-    variant: Variant,
+    pub(crate) variant: Variant,
 }
 
 impl E1000 {
@@ -1666,7 +1666,7 @@ impl E1000 {
         info!("MAC: {:?}, PHY: {:?}, PBA No: {}", mac_kind, phy_kind, p);
     }
 
-    fn read_nvm(&self, offset: u16, words: u16) -> Result<Vec<u16>> {
+    pub(crate) fn read_nvm(&self, offset: u16, words: u16) -> Result<Vec<u16>> {
         self.nvm.read_nvm(offset, words, &self.variant)
     }
 
@@ -1904,11 +1904,11 @@ impl E1000 {
         Ok(())
     }
 
-    fn e1e_rphy(&mut self, offset: u32) -> Result<u16> {
+    pub(crate) fn e1e_rphy(&self, offset: u32) -> Result<u16> {
         self.phy.e1e_rphy(offset)
     }
 
-    fn e1e_wphy(&mut self, offset: u32, value: u16) -> Result {
+    pub(crate) fn e1e_wphy(&self, offset: u32, value: u16) -> Result {
         self.phy.e1e_wphy(offset, value)
     }
 
