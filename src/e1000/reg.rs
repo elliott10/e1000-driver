@@ -280,7 +280,48 @@ impl Reg {
     pub fn e1e_flush(&self) {
         self.er32(STATUS);
     }
-
+    pub fn er16flash(&self, reg: usize) -> Result<u16> {
+        match self.flash {
+            None => {
+                error!("flash not set");
+                Err(Error::Nvm("flash not set"))
+            }
+            Some(flash) => unsafe { Ok(((flash + reg) as *const u16).read_volatile()) },
+        }
+    }
+    pub fn er32flash(&self, reg: usize) -> Result<u32> {
+        match self.flash {
+            None => {
+                error!("flash not set");
+                Err(Error::Nvm("flash not set"))
+            }
+            Some(flash) => unsafe { Ok(((flash + reg) as *const u32).read_volatile()) },
+        }
+    }
+    pub fn ew16flash(&self, reg: usize, val: u16) -> Result {
+        match self.flash {
+            None => {
+                error!("flash not set");
+                Err(Error::Nvm("flash not set"))
+            }
+            Some(flash) => unsafe {
+                ((flash + reg) as *mut u16).write_volatile(val);
+                Ok(())
+            },
+        }
+    }
+    pub fn ew32flash(&self, reg: usize, val: u32) -> Result {
+        match self.flash {
+            None => {
+                error!("flash not set");
+                Err(Error::Nvm("flash not set"))
+            }
+            Some(flash) => unsafe {
+                ((flash + reg) as *mut u32).write_volatile(val);
+                Ok(())
+            },
+        }
+    }
     pub fn write_reg_array(&self, reg: u32, offset: u32, value: u32) {
         let address = reg + (offset << 2);
         self.ew32(address, value);

@@ -1666,10 +1666,14 @@ impl E1000 {
         info!("MAC: {:?}, PHY: {:?}, PBA No: {}", mac_kind, phy_kind, p);
     }
 
+    fn read_nvm(&self, offset: u16, words: u16) -> Result<Vec<u16>> {
+        self.nvm.read_nvm(offset, words, &self.variant)
+    }
+
     fn read_pba_string_generic(&mut self) -> Result<[u8; PBANUM_LENGTH]> {
         let mut pba_num = [0; PBANUM_LENGTH];
-        let mut nvm_data = self.nvm.read_nvm(NVM_PBA_OFFSET_0, 1)?[0];
-        let mut pba_ptr = self.nvm.read_nvm(NVM_PBA_OFFSET_1, 1)?[0];
+        let mut nvm_data = self.read_nvm(NVM_PBA_OFFSET_0, 1)?[0];
+        let mut pba_ptr = self.read_nvm(NVM_PBA_OFFSET_1, 1)?[0];
 
         if (nvm_data != NVM_PBA_PTR_GUARD) {
             info!("NVM PBA number is not stored as string");
@@ -1699,7 +1703,7 @@ impl E1000 {
             return Ok(pba_num);
         }
 
-        let mut length: u16 = self.nvm.read_nvm(pba_ptr, 1)?[0];
+        let mut length: u16 = self.read_nvm(pba_ptr, 1)?[0];
 
         if length == 0xFFFF || length == 0 {
             error!("NVM PBA number section invalid length\n");
@@ -1716,7 +1720,7 @@ impl E1000 {
         length -= 1;
 
         for offset in 0..length {
-            nvm_data = self.nvm.read_nvm(pba_ptr + offset, 1)?[0];
+            nvm_data = self.read_nvm(pba_ptr + offset, 1)?[0];
             pba_num[offset as usize * 2] = (nvm_data >> 8) as u8;
             pba_num[(offset as usize * 2) + 1] = (nvm_data & 0xFF) as u8;
         }
@@ -2105,7 +2109,7 @@ impl E1000 {
          * control setting, then the variable hw->fc will
          * be initialized based on a value in the EEPROM.
          */
-        let nvm_data = self.nvm.read_nvm(NVM_INIT_CONTROL2_REG, 1)?[0];
+        let nvm_data = self.read_nvm(NVM_INIT_CONTROL2_REG, 1)?[0];
 
         if (nvm_data & NVM_WORD0F_PAUSE_MASK) == 0 {
             self.fc.requested_mode = FcMode::None;

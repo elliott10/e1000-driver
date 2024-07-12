@@ -774,3 +774,47 @@ pub(crate) const IFS_MAX: u16 = 80;
 pub(crate) const IFS_MIN: u16 = 40;
 pub(crate) const IFS_RATIO: u16 = 4;
 pub(crate) const IFS_STEP: u16 = 10;
+
+pub(crate) const ICH_CYCLE_READ: u16 = 0;
+pub(crate) const ICH_CYCLE_WRITE: u16 = 2;
+
+pub(crate) const ICH_CYCLE_ERASE: u16 = 3;
+pub(crate) const ICH_NVM_SIG_WORD: usize = 0x13;
+pub(crate) const ICH_NVM_SIG_MASK: u16 = 0xC000;
+pub(crate) const ICH_NVM_VALID_SIG_MASK: u8 = 0xC0;
+pub(crate) const ICH_NVM_SIG_VALUE: u8 = 0x80;
+
+pub(crate) const HSFSTS_FLDESVALID: u16 = 1 << 14;
+pub(crate) const HSFSTS_FLCERR: u16 = 1 << 1;
+pub(crate) const HSFSTS_DAEL: u16 = 1 << 2;
+
+pub(crate) const HSFSTS_FLCINPROG: u16 = 1 << 5;
+pub(crate) const HSFSTS_FLCDONE: u16 = 1;
+
+pub(crate) const HSFCTL_FLCGO: u16 = 1;
+pub(crate) const HSFCTL_FLCYCLE_SHIFT: u16 = 1;
+pub(crate) const HSFCTL_FLDBCOUNT_SHIFT: u16 = 8;
+
+pub(crate) const FEXTNVM3_PHY_CFG_COUNTER_MASK: u32 = 0x0C000000;
+pub(crate) const FEXTNVM3_PHY_CFG_COUNTER_50MSEC: u32 = 0x08000000;
+
+pub(crate) const FEXTNVM_SW_CONFIG: u32 = 1;
+pub(crate) const FEXTNVM_SW_CONFIG_ICH8M: u32 = (1 << 27); /* different on ICH8M */
+
+// Mask for linear address in flash operations.
+pub(crate) const ICH_FLASH_LINEAR_ADDR_MASK: u32 = 0x00FFFFFF;
+
+// Number of times a flash cycle should be repeated.
+pub(crate) const ICH_FLASH_CYCLE_REPEAT_COUNT: u32 = 10;
+
+pub(crate) const ICH_FLASH_GFPREG: usize = 0x0000; // GFP Configuration Register
+pub(crate) const ICH_FLASH_HSFSTS: usize = 0x0004; // Host Status and Control Register
+pub(crate) const ICH_FLASH_HSFCTL: usize = 0x0006; // Host Control Register
+pub(crate) const ICH_FLASH_FADDR: usize = 0x0008; // Flash Address Register
+pub(crate) const ICH_FLASH_FDATA0: usize = 0x0010; // Flash Data Register 0
+pub(crate) const ICH_FLASH_PR0: usize = 0x0074; // Protected Range Register 0
+                                                // Requires up to 10 seconds when MNG might be accessing part.
+pub(crate) const ICH_FLASH_READ_COMMAND_TIMEOUT: u32 = 10000000;
+pub(crate) const ICH_FLASH_WRITE_COMMAND_TIMEOUT: u32 = 10000000;
+pub(crate) const ICH_FLASH_ERASE_COMMAND_TIMEOUT: u32 = 10000000;
+

@@ -72,8 +72,9 @@ pub(crate) trait VariantCommon {
         let mut mac = self.init_mac_params(boad, reg)?;
         self.set_reg(mac.kind, &mut reg);
         mac.reg = reg;
-        let nvm = self.init_nvm_params(&mac, boad, reg)?;
+        let mut nvm = self.init_nvm_params(&mac, boad, reg)?;
         reg = nvm.reg;
+        nvm.mac_kind= mac.kind;
         mac.reg = reg;
         let phy = self.init_phy_params(&mac, boad, reg)?;
 

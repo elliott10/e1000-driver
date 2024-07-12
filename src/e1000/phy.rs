@@ -1165,7 +1165,7 @@ impl core::ops::DerefMut for PhyGuard<'_> {
 impl Drop for PhyGuard<'_> {
     fn drop(&mut self) {
         match &self.phy.ops.semaphore {
-            PhySemaphore::Ich8lan => todo!(),
+            PhySemaphore::Ich8lan => ich8lan::PhySemaphore::new(self.phy.reg).release(),
             PhySemaphore::B82571 => e82571::PhySemaphore::new(self.phy.reg).release(),
         }
     }

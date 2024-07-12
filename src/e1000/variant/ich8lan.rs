@@ -494,6 +494,7 @@ pub(crate) struct NvmSemaphore {
 
 impl NvmSemaphore {
     pub(crate) fn new(reg: Reg) -> Self {
+        
         Self { reg }
     }
 }
