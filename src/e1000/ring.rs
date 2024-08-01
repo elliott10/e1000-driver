@@ -32,9 +32,9 @@ where
     pub fn new(buff_len: usize) -> Result<Self> {
         let size = DEFAULT_RING_SIZE;
 
-        #[cfg(no_global_oom_handling)]
+        #[cfg(not(oom_handle))]
         let mut elems = Vec::try_with_capacity(size)?;
-        #[cfg(not(no_global_oom_handling))]
+        #[cfg(oom_handle)]
         let mut elems = Vec::with_capacity(size);
 
         let mut layout = Layout::array::<T>(size).unwrap();
@@ -57,9 +57,9 @@ where
                     cpu_addr: buff_cpu_addr,
                 };
 
-                #[cfg(no_global_oom_handling)]
+                #[cfg(not(oom_handle))]
                 elems.try_push(elem)?;
-                #[cfg(not(no_global_oom_handling))]
+                #[cfg(oom_handle)]
                 elems.push(elem);
                 buff_dma_addr += buff_len as u64;
                 buff_cpu_addr += buff_len;

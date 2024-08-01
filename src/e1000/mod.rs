@@ -51,9 +51,9 @@ impl NetDevSettings {
                 &*slice_from_raw_parts_mut(self.mc_list.offset((i * 6) as _), 6)
             });
 
-            #[cfg(no_global_oom_handling)]
+            #[cfg(not(oom_handle))]
             list.try_push(addr).unwrap();
-            #[cfg(not(no_global_oom_handling))]
+            #[cfg(oom_handle)]
             list.push(addr);
         }
         list
@@ -67,9 +67,9 @@ impl NetDevSettings {
                 &*slice_from_raw_parts_mut(self.uc_list.offset((i * 6) as _), 6)
             });
 
-            #[cfg(no_global_oom_handling)]
+            #[cfg(not(oom_handle))]
             list.try_push(addr).unwrap();
-            #[cfg(not(no_global_oom_handling))]
+            #[cfg(oom_handle)]
             list.push(addr);
         }
         list

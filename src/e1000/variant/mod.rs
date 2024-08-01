@@ -67,9 +67,9 @@ pub(crate) trait VariantCommon {
     fn get_variants(&mut self, mut reg: Reg, boad: &BoardInfo) -> Result<VariantResult> {
         let mut flags = boad.flags.clone();
         let mut mac: MacInfo = self.init_mac_params(boad, reg)?;
-        #[cfg(no_global_oom_handling)]
+        #[cfg(not(oom_handle))]
         mac.mta_shadow.try_resize(128, 0)?;
-        #[cfg(not(no_global_oom_handling))]
+        #[cfg(oom_handle)]
         mac.mta_shadow.resize(128, 0);
         self.set_reg(mac.kind, &mut reg);
         mac.reg = reg;

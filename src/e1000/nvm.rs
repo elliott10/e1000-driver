@@ -115,14 +115,14 @@ impl NvmInfo {
             if offset > self.word_size || (words > (self.word_size - offset)) || words == 0 {
                 return Err(Error::Nvm("nvm parameter(s) out of bounds"));
             }
-            #[cfg(no_global_oom_handling)]
+            #[cfg(not(oom_handle))]
             let mut data: Vec<u16> = Vec::try_with_capacity(words as usize)?;
-            #[cfg(not(no_global_oom_handling))]
+            #[cfg(oom_handle)]
             let mut data: Vec<u16> = Vec::with_capacity(words as usize);
             for _ in 0..words {
-                #[cfg(no_global_oom_handling)]
+                #[cfg(not(oom_handle))]
                 data.try_push(0).unwrap();
-                #[cfg(not(no_global_oom_handling))]
+                #[cfg(oom_handle)]
                 data.push(0);
             }
 
@@ -189,9 +189,9 @@ impl NvmInfo {
         if offset > self.word_size || (words > (self.word_size - offset)) || words == 0 {
             return Err(Error::Nvm("nvm parameter(s) out of bounds"));
         }
-        #[cfg(no_global_oom_handling)]
+        #[cfg(not(oom_handle))]
         let mut data: Vec<u16> = Vec::try_with_capacity(words as usize)?;
-        #[cfg(not(no_global_oom_handling))]
+        #[cfg(oom_handle)]
         let mut data: Vec<u16> = Vec::with_capacity(words as usize);
         let mut eerd = 0u32;
 
@@ -204,9 +204,9 @@ impl NvmInfo {
 
             let d = self.reg.er32(EERD) >> NVM_RW_REG_DATA;
 
-            #[cfg(no_global_oom_handling)]
+            #[cfg(not(oom_handle))]
             data.try_push(d as u16)?;
-            #[cfg(not(no_global_oom_handling))]
+            #[cfg(oom_handle)]
             data.push(d as u16);
         }
 

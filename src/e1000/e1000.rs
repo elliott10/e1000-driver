@@ -1812,13 +1812,13 @@ impl E1000 {
                 let mbuf = &*slice_from_raw_parts(cpu_addr, len);
                 let mut data = Vec::new();
 
-                #[cfg(no_global_oom_handling)]
+                #[cfg(not(oom_handle))]
                 {
                     data = Vec::try_with_capacity(len).unwrap();
                     data.try_extend_from_slice(mbuf);
                     out.try_push(RcvPkt { data }).unwrap();
                 };
-                #[cfg(not(no_global_oom_handling))]
+                #[cfg(oom_handle)]
                 {
                     data = Vec::with_capacity(len);
                     data.extend_from_slice(mbuf);

@@ -127,11 +127,11 @@ impl Clone for Context {
     fn clone(&self) -> Self {
         let mut shadow_ram = Vec::new();
 
-        #[cfg(no_global_oom_handling)]
+        #[cfg(not(oom_handle))]
         {
             shadow_ram.try_extend_from_slice(&self.shadow_ram);
         };
-        #[cfg(not(no_global_oom_handling))]
+        #[cfg(oom_handle)]
         {
             shadow_ram.extend_from_slice(&self.shadow_ram);
         };
@@ -149,14 +149,14 @@ impl Clone for Context {
 
 impl Default for Context {
     fn default() -> Self {
-        #[cfg(no_global_oom_handling)]
+        #[cfg(not(oom_handle))]
         let mut shadow_ram = Vec::try_with_capacity(ICH8_SHADOW_RAM_WORDS).unwrap();
-        #[cfg(not(no_global_oom_handling))]
+        #[cfg(oom_handle)]
         let mut shadow_ram = Vec::with_capacity(ICH8_SHADOW_RAM_WORDS);
         for _ in 0..ICH8_SHADOW_RAM_WORDS {
-            #[cfg(no_global_oom_handling)]
+            #[cfg(not(oom_handle))]
             shadow_ram.try_push(ShadowRam::default()).unwrap();
-            #[cfg(not(no_global_oom_handling))]
+            #[cfg(oom_handle)]
             shadow_ram.push(ShadowRam::default());
         }
 
