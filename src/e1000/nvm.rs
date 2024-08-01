@@ -35,13 +35,13 @@ impl From<u16> for FlashCtrl {
 }
 
 #[derive(Debug, Default, Clone)]
-pub(super) struct NvmOps {
+pub(crate) struct NvmOps {
     pub semaphore: NvmSemaphore,
     pub read_write: NvmReadWrite,
 }
 
 #[derive(Debug, Clone)]
-pub(super) enum NvmReadWrite {
+pub(crate) enum NvmReadWrite {
     E82571,
     Ich8lan,
 }
@@ -58,13 +58,13 @@ impl Default for NvmReadWrite {
 }
 
 #[derive(Debug, Clone)]
-pub(super) enum NvmSemaphore {
+pub(crate) enum NvmSemaphore {
     E82571,
     Spt,
 }
 
 #[derive(Debug, PartialEq)]
-pub(super) enum NvmType {
+pub(crate) enum NvmType {
     Unknown = 0,
     None,
     EepromSpi,
@@ -78,7 +78,7 @@ impl Default for NvmType {
 }
 
 #[derive(Default)]
-pub(super) struct NvmInfo {
+pub(crate) struct NvmInfo {
     pub kind: NvmType,
     pub reg: Reg,
     pub ops: NvmOps,
