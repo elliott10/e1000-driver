@@ -35,6 +35,8 @@ pub struct E1000 {
     pub(crate) variant: Variant,
 }
 
+unsafe impl Send for E1000 {}
+
 impl E1000 {
     /// new one.
     pub fn new(device_id: u32, settings: Settings) -> Result<Self> {
