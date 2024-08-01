@@ -25,7 +25,7 @@ use core::{
 use err::{Error, Result};
 
 pub use hw::E1000HWStats;
-pub use params::Flags;
+pub use params::{Flags, InterruptMode, Settings};
 pub use phy::MediaType;
 
 const PAGE_SIZE: usize = 4096;
