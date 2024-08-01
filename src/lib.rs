@@ -1,5 +1,6 @@
 #![no_std]
 #![allow(unused)]
+#![allow(invalid_reference_casting)]
 
 extern crate alloc;
 

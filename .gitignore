@@ -48,3 +48,4 @@ Module.symvers
 modules.order
 rust-project.json
 compile_commands.json
+.vscode
