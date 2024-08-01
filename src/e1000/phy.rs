@@ -7,17 +7,17 @@ use core::{
 };
 
 use super::{
-    reg::*,
-    variant::{e82571, ich8lan, Variant},
-};
-use crate::{
     defines::*,
     err::*,
     kfn,
     mac::{MacInfo, MacType},
     E1000,
 };
-use crate::{e1000::lock::SemaphoreBackend, hw::FcMode};
+use super::{
+    reg::*,
+    variant::{e82571, ich8lan, Variant},
+};
+use crate::e1000::{hw::FcMode, lock::SemaphoreBackend};
 
 // IGP01E1000 Specific Registers
 pub(crate) const PHY_PORT_CONFIG: u16 = 0x10; // Port Config

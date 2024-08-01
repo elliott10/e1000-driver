@@ -8,7 +8,7 @@ use core::{
     slice::{from_raw_parts, from_raw_parts_mut},
 };
 
-use crate::{err::Result, DMA};
+use super::{err::Result, DMA};
 
 const DEFAULT_RING_SIZE: usize = 256;
 
@@ -31,7 +31,12 @@ where
 {
     pub fn new(buff_len: usize) -> Result<Self> {
         let size = DEFAULT_RING_SIZE;
+
+        #[cfg(no_global_oom_handling)]
         let mut elems = Vec::try_with_capacity(size)?;
+        #[cfg(not(no_global_oom_handling))]
+        let mut elems = Vec::with_capacity(size);
+
         let mut layout = Layout::array::<T>(size).unwrap();
         layout = layout.align_to(4096).unwrap();
         let dma_desc: DMA = DMA::try_new(layout.size())?;
@@ -52,7 +57,10 @@ where
                     cpu_addr: buff_cpu_addr,
                 };
 
+                #[cfg(no_global_oom_handling)]
                 elems.try_push(elem)?;
+                #[cfg(not(no_global_oom_handling))]
+                elems.push(elem);
                 buff_dma_addr += buff_len as u64;
                 buff_cpu_addr += buff_len;
             }
@@ -81,7 +89,6 @@ where
         buf[..len].copy_from_slice(&src[..len]);
         len
     }
-    
 }
 
 impl<T> Deref for Ring<T>

@@ -215,10 +215,10 @@ pub(crate) const fn PCH_RAICC(n: u32) -> u32 {
 
 use core::time::Duration;
 
-use crate::kfn;
-use crate::BoardInfo;
-use crate::MacAddress;
-use crate::{defines::*, err::*, mac::MacType};
+use super::kfn;
+use super::BoardInfo;
+use super::MacAddress;
+use super::{defines::*, err::*, mac::MacType};
 
 #[derive(Debug, Default, Clone, Copy)]
 pub(crate) struct Reg {

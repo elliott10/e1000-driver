@@ -8,9 +8,6 @@ extern crate log;
 
 mod utils;
 pub mod e1000;
-pub mod pci;
-
-pub use volatile::Volatile;
 
 pub trait Ext {}
 

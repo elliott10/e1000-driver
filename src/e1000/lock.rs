@@ -1,6 +1,6 @@
 use core::cell::UnsafeCell;
 
-use crate::err::*;
+use super::err::*;
 
 pub(crate) trait SemaphoreBackend {
     fn acquire(&self) -> Result;

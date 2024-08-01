@@ -50,7 +50,11 @@ impl NetDevSettings {
             addr.copy_from_slice(unsafe {
                 &*slice_from_raw_parts_mut(self.mc_list.offset((i * 6) as _), 6)
             });
+
+            #[cfg(no_global_oom_handling)]
             list.try_push(addr).unwrap();
+            #[cfg(not(no_global_oom_handling))]
+            list.push(addr);
         }
         list
     }
@@ -62,7 +66,11 @@ impl NetDevSettings {
             addr.copy_from_slice(unsafe {
                 &*slice_from_raw_parts_mut(self.uc_list.offset((i * 6) as _), 6)
             });
+
+            #[cfg(no_global_oom_handling)]
             list.try_push(addr).unwrap();
+            #[cfg(not(no_global_oom_handling))]
+            list.push(addr);
         }
         list
     }

@@ -1,5 +1,5 @@
 [toolchain]
-channel = "nightly-2023-02-23"
+channel = "nightly"
 components = [ "rustfmt", "llvm-tools-preview" ]
 targets = [ "riscv64imac-unknown-none-elf" ]
 profile = "minimal"

@@ -6,14 +6,13 @@ use crate::e1000::mac::*;
 use crate::e1000::nvm::*;
 use crate::e1000::reg;
 use crate::e1000::reg::*;
-use crate::hw::FcMode;
-use crate::kfn;
-use crate::lock::Semaphore;
-use crate::lock::SemaphoreBackend;
-use crate::phy::{self, PhyInfo};
-use crate::E1000;
-use crate::{defines::*, err::*, phy::*};
-use crate::{BoardInfo, Flags};
+use crate::e1000::hw::FcMode;
+use crate::e1000::kfn;
+use crate::e1000::lock::{Semaphore, SemaphoreBackend};
+use crate::e1000::phy::{self, PhyInfo};
+use crate::e1000::E1000;
+use crate::e1000::{defines::*, err::*, phy::*};
+use crate::e1000::{BoardInfo, Flags};
 
 #[derive(Default, Debug, Clone)]
 pub(crate) struct Context {
@@ -405,7 +404,7 @@ impl PhySemaphore {
     }
 }
 
-impl crate::lock::SemaphoreBackend for PhySemaphore {
+impl crate::e1000::lock::SemaphoreBackend for PhySemaphore {
     fn acquire(&self) -> Result {
         Ok(())
     }
@@ -424,7 +423,7 @@ impl NvmSemaphore {
     }
 }
 
-impl crate::lock::SemaphoreBackend for NvmSemaphore {
+impl crate::e1000::lock::SemaphoreBackend for NvmSemaphore {
     fn acquire(&self) -> Result {
         Ok(())
     }

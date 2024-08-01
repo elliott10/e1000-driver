@@ -1,5 +1,5 @@
 use super::reg::*;
-use crate::{defines::*, err::*, hw::FcMode, phy::PhyInfo, MacAddress};
+use super::{defines::*, err::*, hw::FcMode, phy::PhyInfo, MacAddress};
 use alloc::vec::Vec;
 
 #[allow(non_camel_case_types)]
@@ -325,8 +325,6 @@ impl MacInfo {
 
         return hash_value as _;
     }
-
-
 }
 #[derive(Debug, Default, Clone)]
 pub(crate) struct MacOps {

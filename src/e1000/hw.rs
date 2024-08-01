@@ -1,10 +1,10 @@
-use defines::*;
-use e1000::reg::*;
-use params::Flags;
-use phy::*;
+use super::defines::*;
+use super::params::Flags;
+use super::phy::*;
+use super::reg::*;
 
-use crate::err::{Error, Result};
-use crate::*;
+use super::err::{Error, Result};
+use super::*;
 use core::alloc::Layout;
 use core::ptr::NonNull;
 use core::ptr::{slice_from_raw_parts, slice_from_raw_parts_mut};

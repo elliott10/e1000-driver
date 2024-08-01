@@ -1,20 +1,15 @@
 use super::defines::*;
+use super::err::{Error, Result};
 use super::hw::{self, *};
-use super::reg::*;
-use super::ring::*;
-use crate::err::{Error, Result};
-use crate::mac::*;
-use crate::nvm::*;
-use crate::phy::*;
-use crate::*;
+use super::params::{Flags, InterruptMode, Params, Settings};
+use super::{mac::*, nvm::*, phy::*, reg::*, ring::*, *};
 use core::alloc::Layout;
 use core::cmp::min;
+use core::ffi::CStr;
 use core::mem::{self, align_of_val, size_of};
-use core::ptr::NonNull;
+use core::ptr::{slice_from_raw_parts, NonNull};
 use core::sync::atomic::{AtomicBool, Ordering};
 use e1000::variant::{self, Variant};
-use ffi::CStr;
-use params::{Flags, InterruptMode, Params, Settings};
 
 static mut CARD_FOUND: usize = 0;
 
@@ -1815,10 +1810,20 @@ impl E1000 {
 
                 let len = desc.wb.length as usize;
                 let mbuf = &*slice_from_raw_parts(cpu_addr, len);
-                let mut data = Vec::try_with_capacity(len).unwrap();
-                data.try_extend_from_slice(mbuf);
-                out.try_push(RcvPkt { data }).unwrap();
+                let mut data = Vec::new();
 
+                #[cfg(no_global_oom_handling)]
+                {
+                    data = Vec::try_with_capacity(len).unwrap();
+                    data.try_extend_from_slice(mbuf);
+                    out.try_push(RcvPkt { data }).unwrap();
+                };
+                #[cfg(not(no_global_oom_handling))]
+                {
+                    data = Vec::with_capacity(len);
+                    data.extend_from_slice(mbuf);
+                    out.push(RcvPkt { data });
+                };
                 fence_w();
 
                 desc.set_dma_addr(dma_addr);

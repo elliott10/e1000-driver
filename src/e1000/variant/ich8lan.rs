@@ -4,14 +4,14 @@ use super::{VariantCommon, VariantResult};
 use alloc::vec::Vec;
 use core::mem::size_of;
 
-use crate::defines::*;
+use crate::e1000::defines::*;
+use crate::e1000::kfn;
 use crate::e1000::mac::*;
 use crate::e1000::nvm::*;
 use crate::e1000::reg::{self, *};
-use crate::kfn;
-use crate::E1000;
-use crate::{defines::*, err::*, phy::*};
-use crate::{err::*, BoardInfo, Flags};
+use crate::e1000::E1000;
+use crate::e1000::{defines::*, err::*, phy::*};
+use crate::e1000::{err::*, BoardInfo, Flags};
 
 const ICH_RAR_ENTRIES: u16 = 7;
 const PCH2_RAR_ENTRIES: u16 = 5; /* RAR[0], SHRA[0-3] */
@@ -126,7 +126,15 @@ pub(crate) struct Context {
 impl Clone for Context {
     fn clone(&self) -> Self {
         let mut shadow_ram = Vec::new();
-        shadow_ram.try_extend_from_slice(&self.shadow_ram);
+
+        #[cfg(no_global_oom_handling)]
+        {
+            shadow_ram.try_extend_from_slice(&self.shadow_ram);
+        };
+        #[cfg(not(no_global_oom_handling))]
+        {
+            shadow_ram.extend_from_slice(&self.shadow_ram);
+        };
 
         Self {
             kmrn_lock_loss_workaround_enabled: self.kmrn_lock_loss_workaround_enabled.clone(),
@@ -141,9 +149,15 @@ impl Clone for Context {
 
 impl Default for Context {
     fn default() -> Self {
+        #[cfg(no_global_oom_handling)]
         let mut shadow_ram = Vec::try_with_capacity(ICH8_SHADOW_RAM_WORDS).unwrap();
+        #[cfg(not(no_global_oom_handling))]
+        let mut shadow_ram = Vec::with_capacity(ICH8_SHADOW_RAM_WORDS);
         for _ in 0..ICH8_SHADOW_RAM_WORDS {
+            #[cfg(no_global_oom_handling)]
             shadow_ram.try_push(ShadowRam::default()).unwrap();
+            #[cfg(not(no_global_oom_handling))]
+            shadow_ram.push(ShadowRam::default());
         }
 
         Self {
@@ -356,7 +370,6 @@ impl VariantCommon for Context {
         for i in 0..e1000.mac.mta_reg_count {
             e1000.reg.write_reg_array(MTA, i as _, 0);
         }
-
 
         /* Set the transmit descriptor write-back policy for both queues */
         let mut txdctl = e1000.er32(TXDCTL(0));
@@ -760,7 +773,7 @@ impl PhySemaphore {
     }
 }
 
-impl crate::lock::SemaphoreBackend for PhySemaphore {
+impl crate::e1000::lock::SemaphoreBackend for PhySemaphore {
     fn acquire(&self) -> Result {
         let mut extcnf_ctrl = 0;
         let mut timeout = true;
@@ -833,7 +846,7 @@ impl NvmSemaphore {
     }
 }
 
-impl crate::lock::SemaphoreBackend for NvmSemaphore {
+impl crate::e1000::lock::SemaphoreBackend for NvmSemaphore {
     fn acquire(&self) -> Result {
         Ok(())
     }

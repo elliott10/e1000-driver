@@ -1,13 +1,13 @@
 use core::mem::size_of;
 use core::time::Duration;
 
+use super::defines::*;
+use super::err::{Error, Result};
+use super::kfn;
+use super::lock::SemaphoreBackend;
+use super::mac::MacType;
 use super::reg::*;
 use super::variant::*;
-use crate::defines::*;
-use crate::e1000::lock::SemaphoreBackend;
-use crate::err::{Error, Result};
-use crate::kfn;
-use crate::mac::MacType;
 use alloc::vec::Vec;
 
 struct FlashCtrl {
@@ -35,13 +35,13 @@ impl From<u16> for FlashCtrl {
 }
 
 #[derive(Debug, Default, Clone)]
-pub(crate) struct NvmOps {
+pub(super) struct NvmOps {
     pub semaphore: NvmSemaphore,
     pub read_write: NvmReadWrite,
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum NvmReadWrite {
+pub(super) enum NvmReadWrite {
     E82571,
     Ich8lan,
 }
@@ -58,13 +58,13 @@ impl Default for NvmReadWrite {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum NvmSemaphore {
+pub(super) enum NvmSemaphore {
     E82571,
     Spt,
 }
 
 #[derive(Debug, PartialEq)]
-pub(crate) enum NvmType {
+pub(super) enum NvmType {
     Unknown = 0,
     None,
     EepromSpi,
@@ -78,7 +78,7 @@ impl Default for NvmType {
 }
 
 #[derive(Default)]
-pub(crate) struct NvmInfo {
+pub(super) struct NvmInfo {
     pub kind: NvmType,
     pub reg: Reg,
     pub ops: NvmOps,
@@ -115,9 +115,15 @@ impl NvmInfo {
             if offset > self.word_size || (words > (self.word_size - offset)) || words == 0 {
                 return Err(Error::Nvm("nvm parameter(s) out of bounds"));
             }
+            #[cfg(no_global_oom_handling)]
             let mut data: Vec<u16> = Vec::try_with_capacity(words as usize)?;
+            #[cfg(not(no_global_oom_handling))]
+            let mut data: Vec<u16> = Vec::with_capacity(words as usize);
             for _ in 0..words {
+                #[cfg(no_global_oom_handling)]
                 data.try_push(0).unwrap();
+                #[cfg(not(no_global_oom_handling))]
+                data.push(0);
             }
 
             let res = self.valid_nvm_bank_detect();
@@ -183,8 +189,10 @@ impl NvmInfo {
         if offset > self.word_size || (words > (self.word_size - offset)) || words == 0 {
             return Err(Error::Nvm("nvm parameter(s) out of bounds"));
         }
+        #[cfg(no_global_oom_handling)]
         let mut data: Vec<u16> = Vec::try_with_capacity(words as usize)?;
-
+        #[cfg(not(no_global_oom_handling))]
+        let mut data: Vec<u16> = Vec::with_capacity(words as usize);
         let mut eerd = 0u32;
 
         for i in 0..words {
@@ -196,7 +204,10 @@ impl NvmInfo {
 
             let d = self.reg.er32(EERD) >> NVM_RW_REG_DATA;
 
+            #[cfg(no_global_oom_handling)]
             data.try_push(d as u16)?;
+            #[cfg(not(no_global_oom_handling))]
+            data.push(d as u16);
         }
 
         Ok(data)

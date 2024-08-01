@@ -1,6 +1,5 @@
 // Simple PCI-Express for qemu and its e1000 ethernet
 use core::slice::from_raw_parts_mut;
-use volatile::Volatile;
 use log::*;
 
 /// E1000 registers which were mapped

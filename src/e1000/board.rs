@@ -4,9 +4,9 @@ use super::dev_id::*;
 use super::hw::*;
 use super::mac::*;
 use super::nvm::*;
-use crate::err::*;
-use crate::params::Flags;
-use crate::phy::*;
+use super::err::*;
+use super::params::Flags;
+use super::phy::*;
 
 const DEFAULT_JUMBO: u32 = 9234;
 
