@@ -154,7 +154,9 @@ impl E1000 {
 
         Ok(())
     }
-
+    pub fn is_link_up(&self) -> bool {
+        self.is_link_up.load(Ordering::SeqCst)
+    }
     pub fn down(&mut self) {
         /* disable transmits in the hardware */
         let mut tctl = self.er32(TCTL);
